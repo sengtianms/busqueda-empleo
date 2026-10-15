@@ -200,12 +200,15 @@ Build strategy: functional sub-phases grouping nodes by testable unit, per canon
 | 5.7 — Real sequential run 1→2 and documentation closure | Production run validating M1→M2 chained through BD coordination + summary events (`modulo_ejecutado` × N, `corrida_programada`); as-built notes on deviations, database-tables writers per module, README, AGENTS.md status/test count; code-reviewer + docs-reviewer | E2E verification + doc closure |
 
 ## Phase 6. Module 3 — Initial Evaluation
-- Create `modules/evaluation/`.
-- Load prepared offers + user profile.
-- Invoke `shared/decision_engine.py`: apply DOC-03 criteria with configurable weights; calculate compatibility score; optional LLM (evaluation prompt) for non-deterministic items; classify High/Medium/Low; decide continue/discard (with justification).
-- Save results + traceability.
-- Error handling: ER-LLM, ER-DAT, ER-INT.
-- Tests: unit (rules vs mock profiles); mocked LLM for deterministic tests.
+
+> Build strategy (as Phases 4–5): functional sub-phases grouping nodes by testable unit, per canonical spec in `docs/diagrams/Ficha técnica - Diagrama de flujo (Evaluación inicial de ofertas).md` (technical sheet = authoritative construction base; decision D48). Pre-build gate: `docs/history/tracker.md` "Previo Fase 6" (5 points). Legacy scoring (`evaluation.weights`, `decision_engine.py` High/Medium/Low, "optional LLM") is retired by this design — evaluation is 5 veto controls by the routed AI (prompt `compatibility.md` v2), no score.
+
+| Sub-phase | Content | Nodes |
+|---|---|---|
+| 6.1 — Startup and candidate decision | INICIO (module own run, execution context, full `evaluacion:` validation, shared global lock M1/M2/M3, FIFO `preparada` load, `hubo_candidatas`, no AI probe) + ¿Hay ofertas por procesar? (`sin_pendientes` controlled termination) | 1 process + 1 decision |
+| 6.2 — Initial evaluation | Evaluación inicial: batch (evaluate all, then close), 4 fields as-is, 5 vetoes via routed AI + ordered alternate doors (2 retries), immediate per-offer persistence (`aceptada_ei`/`descartada_ei` via `evaluada` + `resultado_evaluacion_inicial` + event with `id_oferta`), V3-FAIL empty-description exception, persistent failure → pending in `preparada`, quota exhaustion → orderly close | 1 process |
+| 6.3 — Closure and module orchestrator | Finalizar Proceso (metrics by events with DISTINCT `id_oferta`, official motive/state table incl. `sin_pendientes`/`corrida_completada`/`cupo_agotado`, best-effort close, ownership-safe lock release) + module flow orchestrator (`ejecutar_flujo`, mirror of Preparation) | 1 terminal + 1 integration |
+| 6.4 — Solo real run, transversal third, doc closure | Solo real verification run of the module; on pass, transversal joins third after Preparation (`orquestador.modulos`, result read from DB as the others); physical migrations (`resultado_evaluacion_inicial`, `total_aprobadas`/`total_descartadas`, states) land with the build; legacy scoring keys + old engine retired; as-built notes, database-tables writers per module, README, AGENTS.md status/test count; code-reviewer + docs-reviewer | E2E verification + doc closure |
 
 ## Phase 7. Module 4 — Deep Processing
 - Create `modules/processing/`.

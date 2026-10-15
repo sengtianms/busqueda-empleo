@@ -1,47 +1,67 @@
-## PRM-001 Offer-profile compatibility
 
-**Objective.**
+**Objetivo**
 
-Analyze qualitative compatibility between a processed job offer and the user's professional profile, evaluating aspects not covered by the deterministic rules of the decision engine.
+Tu única función es aplicar 5 reglas de VETO basadas en la naturaleza del rol y su viabilidad.
+No analices ajuste profundo.
+No uses listas de palabras clave; evalúa la naturaleza semántica del cargo. Los ejemplos entre paréntesis son ilustrativos: orientan, pero se decide por la naturaleza del rol.
+Responde siempre en español.
+REGLA DE ORO: Ante la duda, ambigüedad o falta de información, NO DESCARTES. Deja pasar.
+La REGLA DE ORO aplica a la interpretación semántica del rol (V1, V2, V3). Para los datos de modalidad y ubicación, V4 y V5 se aplican literalmente aunque el dato falte.
 
-**Inputs.**
+**Variables**
 
-- ProcessedOffer: clean_title, clean_description, salary_min, salary_max, currency, clean_location, modality, requirements, technologies, languages, experience_years
-- Profile: technologies, experience_years, languages, preferred_locations, preferred_modalities, minimum_salary, seniority, target_companies, excluded_companies, education_level
+- {{titulo}}
+- {{descripcion_original}}
+- {{modalidad}}
+- {{ubicacion}}
 
-**Variables.**
+V1 Foco Funcional
+Evalúa el propósito del rol, no el vocabulario.
+PASS si el beneficiario final es diseñar, gobernar, transformar, planear o estabilizar sistemas organizacionales en al menos uno de estos tres ejes:
+1. Sistemas operacionales (procesos, cadena de suministro, capacidad, servicio, mejora continua, calidad).
+2. Sistemas de decisión e información (planeación, analítica para el negocio, gobierno de datos, criterios de priorización, control operacional).
+3. Diseño y transformación organizacional (arquitectura de negocio, rediseño estructural, gobierno operacional, escalabilidad, gestión del cambio sistémico).
+FAIL solo si el rol es estructuralmente ajeno al diseño de sistemas (ej. ventas puras, marketing, contabilidad financiera, desarrollo de software de producto, soporte técnico, RRHH transaccional).
 
-- `{{ oferta }}`: JSON object with ProcessedOffer fields
-- `{{ perfil }}`: JSON object with Profile fields
+V2 Nivel y Alcance (Seniority Real)
+PASS si el rol implica un nivel Senior/Lead/Manager con autonomía de diseño, liderazgo de equipos, o gobierno de sistemas.
+FAIL si el rol es de entrada/asistencia (Junior, Trainee, Pasante, Auxiliar).
+FAIL también si el rol pide MENOS de 5 años de experiencia y su alcance es de analista de ejecución, reporte o soporte, sin liderazgo de transformación o diseño estructural.
 
-**Instructions.**
+V3 Calidad Mínima
+PASS si la descripción permite identificar responsabilidades o un problema a resolver.
+FAIL si es spam, genérica, vacía o incomprensible. Sin descripción o con marca de no reportada → FAIL (excepción a la REGLA DE ORO).
 
-You are an assistant specialized in job compatibility analysis. You will receive a job offer and a candidate's professional profile. You must evaluate the qualitative compatibility between both considering:
+V4 Claridad de Modalidad
+PASS si la oferta especifica la modalidad (remoto, híbrido, presencial, teletrabajo).
+PASS si modalidad no está especificada o es N/R, pero la ubicación esta dentro de Colombia
+FAIL si modalidad no está especificada o es N/R, y ubicacion es distinta de Colombia o no está especificada.
 
-1. General alignment: how well the offer fits the candidate's profile in terms of career, aspirations, and work environment.
-2. Differentiating factors: aspects of the offer that make it especially attractive or relevant for the candidate.
-3. Gaps or risks: areas where the candidate does not fully meet the requirements or where the offer presents disadvantages.
-4. Cultural compatibility: affinity with the type of company, industry, values, and work style.
+V5 Viabilidad Geográfica y Migratoria (Base: Colombia)
+El candidato reside en Colombia.
+PASS si el rol es 100% remoto (permitiendo trabajar desde Colombia para empresas de cualquier país).
+PASS si la modalidad es presencial, híbrida o remota dentro de Colombia.
+PASS si modalidad no está especificada o es N/R  ubicacion está dentro de Colombia.
+PASS si la oferta exige trabajar o residir en otro país, PERO la oferta menciona explícitamente patrocinio de visa (visa sponsorship), reubicación (relocation assistance/support) o soporte legal/migratorio para el candidato.
+FAIL si la oferta exige trabajar o residir en otro país y no hay mención de patrocinio de visa, reubicación o soporte migratorio.
+FAIL si la oferta solo considera candidatos que residan en un lugar fuera de Colombia, sin ofrecer reubicación o patrocinio de visa.
 
-Respond strictly in JSON format without additional text. Do not include Markdown code blocks.
+DECISIÓN
+Si v1, v2, v3, v4 y v5 son PASS -> APROBADA.
+Si alguno es FAIL -> DESCARTADA.
 
-**Expected output.**
-
-```json
+SALIDA
+Devuelve exclusivamente este JSON, sin markdown, sin texto adicional. El primer carácter de tu respuesta debe ser `{`.
+La decisión debe ser coherente: APROBADA solo si v1, v2, v3, v4 y v5 son PASS.
+REGLA CRÍTICA PARA JUSTIFICACIÓN: El texto debe ser una sola línea continua, máximo 20 palabras, en español. Prohibido usar comillas dobles ("), saltos de línea, barras invertidas y llaves dentro del valor de "justificacion". Tildes y eñe permitidas.
 {
-  "compatibility": "ALTA|MEDIA|BAJA",
-  "justification": "Explanatory text of the overall evaluation.",
-  "key_factors": ["Positive factor 1", "Positive factor 2"],
-  "gaps": ["Gap or risk 1", "Gap or risk 2"],
-  "cultural_compatibility": "Text about the perceived cultural affinity."
+  "v1": "PASS|FAIL",
+  "v2": "PASS|FAIL",
+  "v3": "PASS|FAIL",
+  "v4": "PASS|FAIL",
+  "v5": "PASS|FAIL",
+  "decision": "APROBADA|DESCARTADA",
+  "justificacion": "Explicación breve y directa del resultado o del veto principal sin usar comillas internas"
 }
-```
 
-**Observations.**
-
-- This prompt is complementary to the rule-based decision engine. It does not replace the deterministic score.
-- The analysis should be qualitative and focused on aspects that rules cannot capture (culture, narrative, context).
-- The `compatibility` field must use exactly the values ALTA, MEDIA, or BAJA.
-- All generated content must be written in Spanish.
-
-**Version:** v1
+**Version:** v2

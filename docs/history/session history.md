@@ -5,6 +5,7 @@ Unless noted, decisions from previous sessions remain in effect.
 ## Sessions index
 | № | Date | Session ID | Summary |
 |---|---|---|---|
+| 38 | 15/10/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Module 3 sheet built node by node (4 nodes, veto design, closure motives and metrics, prompt v2, separate flow-diagram image); 5-point pre-build gate recorded ahead of Phase 6; docs-only alignment batch applied across settings, data model, tables reference, decision record, plan, tracker and transversal sheet (D48); plan/tracker verified against the sheet and sub-phase build strategy confirmed; module construction not started |
 | 37 | 08/09/2026 | `ses_f7ef9f510ffe2YkCmvje0FKH6S` | Entry unblocked after OS reinstall with a persistent session (one manual login, later runs automatic); window fixed to a normal size with content following resizes; guest completion path proven still anonymous from real evidence; polish batch with shared settings readers plus decision record and operations docs; full runs green with zero errors |
 | 36 | 25/08/2026 | `ses_fc6fa3931ffe4thZKiecpyCuhK` | Enrichment era closed (built as D39, measured as bottleneck, reverted as D40); three clean-run verifications mapped end-to-end; data-fidelity batch landed keeping every character in company keys, verbatim offer descriptions and a raw card company column (D41); full ops/performance program shipped: run-report and preflight CLIs, schema auto-init, jittered pacing, unified event emitter, persistence split into a package and card parser extracted (D42); live DB migrated twice with backups; final dogfooded verification preflight→run→reporte; second half: self-service run instructions proven by the user's first fully manual corridor on a wiped database, ERR-08 cluster traced to one all-caps department string, deterministic Colombian-department fast path added (D43) and local model swapped to gpt-oss:120b-cloud with a confidence-oriented prompt rewrite (D44); phase 5 formally closed by registering the orphaned handover-session changes as a consolidated decision (D45) and aligning data model, tables reference, README operations guide and both module sheets; final stretch: development branch merged into main and retired (single-branch state), third full wipe, user's fastest real run yet (123 offers under six minutes) exposed a location name-variant duplicate that was fixed generically with similarity-based catalog fusion (D46) |
 | 35 | 25/08/2026 | `ses_fc9cdf2e5ffeMja2ZpSownJ82R` | First real orchestrated sequential runs M1→M2 validated end-to-end on an emptied database (twice); traspaso fixes confirmed; capture bug with pipe-in-title fixed using real card evidence; deterministic AI sampling (temperature 0) both routes; tests isolated from the production database; operating contract gains the functional-communication instruction (525 tests) |
@@ -31,6 +32,25 @@ Unless noted, decisions from previous sessions remain in effect.
 | 14 | 09/08/2026 | `ses_01bcc78adffemcqFEiZxT52Eli` | Sub-fase 4.4: capture/registration nodes implemented, audited, and post-audit fixes applied (FK-free schema, name columns, upsert tests) |
 | 13 | 08/08/2026 | `ses_01be77680ffeuyoKct4Qrfx1GG` | Repo sync to `fase-4`; new `/save` section with general git commit and push guidance |
 | 12 | 08/08/2026 | `ses_01c089ce2ffe9MvQT4F1pC0MJN` | Sub-fase 4.2 deep audit + post-audit fixes (credentials mapping, playwright lifecycle) |
+
+## Session 38 — 15/10/2026
+`ses_f4af1b961ffe5t8xNspW5U761x` · `fase-6`
+
+**Topics**
+- Module 3 technical sheet designed node by node with the four-point process (organize node dropped, four nodes kept)
+- Separate flow-diagram image produced and reviewed with the user
+- Pre-build prerequisite plan defined in five points and recorded ahead of Phase 6
+- Full project-document review for Module 3 alignment, document by document
+- Docs-only alignment batch applied (new evaluation settings, veto result storage, new states and events, closure metrics, plan and tracker replaced by the sheet-based plan, transversal third after solo run)
+- Plan and tracker verified against the sheet; sub-phase build strategy confirmed for construction
+
+**Decisions**
+- D48: Module 3 docs alignment before build (legacy scoring kept deprecated until the build retires the old engine; physical migrations, transversal third and scoring retirement deferred to construction)
+- Decisions from previous sessions remain in effect
+
+**Status**
+- Documentation complete, module construction not started; Phase 6 tasks pending
+- pytest 563 passing; active branch `fase-6`
 
 ## Session 37 — 08/09/2026
 `ses_f7ef9f510ffe2YkCmvje0FKH6S` · `fase-6`

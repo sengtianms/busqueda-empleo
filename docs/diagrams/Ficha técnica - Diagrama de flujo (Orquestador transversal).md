@@ -117,11 +117,13 @@ Al recibir disparador manual:
 ### Notas de implementación
 
 **Nota as-built 2026-08-25 (decisión D42):** el arranque (`ejecutar_corrida_programada`) inicializa el esquema automáticamente cuando la base no tiene tablas; el chequeo prevuelo de este lote vive en `scripts/preflight.py` y el diagnóstico post-corrida en `scripts/reporte_corrida.py`.
+
+**Nota aprobado M3-docs (decisión D48, previo a construcción):** el Módulo 3 «Evaluación inicial» se suma tercero tras Preparación, solo después de su vuelta real de verificación en solo (`orquestador.modulos: [descubrimiento, preparacion, evaluacion]`; hasta entonces la lista sigue con 2). Su resultado se lee desde la base como los demás; sin migraciones propias del orquestador.
 - Estructura: `modules/orchestrator/orchestrator.py` con la función pública `ejecutar_corrida_programada()` (distinta de `ejecutar_flujo()` de los módulos) y el registro declarativo `MODULOS: list[ModuloOrquestado]` (nombre, `estado_entrada`, `estado_salida`, `ejecutar_flujo`). Tests de integración en `tests/test_orquestador_transversal.py` (patrón de `tests/test_orquestador_integracion.py`: flujo completo con nodos reales y arranque de plataforma simulado).
 - Configuración nueva en `config/config.yaml` → `orquestador:` (`modo_ejecucion: serie`, `modulos: [descubrimiento, preparacion]`, `pausa_entre_modulos_segundos`).
 - Sin migraciones de esquema propias: `corridas` y `eventos` ya existen; `motivo_terminacion` es TEXT libre; `EstadoCorrida` reutiliza `completada`/`abortada`. *(As-built D42: el arranque además crea el esquema completo si la base está vacía, vía `inicializar_si_ausente`.)*
 - Hitos informativos con Loguru (patrón del orquestador del Módulo 1); el evento final nunca se cuenta en métricas de módulos (semántica D30 intacta: el resumen es trazabilidad de la corrida programada, no de los módulos).
-- La **prueba real 1→2** (al cierre del Módulo 2) valida: Módulo 1 termina su corrida, Módulo 2 la suya (lee `descubierta`, escribe `preparada`/`duplicada`), y la corrida programada queda con sus eventos `modulo_ejecutado` × 2 + `corrida_programada`.
+- La **prueba real 1→2** (al cierre del Módulo 2) valida: Módulo 1 termina su corrida, Módulo 2 la suya (lee `descubierta`, escribe `preparada`/`duplicada`), y la corrida programada queda con sus eventos `modulo_ejecutado` × 2 + `corrida_programada`. La **prueba real 1→2→3** (al cierre del Módulo 3, D48) añade: Módulo 3 lee `preparada` y escribe `aceptada_ei`/`descartada_ei`, con `modulo_ejecutado` × 3.
 
 ### Pasos funcionales
 1. **Cargar y validar configuración**. Entrada: `config.yaml` (`orquestador:`). Proceso: leer y validar claves, rangos y `modo_ejecucion`. Salida: configuración. Val: VAL-01, VAL-02. Err: ERR-01.

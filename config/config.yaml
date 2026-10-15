@@ -85,7 +85,11 @@ almacen_credenciales:
     - "LINKEDIN_EMAIL"
     - "LINKEDIN_PASSWORD"
 
-# --- Evaluation (DOC-03) ---
+# --- Evaluation scoring (LEGACY Phase 2, deprecated) ---
+# Motor de puntaje Alto/Medio/Bajo de la fase 2 (`shared/decision_engine.py`).
+# El Módulo 3 aprobado ya no usa puntaje sino 5 vetos por IA (sección `evaluacion:`).
+# Estas claves se retiran cuando se construya el Módulo 3 (entonces se retira
+# también el motor viejo); hasta ese momento se conservan para no romperlo.
 evaluation:
   high_compatibility_threshold: 80
   medium_compatibility_threshold: 50
@@ -96,6 +100,23 @@ evaluation:
     modalidad: 0.10
     idiomas: 0.10
     seniority: 0.10
+
+# --- Initial evaluation (Module 3, 5 controles de veto; ficha M3) ---
+evaluacion:
+  # Pausa anti-bloqueo entre ofertas consecutivas (>= 0), espejo de Preparación:
+  # la pausa efectiva es aleatoria en [base - jitter, base + jitter]; con jitter 0 queda fija.
+  pausa_entre_ofertas_segundos: 1.2
+  pausa_jitter_segundos: 0.4
+  # Reintentos por oferta (ficha M3: 2).
+  retries:
+    max_attempts: 2
+    base_wait_seconds: 2
+    max_wait_seconds: 30
+    multiplier: 2
+  # Puertas alternas del mismo modelo, en orden (la primera que responde manda).
+  # Las llaves viven solo en config/.env; aquí solo sus nombres de referencia.
+  # Vacío hasta la construcción del módulo (el modelo se confirma en ai_routing.evaluation).
+  puertas_alternas: []
 
 # --- Browser ---
 browser:

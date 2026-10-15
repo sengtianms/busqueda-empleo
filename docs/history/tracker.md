@@ -143,20 +143,30 @@
 
 ---
 
-## Phase 6. Module 3 — Initial Evaluation
+## Previo Fase 6 — Preparación para Evaluación inicial
+
+> Hacer esto antes de construir el Módulo 3. No cambia Descubrimiento ni Preparación.
 
 | # | Task | Source docs | Status | Notes |
 |---|------|-------------|--------|-------|
-| 1 | Structure modules/evaluation/ | DOC-07 | ⬜ | |
-| 2 | Load prepared offers + profile | DOC-04 | ⬜ | |
-| 3 | Rule engine (decision_engine) | DOC-03 | ⬜ | |
-| 4 | Optional LLM invocation | DOC-12 | ⬜ | |
-| 5 | Classification (High / Medium / Low) | DOC-01 | ⬜ | |
-| 6 | Continue/discard decision + justification | DOC-03 | ⬜ | |
-| 7 | Persistence of results + traceability | DOC-04 | ⬜ | |
-| 8 | Error handling (ER-LLM, ER-DAT, ER-INT) | DOC-06 | ⬜ | |
-| 9 | Tests | — | ⬜ | |
-| 10 | Validation | — | ⬜ | |
+| 1 | Espacio para guardar el resultado en la oferta | Ficha M3 | ⬜ | Agregar `resultado_evaluacion_inicial` con pendiente inicial; se llena una vez sin borrar lo original; descripción vacía = fallo. |
+| 2 | Ampliar lista de estados y resumen de la vuelta | Ficha M3 | ⬜ | Sumar `aceptada_ei`/`descartada_ei`; sumar `total_aprobadas`/`total_descartadas` en `corridas`. Sin tocar conteos M1/M2. |
+| 3 | Ajustes nuevos de evaluación | Ficha M3 | ⬜ | Quitar puntajes viejos; dejar pausa 1.2s ±0.4s, 2 reintentos, puertas alternas en orden; cupo agotado = cierre ordenado, resto queda pendiente. |
+| 4 | Confirmar el modelo a usar | Ficha M3 | ⬜ | Usar ruta existente `ai_routing.evaluation`; sin duplicar sección; apertura no llama a IA. Prueba corta de conexión. |
+| 5 | Respaldo y orden de entrada | — | ⬜ | Copia DB con preparadas; construir y probar solo; solo tras prueba solo, agregar como tercero tras Preparación en `orquestador:`. |
+
+---
+
+## Phase 6. Module 3 — Initial Evaluation
+
+> Build strategy: functional sub-phases grouping nodes by testable unit, per canonical spec in `docs/diagrams/Ficha técnica - Diagrama de flujo (Evaluación inicial de ofertas).md` (decision D48). Pre-build gate: "Previo Fase 6" above (5 points). Legacy scoring tasks retired.
+
+| # | Sub-phase (content) | Source docs | Status | Notes |
+|---|---|---|---|---|
+| 6.1 | Startup and candidate decision (INICIO + Hay ofertas por procesar) | Ficha técnica M3 | ⬜ | Module own run, full `evaluacion:` validation, shared global lock M1/M2/M3, FIFO `preparada` load, `hubo_candidatas`, no AI probe; `sin_pendientes` controlled termination. |
+| 6.2 | Initial evaluation (batch veto evaluation) | Ficha técnica M3 | ⬜ | 5 vetoes over 4 fields via routed AI + ordered alternate doors (2 retries); immediate per-offer persistence (`aceptada_ei`/`descartada_ei` + `resultado_evaluacion_inicial` + event with `id_oferta`); V3-FAIL exception; failures stay `preparada`; quota → orderly close. |
+| 6.3 | Closure and module orchestrator (Finalizar + `ejecutar_flujo`) | Ficha técnica M3 | ⬜ | Metrics by events (DISTINCT `id_oferta`), motive/state table incl. `cupo_agotado`, best-effort close, ownership-safe lock release; orchestrator mirror of Preparation. |
+| 6.4 | Solo real run, transversal third, doc closure | Fichas M3/orquestador, decision log | ⬜ | Solo verification run; then transversal third after Preparation; physical migrations + legacy scoring retirement land with the build; as-built notes + reviewers. |
 
 ---
 
