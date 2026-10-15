@@ -4,7 +4,12 @@ from shared.models import OfferState
 VALID_TRANSITIONS: dict[OfferState, list[OfferState]] = {
     OfferState.DESCUBIERTA: [OfferState.PREPARADA],
     OfferState.PREPARADA: [OfferState.EVALUADA, OfferState.DUPLICADA],
-    OfferState.EVALUADA: [OfferState.ACEPTADA, OfferState.DESCARTADA],
+    OfferState.EVALUADA: [
+        OfferState.ACEPTADA_EI,
+        OfferState.DESCARTADA_EI,
+        OfferState.ACEPTADA,
+        OfferState.DESCARTADA,
+    ],
     OfferState.ACEPTADA: [OfferState.PROCESADA],
     OfferState.DESCARTADA: [OfferState.FINALIZADA],
     OfferState.PROCESADA: [OfferState.FINALIZADA],

@@ -9,6 +9,8 @@ class OfferState(str, Enum):
     PREPARADA = "preparada"
     DUPLICADA = "duplicada"
     EVALUADA = "evaluada"
+    ACEPTADA_EI = "aceptada_ei"
+    DESCARTADA_EI = "descartada_ei"
     ACEPTADA = "aceptada"
     DESCARTADA = "descartada"
     PROCESADA = "procesada"
@@ -68,6 +70,7 @@ class Offer(BaseModel):
     fecha_descubrimiento: datetime | None = None
     estado: OfferState = OfferState.DESCUBIERTA
     id_duplicidad: str = "N/A"
+    resultado_evaluacion_inicial: str = "N/A"
     observaciones: str = "N/A"
     fecha_creacion: str = ""
     fecha_ultima_edicion: str = ""
@@ -98,7 +101,8 @@ class EstadoCorrida(str, Enum):
 class Corrida(BaseModel):
     """Run row model; validates both INICIO registration and the Finalizar
     Proceso closure update (run vocabulary per decision D4). Module 2 adds
-    the preparation metrics `total_preparadas`/`total_duplicadas` (D33)."""
+    the preparation metrics `total_preparadas`/`total_duplicadas` (D33);
+    Module 3 previo (D48) adds `total_aprobadas`/`total_descartadas`."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -113,6 +117,8 @@ class Corrida(BaseModel):
     fuentes_procesadas: int = 0
     total_preparadas: int = 0
     total_duplicadas: int = 0
+    total_aprobadas: int = 0
+    total_descartadas: int = 0
 
 
 class EventoAlmacen(BaseModel):

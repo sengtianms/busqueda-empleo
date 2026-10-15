@@ -54,6 +54,7 @@ ESQUEMAS: dict[str, str] = {
         "fecha_descubrimiento TEXT DEFAULT '',"
         "estado TEXT DEFAULT 'descubierta' "
         "CHECK(estado IN ('descubierta','preparada','duplicada','evaluada',"
+        "'aceptada_ei','descartada_ei',"
         "'aceptada','descartada','procesada','finalizada')),"
         "observaciones TEXT DEFAULT 'N/A',"
         "fecha_creacion TEXT DEFAULT '',"
@@ -69,7 +70,8 @@ ESQUEMAS: dict[str, str] = {
         "id_duplicidad TEXT DEFAULT 'N/A',"
         "ubicacion TEXT DEFAULT 'N/A',"
         "modalidad TEXT DEFAULT 'N/A',"
-        "empresa TEXT DEFAULT 'N/R'"
+        "empresa TEXT DEFAULT 'N/R',"
+        "resultado_evaluacion_inicial TEXT DEFAULT 'N/A'"
         ")"
     ),
     "corridas": (
@@ -84,7 +86,9 @@ ESQUEMAS: dict[str, str] = {
         "total_sucesos INTEGER DEFAULT 0,"
         "fuentes_procesadas INTEGER DEFAULT 0,"
         "total_preparadas INTEGER DEFAULT 0,"
-        "total_duplicadas INTEGER DEFAULT 0"
+        "total_duplicadas INTEGER DEFAULT 0,"
+        "total_aprobadas INTEGER DEFAULT 0,"
+        "total_descartadas INTEGER DEFAULT 0"
         ")"
     ),
     "eventos": (
@@ -199,6 +203,13 @@ _ADICIONES_PREPARACION: tuple[tuple[str, str], ...] = (
     ("corridas", "total_preparadas INTEGER DEFAULT 0"),
     ("corridas", "total_duplicadas INTEGER DEFAULT 0"),
     ("eventos", "id_oferta TEXT DEFAULT 'N/A'"),
+)
+
+
+_ADICIONES_EVALUACION: tuple[tuple[str, str], ...] = (
+    ("ofertas_descubiertas", "resultado_evaluacion_inicial TEXT DEFAULT 'N/A'"),
+    ("corridas", "total_aprobadas INTEGER DEFAULT 0"),
+    ("corridas", "total_descartadas INTEGER DEFAULT 0"),
 )
 
 

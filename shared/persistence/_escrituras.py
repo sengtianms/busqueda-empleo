@@ -247,8 +247,8 @@ def _upsert_ofertas_en(
     counted without aborting the remaining rows; the caller commits.
     Returns (ids_registradas, fallidas). No-empty-field rule (D31): empty
     values in `descripcion_original`/`fecha_publicacion`/`observaciones`/
-    `empresa_id`/`ubicacion_id`/`ubicacion`/`modalidad`/`empresa` are
-    persisted as 'N/A'.
+    `empresa_id`/`ubicacion_id`/`ubicacion`/`modalidad`/`empresa`/
+    `resultado_evaluacion_inicial` are persisted as 'N/A'.
     """
     registradas: list[str] = []
     fallidas = 0
@@ -265,6 +265,7 @@ def _upsert_ofertas_en(
             "ubicacion",
             "modalidad",
             "empresa",
+            "resultado_evaluacion_inicial",
         ):
             if not d.get(campo):
                 d[campo] = "N/A"

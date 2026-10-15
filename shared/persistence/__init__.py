@@ -94,6 +94,9 @@ from ._escrituras import (
     upsert_oferta as upsert_oferta,
 )
 from ._esquemas import (
+    _ADICIONES_EVALUACION as _ADICIONES_EVALUACION,
+)
+from ._esquemas import (
     _ADICIONES_PREPARACION as _ADICIONES_PREPARACION,
 )
 from ._esquemas import (
@@ -122,6 +125,9 @@ from ._migraciones import (  # noqa: F401
 )
 from ._migraciones import (
     _migrate_corridas_finalizacion as _migrate_corridas_finalizacion,
+)
+from ._migraciones import (
+    _migrate_evaluacion_d48 as _migrate_evaluacion_d48,
 )
 from ._migraciones import (
     _migrate_limpieza_d31 as _migrate_limpieza_d31,

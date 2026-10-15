@@ -4,6 +4,7 @@ import sqlite3
 
 from ._conexion import _connection
 from ._esquemas import (
+    _ADICIONES_EVALUACION,
     _ADICIONES_PREPARACION,
     _COLUMNAS_ENRIQUECIMIENTO_RETIRADAS_D40,
     _COLUMNAS_FINALIZACION_CORRIDAS,
@@ -56,6 +57,7 @@ def init_db() -> None:
         _migrate_preparacion_d33(conn)
         _migrate_revertir_enriquecimiento_d40(conn)
         _migrate_normalizacion_nombres_d41(conn)
+        _migrate_evaluacion_d48(conn)
         for sentencia in _INDICES:
             conn.execute(sentencia)
         conn.commit()
@@ -426,6 +428,66 @@ def _migrate_normalizacion_nombres_d41(conn: sqlite3.Connection) -> None:
                 (nueva, id_oferta),
             )
 
+
+
+def _migrate_evaluacion_d48(conn: sqlite3.Connection) -> None:
+    """D48 migration (Previo Fase 6): Module 3 evaluation groundwork.
+
+    (1) Adds the evaluation columns when absent: `ofertas_descubiertas`.
+    `resultado_evaluacion_inicial` ('N/A' = pending) and `corridas`.
+    `total_aprobadas`/`total_descartadas` (0).
+    (2) Extends the `ofertas_descubiertas.estado` CHECK with
+    'aceptada_ei'/'descartada_ei': when the live CHECK predates them, the
+    table is rebuilt from ESQUEMAS preserving every common column (same
+    copy pattern as `_migrate_ofertas`; the new states are a superset so
+    existing rows stay valid). Idempotent: every step only runs when its
+    target is absent.
+    """
+    columnas_por_tabla = {
+        tabla: {
+            fila["name"]
+            for fila in conn.execute(f"PRAGMA table_info({tabla})").fetchall()
+        }
+        for tabla in ("ofertas_descubiertas", "corridas")
+    }
+    for tabla, definicion in _ADICIONES_EVALUACION:
+        nombre_columna = definicion.split(" ")[0]
+        if nombre_columna not in columnas_por_tabla[tabla]:
+            conn.execute(f"ALTER TABLE {tabla} ADD COLUMN {definicion}")
+    fila = conn.execute(
+        "SELECT sql FROM sqlite_master "
+        "WHERE type = 'table' AND name = 'ofertas_descubiertas'"
+    ).fetchone()
+    if fila is None or "aceptada_ei" in str(fila["sql"]):
+        return
+    conn.execute(
+        ESQUEMAS["ofertas_descubiertas"].replace(
+            "TABLE IF NOT EXISTS ofertas_descubiertas",
+            "TABLE ofertas_descubiertas_nueva",
+        )
+    )
+    nuevas = {
+        fila["name"]
+        for fila in conn.execute(
+            "PRAGMA table_info(ofertas_descubiertas_nueva)"
+        ).fetchall()
+    }
+    comunes = [
+        fila["name"]
+        for fila in conn.execute(
+            "PRAGMA table_info(ofertas_descubiertas)"
+        ).fetchall()
+        if fila["name"] in nuevas
+    ]
+    lista = ", ".join(comunes)
+    conn.execute(
+        f"INSERT INTO ofertas_descubiertas_nueva ({lista}) SELECT {lista} "
+        "FROM ofertas_descubiertas"
+    )
+    conn.execute("DROP TABLE ofertas_descubiertas")
+    conn.execute(
+        "ALTER TABLE ofertas_descubiertas_nueva RENAME TO ofertas_descubiertas"
+    )
 
 
 def _migrate_ubicacion_rename(conn: sqlite3.Connection) -> None:

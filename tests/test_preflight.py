@@ -25,6 +25,19 @@ CONFIG_OK: dict[str, Any] = {
         },
     },
     "concurrencia": {"umbral_obsolescencia_minutos": 120},
+    "evaluacion": {
+        "pausa_entre_ofertas_segundos": 1.2,
+        "pausa_jitter_segundos": 0.4,
+        "retries": {
+            "max_attempts": 2,
+            "base_wait_seconds": 2,
+            "max_wait_seconds": 30,
+            "multiplier": 2,
+        },
+        "puertas_alternas": [],
+    },
+    "ai_routing": {"evaluation": "cloud"},
+    "ai_cloud": {"model": "gemma4:31b-cloud"},
 }
 
 

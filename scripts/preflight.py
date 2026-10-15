@@ -35,6 +35,7 @@ Resultados = list[tuple[bool, str]]
 def _check_config(config: dict[str, Any]) -> Resultados:
     from modules.orchestrator.orchestrator import _validar_configuracion
     from modules.preparation.nodes.inicio import _validar_preparacion
+    from shared.evaluacion import validar_evaluacion
 
     resultados: Resultados = []
     detalle_orquestador = _validar_configuracion(config.get("orquestador"))
@@ -49,6 +50,13 @@ def _check_config(config: dict[str, Any]) -> Resultados:
         (
             not detalle_preparacion,
             f"configuracion preparacion: {detalle_preparacion or 'ok'}",
+        )
+    )
+    detalle_evaluacion = validar_evaluacion(config.get("evaluacion"), config)
+    resultados.append(
+        (
+            not detalle_evaluacion,
+            f"configuracion evaluacion: {detalle_evaluacion or 'ok'}",
         )
     )
     return resultados
