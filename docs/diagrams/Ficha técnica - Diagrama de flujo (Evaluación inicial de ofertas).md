@@ -236,7 +236,7 @@ En fallo persistente del paso 2 o respuesta inválida tras los reintentos: event
 - **VAL-01**: insumos presentes (lista no vacía, configuración, ruta de inteligencia).
 - **VAL-02**: los 4 datos tomados tal cual (sin interpretar ni completar).
 - **VAL-03**: política de reintentos cumplida (≤ 2 por oferta); pausa aplicada entre ofertas.
-- **VAL-04**: respuesta con v1–v5 presentes, decisión coherente con ellos y explicación en una línea de máximo 20 palabras.
+- **VAL-04**: respuesta con v1–v5 presentes, decisión coherente con ellos y explicación en una línea de máximo 60 palabras con evidencia de la oferta (v4, D51).
 - **VAL-05**: oferta anotada respeta D31 (sin vacíos); columna de resultado diligenciada o `'N/A'` si pendiente.
 - **VAL-06**: evento escrito con `id_oferta`; evidencia acotada.
 
@@ -280,6 +280,9 @@ En fallo persistente del paso 2 o respuesta inválida tras los reintentos: event
 
 ### Notas de implementación
 - Transiciones `preparada → evaluada → aceptada_ei` y `preparada → evaluada → descartada_ei` en el mismo movimiento (la máquina de estados no admite salto directo).
+- Higiene de entrada (D49): la descripción enviada a la IA se limpia de secciones de ruido (empresa, beneficios, avisos EN/ES) con tope alto de seguridad; el original guardado no se toca (desviación aprobada de VAL-02 solo para la descripción; título, modalidad y ubicación van tal cual).
+- Prompt `compatibility.md` v3 (D49): V1 con prueba del beneficiario final y exclusión estructural de fontanería de datos e infraestructura.
+- Prompt `compatibility.md` v4 (D51): la justificación exige evidencia concreta de la oferta (eje + cita del texto + viabilidad, o veto + dato que lo activa), prohibición de frases genéricas y tope de 60 palabras (antes 20 en v3).
 - Columna nueva `resultado_evaluacion_inicial` (`TEXT DEFAULT 'N/A'`, migración aditiva idempotente).
 - Puertas alternas del mismo modelo con rotación de llaves (llaves solo en el archivo privado); la puerta que respondió queda en la evidencia.
 - Sin valores fijos: reintentos, pausas y modelo desde ajustes.
@@ -382,6 +385,6 @@ No se sobrescribe `ofertas_descubiertas.id_corrida` (sigue siendo la corrida de 
 
 ## Pendientes de construcción e integración (aprobados)
 
-1. **Puertas alternas:** sección propia en ajustes con la dirección, el mismo modelo y la lista de llaves en orden — la primera que responde manda. Las llaves viven solo en el archivo privado; aquí solo sus nombres.
+1. **Puertas alternas (D50, construido):** sección propia en ajustes con el modelo y la lista de llaves en orden — la primera que responde manda. Tres puertas OpenRouter con el mismo Gemma 4 31B (`google/gemma-4-31b-it`, refs `OPENROUTER_API_KEY_1/2/3`). Las llaves viven solo en el archivo privado; aquí solo sus nombres.
 2. **Orquestador del módulo:** espejo del de Preparación — recorrido lineal INICIO → decisión → Evaluación → Cierre, con cierre para toda vuelta registrada.
 3. **Orquestador transversal:** tras la vuelta real de verificación del módulo solo, este módulo se suma tercero en la lista tras Preparación, con su resultado leído desde la base como los demás.

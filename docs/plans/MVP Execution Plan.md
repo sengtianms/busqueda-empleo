@@ -201,7 +201,7 @@ Build strategy: functional sub-phases grouping nodes by testable unit, per canon
 
 ## Phase 6. Module 3 — Initial Evaluation
 
-> Build strategy (as Phases 4–5): functional sub-phases grouping nodes by testable unit, per canonical spec in `docs/diagrams/Ficha técnica - Diagrama de flujo (Evaluación inicial de ofertas).md` (technical sheet = authoritative construction base; decision D48). Pre-build gate: `docs/history/tracker.md` "Previo Fase 6" (5 points). Legacy scoring (`evaluation.weights`, `decision_engine.py` High/Medium/Low, "optional LLM") is retired by this design — evaluation is 5 veto controls by the routed AI (prompt `compatibility.md` v2), no score.
+> Build strategy (as Phases 4–5): functional sub-phases grouping nodes by testable unit, per canonical spec in `docs/diagrams/Ficha técnica - Diagrama de flujo (Evaluación inicial de ofertas).md` (technical sheet = authoritative construction base; decision D48). Pre-build gate: `docs/history/tracker.md` "Previo Fase 6" (5 points). Legacy scoring (`evaluation.weights`, `decision_engine.py` High/Medium/Low, "optional LLM") is retired by this design — evaluation is 5 veto controls by the routed AI (prompt `compatibility.md` v3 since D49; justification depth v4 since D51), no score.
 
 | Sub-phase | Content | Nodes |
 |---|---|---|

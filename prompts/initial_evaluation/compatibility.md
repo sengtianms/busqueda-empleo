@@ -15,13 +15,14 @@ La REGLA DE ORO aplica a la interpretación semántica del rol (V1, V2, V3). Par
 - {{modalidad}}
 - {{ubicacion}}
 
-V1 Foco Funcional
-Evalúa el propósito del rol, no el vocabulario.
-PASS si el beneficiario final es diseñar, gobernar, transformar, planear o estabilizar sistemas organizacionales en al menos uno de estos tres ejes:
+V1 Foco Organizacional (prueba del beneficiario final)
+Evalúa el propósito del rol, no el vocabulario ni las herramientas que usa.
+PASS solo si el beneficiario final del rol es el sistema organizacional: diseñar, gobernar, transformar, planear o estabilizar cómo la organización decide, opera o evoluciona, en al menos uno de estos tres ejes:
 1. Sistemas operacionales (procesos, cadena de suministro, capacidad, servicio, mejora continua, calidad).
 2. Sistemas de decisión e información (planeación, analítica para el negocio, gobierno de datos, criterios de priorización, control operacional).
 3. Diseño y transformación organizacional (arquitectura de negocio, rediseño estructural, gobierno operacional, escalabilidad, gestión del cambio sistémico).
-FAIL solo si el rol es estructuralmente ajeno al diseño de sistemas (ej. ventas puras, marketing, contabilidad financiera, desarrollo de software de producto, soporte técnico, RRHH transaccional).
+FAIL si el núcleo del rol es construir, mantener o dar soporte a tuberías de datos, infraestructura, almacenamiento, plataformas u observabilidad (ej. ingeniería de datos de plataforma: Data Engineer, construcción de pipelines ETL, infraestructura de TI, storage, DevOps), aunque mencione datos, gobierno técnico, nube o analítica: usar esas herramientas no equivale a diseñar el sistema organizacional. Solo pasa si además diseña criterios, reglas o mecanismos de decisión o gobierno organizacional.
+FAIL también si el rol es estructuralmente ajeno al diseño de sistemas (ej. ventas puras, marketing, contabilidad financiera, desarrollo de software de producto, soporte técnico, RRHH transaccional).
 
 V2 Nivel y Alcance (Seniority Real)
 PASS si el rol implica un nivel Senior/Lead/Manager con autonomía de diseño, liderazgo de equipos, o gobierno de sistemas.
@@ -53,7 +54,11 @@ Si alguno es FAIL -> DESCARTADA.
 SALIDA
 Devuelve exclusivamente este JSON, sin markdown, sin texto adicional. El primer carácter de tu respuesta debe ser `{`.
 La decisión debe ser coherente: APROBADA solo si v1, v2, v3, v4 y v5 son PASS.
-REGLA CRÍTICA PARA JUSTIFICACIÓN: El texto debe ser una sola línea continua, máximo 20 palabras, en español. Prohibido usar comillas dobles ("), saltos de línea, barras invertidas y llaves dentro del valor de "justificacion". Tildes y eñe permitidas.
+REGLA CRÍTICA PARA JUSTIFICACIÓN (contenido): el texto debe explicar ESTA oferta, no una genérica. Redacta según el caso:
+- Si APROBADA: nombra el eje del foco organizacional que cumple (sistemas operacionales / sistemas de decisión e información / diseño y transformación organizacional), aporta una evidencia concreta de la descripción (una responsabilidad, requisito o frase del cargo, entre comillas simples) y confirma la viabilidad con el dato de modalidad/ubicación.
+- Si DESCARTADA: nombra el veto que la descarta (V1–V5) y el dato exacto de la oferta que lo activa (la responsabilidad, requisito o frase que lo demuestra).
+PROHIBIDO: frases que servirían igual para cualquier oferta (ej. 'rol compatible con el perfil'), repetir el título sin analizar, o justificaciones sin evidencia de la descripción.
+FORMATO DE LA JUSTIFICACIÓN: una sola línea continua, máximo 60 palabras, en español. Prohibido usar comillas dobles ("), saltos de línea, barras invertidas y llaves dentro del valor de "justificacion". Tildes y eñe permitidas.
 {
   "v1": "PASS|FAIL",
   "v2": "PASS|FAIL",
@@ -61,7 +66,7 @@ REGLA CRÍTICA PARA JUSTIFICACIÓN: El texto debe ser una sola línea continua, 
   "v4": "PASS|FAIL",
   "v5": "PASS|FAIL",
   "decision": "APROBADA|DESCARTADA",
-  "justificacion": "Explicación breve y directa del resultado o del veto principal sin usar comillas internas"
+  "justificacion": "Explicación específica de esta oferta con evidencia concreta del texto, en una sola línea"
 }
 
-**Version:** v2
+**Version:** v4

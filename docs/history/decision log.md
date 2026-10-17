@@ -459,6 +459,41 @@ Format: `D<n>` — module/business decisions; `C<n>` — prompt/design alignment
   4. **Transversal sheet:** Module 3 joins third after Preparation, only after its solo verification run (`orquestador.modulos` stays `[descubrimiento, preparacion]` until then).
 - **Impact:** Docs-only batch (config + DOC-13A + database-tables + plan + tracker + transversal sheet as-built notes); no code, schema, or live-DB changes; physical migrations + `orquestador.modulos` third + legacy scoring retirement all deferred to the Module 3 build. Tests unchanged (563).
 
+### D49. Module 3 build: evaluation flow, prompt v3, input hygiene, legacy retirement, solo run, transversal third (2026-10-15)
+
+- **Date:** 2026-10-15
+- **Status:** In effect
+- **Context:** Previo Fase 6 (groundwork) built and verified first; then the 4-node flow. The solo verification run (COR-0004, 69 `preparada`, prompt v2) closed `corrida_completada` with 42 approved + 27 discarded and 0 errors. Separately, the user reported V1 false positives admitted by the run: pure data-plumbing roles (ETL/PySpark/Databricks) and platform/storage roles passed as Eje 2 by keyword matching; one short (405-char) case proved length was not the sole cause.
+- **Decision:**
+  1. **Flow:** new `modules/evaluation/` mirroring Preparation (Spanish identifiers): INICIO (own run, full `evaluacion:` + `ai_routing.evaluation` validation, shared global lock, FIFO `preparada`, `sin_pendientes` slot) + "Hay ofertas por procesar" (pure in-memory) + "Evaluación inicial" (5 vetos via routed AI, ≤ 2 attempts, same-model ordered doors, immediate per-offer persistence `aceptada_ei`/`descartada_ei` via `evaluada`, V3-FAIL without AI call, failures stay `preparada`, quota exhaustion stops calls and fixes `cupo_agotado`) + Finalizar (DISTINCT `id_oferta` metrics incl. `cupo_agotado`→`completada`/suceso, best-effort, ownership-safe unlock) + `ejecutar_flujo` orchestrator. New additive `leer_candidatas_preparadas`; retry codes `puerta_evaluacion_no_disponible`/`respuesta_evaluacion_invalida`.
+  2. **Prompt v3:** V1 rewritten around the beneficiary test (organizational system as final beneficiary) with structural exclusion of data-plumbing/infra roles even when they mention data, technical governance, cloud or analytics; golden rule kept.
+  3. **Input hygiene (approved VAL-02 deviation, description only):** the AI receives the description minus noise sections (company/benefits/legal EN/ES headers, role headers resume keeping) with a high safety cap; title/modality/location go verbatim and the stored original is never touched.
+  4. **Legacy retirement:** `evaluation:` scoring keys removed from config; `shared/decision_engine.py`, its suite and the `example_profile` fixture removed (no production callers).
+  5. **Transversal third:** `evaluacion` declared in the module registry and enabled in `orquestador.modulos` after the passing solo run (COR-0004 ran under prompt v2; v3 applies going forward).
+- **Impact:** Phase 6 complete (previo + 6.1–6.4); live DB holds 42 `aceptada_ei` + 27 `descartada_ei` (backups pre-previo and pre-solo); 609 tests.
+
+### D50. Alternate evaluation doors active: three OpenRouter doors, same model, key rotation (2026-10-15)
+
+- **Date:** 2026-10-15
+- **Status:** In effect
+- **Context:** Ficha M3 pending item 1 (alternate doors) stood with an empty list since D48; the private-file template already reserved `OPENROUTER_API_KEY`. The user supplied three OpenRouter keys (one per account) and confirmed order is irrelevant and all doors use the same model as Ollama.
+- **Decision:**
+  1. **Doors:** `evaluacion.puertas_alternas` declares three ordered doors (`openrouter-1/2/3`, model `google/gemma-4-31b-it` — the same Gemma 4 31B family as the principal `gemma4:31b-cloud` — key refs `OPENROUTER_API_KEY_1/2/3`); keys live only in `config/.env` (git-ignored), never in the repo.
+  2. **Calling:** new `analyze_openrouter` in `shared/ia_service.py` (chat completions, deterministic sampling, LLM error mapping with quota/key signals); the evaluation node calls the principal via the existing route and alternates via OpenRouter, rotating on verified door failure and retrying invalid answers on the same door (RN-07 unchanged); the responding door stays in the evidence. Validator requires non-empty `modelo`/`clave_ref` per door and textual `nombre` (empty auto-names as `alterna-N`).
+  3. **Verification:** rotation covered by new tests; one live call per design verified end-to-end (transformation role → 5×PASS/APROBADA with coherent justification).
+- **Impact:** The module now has a real fallback provider — a down principal or exhausted quota rotates instead of leaving offers pending. 615 tests.
+
+### D51. Evaluation justification upgraded: evidence-backed explanations, 60-word cap, prompt v4 (2026-10-17)
+
+- **Date:** 2026-10-17
+- **Status:** In effect
+- **Context:** During the approved-offer sample review (14 `aceptada_ei` from the full clean-DB run), the user found the stored justificaciones uninformative — prompt v3 caps them at 20 words/one line ("Rol senior de analítica para sistemas de decisión"), so every explanation reads as a template and does not support calibration decisions. The VAL-04 validator mirrors the same 20-word cap, so the model cannot elaborate even if the prompt allowed it.
+- **Decision:**
+  1. **Prompt `compatibility.md` v4:** the justification must explain THE offer, not a generic one — for APROBADA: the organizational-focus axis it satisfies (operational systems / decision & information systems / organizational design & transformation), concrete evidence quoted from the description (single quotes) and the modality/location viability; for DESCARTADA: the veto (V1–V5) plus the exact description data triggering it. Template phrases valid for any offer (e.g. "rol compatible con el perfil") are explicitly prohibited. Cap raised 20 → 60 words; the single-line/no-double-quotes/no-backslash/no-braces format rules are unchanged.
+  2. **Validator:** `_validar_respuesta` raises its word cap to 60 with a boundary test (60 OK / 61 rejected). No schema, veto rules, doors or flow changes; stored `resultado_evaluacion_inicial` keeps richer text going forward (historical rows keep their short v3 text).
+  3. **Scope:** applies identically to the principal door and the three OpenRouter alternates (same prompt + validator, D50).
+- **Impact:** More informative audit trail for human sample review without touching veto semantics, persistence or flow; intelligence input unchanged. 617 tests.
+
 ## Prompt/design alignment decisions
 
 ### C2. Detailed Evaluation entity uses Spanish attribute names
@@ -522,6 +557,8 @@ Source: DOC-APPENDIX 9A — archived 2026-08-11; content consolidated here uncha
 
 | Version | Date | Change |
 |---|---|---|
+| 1.35 | 2026-10-17 | Added D51 (evaluation justification upgraded: prompt `compatibility.md` v4 requires evidence-backed per-offer explanations — axis + quoted description evidence + viability for APROBADA, veto + triggering data for DESCARTADA, generic template phrases prohibited; word cap 20 → 60 in prompt and VAL-04 validator; no schema/veto/flow changes; tracker 6.2; 617 tests). |
+| 1.34 | 2026-10-15 | Added D49 (Module 3 build: 4-node evaluation flow + prompt v3 + description hygiene for AI input + legacy scoring retirement + solo run COR-0004 42/27/0 + transversal third enabled; tracker Phase 6 complete; 609 tests). |
 | 1.33 | 2026-10-15 | Added D48 (Module 3 docs alignment before build: new `evaluacion:` settings with legacy scoring kept deprecated until the build retires `decision_engine`; `resultado_evaluacion_inicial`, `aceptada_ei`/`descartada_ei`, `total_aprobadas`/`total_descartadas`, `cupo_agotado`, per-offer events, 3-module lock in DOC-13A v1.16 + database-tables; Phase 6 plan/tracker replaced by the 4-node sheet plan; transversal third after solo run; no code/schema/DB changes; 563 tests). |
 | 1.32 | 2026-09-08 | Added D47 (persistent LinkedIn session for Module 1 entry + normal window: `browser.profile_path` with persistent context and ephemeral fallback, session-aware entry reusing a valid session or waiting up to `browser.espera_manual_segundos` for one manual login, D9 detach guard on both checks, window from `browser.ventana_ancho/alto` with content following resizes; Module 2 proven still guest; one-setting reversal documented in README; polish batch with shared readers in `shared/utilidades.py`; no schema changes; 563 tests). |
 | 1.31 | 2026-08-26 | Added D46 (location-alias fusion: `_resolver_ubicacion_existente` resolves exact-or-fuzzy with ONE catalog read per uncached tuple [pais filter; exact wins first], RapidFuzz token_set_ratio merge requiring zero conflicts + one real coincidence, N/A never fuses alone, country-only and other-country rows excluded; optional validated key `preparacion.umbral_alias_ubicacion` default 90, 0 disables fuzzy path; `ALIAS_UBICACIONES` full-tuple aliases ['Bogotá D.C.' → bogota/distrito capital/colombia] consulted before D43's table; live-data healing without backup per user instruction. No schema changes; tracker 5.14; 552 tests). |

@@ -40,6 +40,9 @@ from ._consultas import (
     leer_candidatas_descubiertas as leer_candidatas_descubiertas,
 )
 from ._consultas import (
+    leer_candidatas_preparadas as leer_candidatas_preparadas,
+)
+from ._consultas import (
     leer_tabla as leer_tabla,
 )
 from ._consultas import (

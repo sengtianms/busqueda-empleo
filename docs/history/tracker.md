@@ -149,11 +149,11 @@
 
 | # | Task | Source docs | Status | Notes |
 |---|------|-------------|--------|-------|
-| 1 | Espacio para guardar el resultado en la oferta | Ficha M3 | ⬜ | Agregar `resultado_evaluacion_inicial` con pendiente inicial; se llena una vez sin borrar lo original; descripción vacía = fallo. |
-| 2 | Ampliar lista de estados y resumen de la vuelta | Ficha M3 | ⬜ | Sumar `aceptada_ei`/`descartada_ei`; sumar `total_aprobadas`/`total_descartadas` en `corridas`. Sin tocar conteos M1/M2. |
-| 3 | Ajustes nuevos de evaluación | Ficha M3 | ⬜ | Quitar puntajes viejos; dejar pausa 1.2s ±0.4s, 2 reintentos, puertas alternas en orden; cupo agotado = cierre ordenado, resto queda pendiente. |
-| 4 | Confirmar el modelo a usar | Ficha M3 | ⬜ | Usar ruta existente `ai_routing.evaluation`; sin duplicar sección; apertura no llama a IA. Prueba corta de conexión. |
-| 5 | Respaldo y orden de entrada | — | ⬜ | Copia DB con preparadas; construir y probar solo; solo tras prueba solo, agregar como tercero tras Preparación en `orquestador:`. |
+| 1 | Espacio para guardar el resultado en la oferta | Ficha M3 | ✅ | `resultado_evaluacion_inicial` con pendiente inicial (`N/A`); se llena una vez sin borrar lo original; descripción vacía = fallo. Verificado con respaldo (75 ofertas intactas).
+| 2 | Ampliar lista de estados y resumen de la vuelta | Ficha M3 | ✅ | `aceptada_ei`/`descartada_ei` en estados y CHECK; `total_aprobadas`/`total_descartadas` en `corridas`. Conteos M1/M2 intactos.
+| 3 | Ajustes nuevos de evaluación | Ficha M3 | ✅ | Puntajes viejos retirados con el motor (D49); pausa 1.2s ±0.4s, 2 reintentos, puertas alternas en orden; cupo agotado = cierre ordenado, resto pendiente.
+| 4 | Confirmar el modelo a usar | Ficha M3 | ✅ | Ruta existente `ai_routing.evaluation` (nube `gemma4:31b-cloud`); sin duplicar sección; apertura no llama a IA. Verificado en COR-0004.
+| 5 | Respaldo y orden de entrada | — | ✅ | Respaldo antes de construir y antes de la vuelta solo; módulo probado solo; tercero tras Preparación habilitado tras la vuelta solo (D49). |
 
 ---
 
@@ -163,10 +163,10 @@
 
 | # | Sub-phase (content) | Source docs | Status | Notes |
 |---|---|---|---|---|
-| 6.1 | Startup and candidate decision (INICIO + Hay ofertas por procesar) | Ficha técnica M3 | ⬜ | Module own run, full `evaluacion:` validation, shared global lock M1/M2/M3, FIFO `preparada` load, `hubo_candidatas`, no AI probe; `sin_pendientes` controlled termination. |
-| 6.2 | Initial evaluation (batch veto evaluation) | Ficha técnica M3 | ⬜ | 5 vetoes over 4 fields via routed AI + ordered alternate doors (2 retries); immediate per-offer persistence (`aceptada_ei`/`descartada_ei` + `resultado_evaluacion_inicial` + event with `id_oferta`); V3-FAIL exception; failures stay `preparada`; quota → orderly close. |
-| 6.3 | Closure and module orchestrator (Finalizar + `ejecutar_flujo`) | Ficha técnica M3 | ⬜ | Metrics by events (DISTINCT `id_oferta`), motive/state table incl. `cupo_agotado`, best-effort close, ownership-safe lock release; orchestrator mirror of Preparation. |
-| 6.4 | Solo real run, transversal third, doc closure | Fichas M3/orquestador, decision log | ⬜ | Solo verification run; then transversal third after Preparation; physical migrations + legacy scoring retirement land with the build; as-built notes + reviewers. |
+| 6.1 | Startup and candidate decision (INICIO + Hay ofertas por procesar) | Ficha técnica M3 | ✅ | `modules/evaluation/` espejo de Preparación: corrida propia, validación `evaluacion:` + ruta IA, bloqueo global, FIFO `preparada`, `hubo_candidatas`, sin sonda IA; `sin_pendientes` controlado. 11 pruebas. |
+| 6.2 | Initial evaluation (batch veto evaluation) | Ficha técnica M3 | ✅ | 5 vetos sobre 4 campos vía IA enrutada + puertas alternas (2 reintentos); persistencia inmediata (`aceptada_ei`/`descartada_ei` + resultado + evento); V3-FAIL sin IA; fallos quedan `preparada`; cupo = cierre ordenado. prompt v3 + higiene de entrada (D49); 3 puertas OpenRouter activas (D50); justificación explicativa v4 (60 palabras con evidencia, D51). 25 pruebas. |
+| 6.3 | Closure and module orchestrator (Finalizar + `ejecutar_flujo`) | Ficha técnica M3 | ✅ | Métricas por eventos (DISTINCT `id_oferta`); motivos incl. `cupo_agotado`→`completada`; cierre best-effort con liberación segura; orquestador espejo de Preparación. 10 pruebas (6 cierre + 4 flujo). |
+| 6.4 | Solo real run, transversal third, doc closure | Fichas M3/orquestador, decision log | ✅ | Vuelta solo COR-0004 (69 `preparada`, prompt v2): 42 aprobadas + 27 descartadas, 0 errores, `corrida_completada`; tercero tras Preparación habilitado (registro + `orquestador.modulos`); puntaje viejo retirado; notas as-built + D49. Vuelta completa posterior sobre base limpiada (evaluación COR-0004 también, por reinicio de contadores tras el barrido; prompt v3): 65 `descubierta` → 65 `preparada` + 4 `duplicada` → 14 `aceptada_ei` + 47 `descartada_ei`, 0 errores; D50/D51 siguientes. |
 
 ---
 

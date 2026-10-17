@@ -36,6 +36,11 @@ _CODIGOS_REINTENTABLES = (
     # Module 2 local nodes (ficha M2 Verificación ERR-01 / decisión de bucle
     # ERR-01): a transient SQLite failure can succeed on a later attempt.
     "error_bd",
+    # Module 3 evaluation (ficha M3 ERR-02/ERR-03): a down door/quota wall or
+    # an invalid AI answer can succeed on a later attempt (same door for an
+    # invalid answer, next door for a verified door failure).
+    "puerta_evaluacion_no_disponible",
+    "respuesta_evaluacion_invalida",
 )
 
 

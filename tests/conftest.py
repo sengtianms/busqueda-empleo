@@ -8,7 +8,6 @@ from shared.models import (
     Location,
     Offer,
     OfferState,
-    Profile,
     Source,
 )
 
@@ -82,20 +81,4 @@ def example_offer(
         titulo="Data Engineer",
         descripcion_original="Descripcion de prueba",
         estado=OfferState.DESCUBIERTA,
-    )
-
-
-@pytest.fixture
-def example_profile() -> Profile:
-    return Profile(
-        tecnologias={"Python": 5, "SQL": 4, "Spark": 3},
-        anos_experiencia=8,
-        seniority="senior",
-        idiomas={"Ingles": "C1", "Espanol": "Nativo"},
-        ubicaciones_preferidas=["Madrid", "Remoto"],
-        modalidades_preferidas=["remoto", "hibrido"],
-        salario_minimo=55000,
-        empresas_objetivo=[],
-        empresas_excluidas=["EvilCorp"],
-        educacion_nivel="grado",
     )

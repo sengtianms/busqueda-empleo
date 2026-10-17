@@ -1,0 +1,403 @@
+"""Unit tests for the Evaluación inicial node (Phase 6.2).
+
+The AI boundary (`analyze`) is mocked; persistence and counters run against
+a temporary database. Covers approved/rejected persistence, the V3-FAIL
+fast path, per-offer failure tolerance, quota-ordered stop and answer
+validation (VAL-04).
+"""
+
+import json
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+import modules.evaluation.nodes.evaluacion as evaluacion_mod
+from modules.evaluation.nodes.evaluacion import (
+    _limpiar_descripcion_para_ia,
+    _validar_respuesta,
+    ejecutar_evaluacion,
+)
+from modules.evaluation.run_context import RunContext
+from shared.persistence import buscar_por_id, leer_tabla
+
+EVALUACION_VALIDA: dict[str, Any] = {
+    "pausa_entre_ofertas_segundos": 0,
+    "pausa_jitter_segundos": 0,
+    "retries": {
+        "max_attempts": 2,
+        "base_wait_seconds": 0,
+        "max_wait_seconds": 0,
+        "multiplier": 1,
+    },
+    "puertas_alternas": [],
+}
+
+
+def _respuesta(decision: str = "APROBADA", veto: str = "v1") -> dict[str, str]:
+    base = {"v1": "PASS", "v2": "PASS", "v3": "PASS", "v4": "PASS", "v5": "PASS"}
+    if decision == "DESCARTADA":
+        base[veto] = "FAIL"
+    return {**base, "decision": decision, "justificacion": "Rol compatible con el perfil buscado"}
+
+
+def _sembrar(oferta_id: str, descripcion: str = "Descripcion valida de la oferta.") -> None:
+    from shared.persistence import escribir_fila
+
+    escribir_fila(
+        "ofertas_descubiertas",
+        {
+            "id": oferta_id,
+            "enlace": f"https://www.linkedin.com/jobs/view/{oferta_id}",
+            "titulo": f"Oferta {oferta_id}",
+            "descripcion_original": descripcion,
+            "modalidad": "remoto",
+            "ubicacion": "Colombia",
+            "fecha_descubrimiento": "2026-10-15 10:00:00",
+            "estado": "preparada",
+        },
+    )
+
+
+def _contexto(ids: list[str]) -> RunContext:
+    from shared.persistence import leer_candidatas_preparadas
+
+    candidatas = [c for c in leer_candidatas_preparadas() if c["id"] in ids]
+    return RunContext(
+        config_evaluacion=dict(EVALUACION_VALIDA),
+        candidatas=candidatas,
+        id_corrida="COR-TEST",
+    )
+
+
+def _eventos(codigo: str) -> list[dict[str, Any]]:
+    return [e for e in leer_tabla("eventos") if e["codigo"] == codigo]
+
+
+# ---------------------------------------------------------------- VAL-04
+
+
+def test_validar_respuesta_aprobada_ok() -> None:
+    validada = _validar_respuesta(_respuesta("APROBADA"))
+    assert validada.decision == "APROBADA"
+
+
+def test_validar_respuesta_incoherente() -> None:
+    mala = _respuesta("APROBADA")
+    mala["v2"] = "FAIL"
+    with pytest.raises(ValueError):
+        _validar_respuesta(mala)
+
+
+def test_validar_respuesta_justificacion_larga() -> None:
+    mala = _respuesta("APROBADA")
+    mala["justificacion"] = " ".join(f"palabra{i}" for i in range(61))
+    with pytest.raises(ValueError):
+        _validar_respuesta(mala)
+
+
+def test_validar_respuesta_justificacion_exacto_60_palabras_ok() -> None:
+    buena = _respuesta("APROBADA")
+    buena["justificacion"] = " ".join(f"palabra{i}" for i in range(60))
+    assert _validar_respuesta(buena).decision == "APROBADA"
+
+
+def test_validar_respuesta_no_dict() -> None:
+    with pytest.raises(ValueError):
+        _validar_respuesta("APROBADA")
+
+
+# ---------------------------------------------------------------- Caminos felices
+
+
+def test_aprobada_persiste_estado_resultado_y_evento(
+    temp_db_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _sembrar("OFE-0001")
+    monkeypatch.setattr(evaluacion_mod, "analyze", lambda *a, **k: _respuesta("APROBADA"))
+    res = ejecutar_evaluacion(_contexto(["OFE-0001"]))
+    assert res.estado == "completada"
+    fila = buscar_por_id("ofertas_descubiertas", "OFE-0001")
+    assert fila is not None
+    assert fila["estado"] == "aceptada_ei"
+    guardado = json.loads(str(fila["resultado_evaluacion_inicial"]))
+    assert guardado["decision"] == "APROBADA"
+    assert guardado["puerta"] == "principal"
+    eventos = _eventos("oferta_aprobada")
+    assert len(eventos) == 1
+    assert eventos[0]["id_oferta"] == "OFE-0001"
+    assert res.contexto is not None
+    assert res.contexto.contador_aprobadas == 1
+
+
+def test_descartada_registra_el_veto_que_freno(
+    temp_db_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _sembrar("OFE-0001")
+    monkeypatch.setattr(
+        evaluacion_mod, "analyze", lambda *a, **k: _respuesta("DESCARTADA", veto="v5")
+    )
+    res = ejecutar_evaluacion(_contexto(["OFE-0001"]))
+    assert res.estado == "completada"
+    fila = buscar_por_id("ofertas_descubiertas", "OFE-0001")
+    assert fila is not None
+    assert fila["estado"] == "descartada_ei"
+    eventos = _eventos("oferta_descartada")
+    assert len(eventos) == 1
+    assert "veto=v5" in str(eventos[0]["evidencia"])
+    assert res.contexto is not None
+    assert res.contexto.contador_descartadas == 1
+
+
+# ---------------------------------------------------------------- V3-FAIL
+
+
+@pytest.mark.parametrize("descripcion", ["", "N/A", "N/R", "No reportada por la fuente"])
+def test_descripcion_vacia_descarta_sin_llamar_a_la_ia(
+    temp_db_file: Path, monkeypatch: pytest.MonkeyPatch, descripcion: str
+) -> None:
+    _sembrar("OFE-0001", descripcion=descripcion)
+
+    def _boom(*a: Any, **k: Any) -> dict[str, str]:
+        raise AssertionError("la IA no debe llamarse sin descripcion")
+
+    monkeypatch.setattr(evaluacion_mod, "analyze", _boom)
+    res = ejecutar_evaluacion(_contexto(["OFE-0001"]))
+    assert res.estado == "completada"
+    fila = buscar_por_id("ofertas_descubiertas", "OFE-0001")
+    assert fila is not None
+    assert fila["estado"] == "descartada_ei"
+    guardado = json.loads(str(fila["resultado_evaluacion_inicial"]))
+    assert guardado["v3"] == "FAIL"
+    assert guardado["puerta"] == "sin_llamada"
+
+
+# ---------------------------------------------------------------- Fallos por oferta
+
+
+def test_fallo_persistente_deja_pendiente_y_continua(
+    temp_db_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from shared.errors import LLMError
+
+    _sembrar("OFE-0001")
+    _sembrar("OFE-0002")
+    llamadas = {"n": 0}
+
+    def _falla(*a: Any, **k: Any) -> dict[str, str]:
+        llamadas["n"] += 1
+        if llamadas["n"] <= 2:
+            raise LLMError("001", "puerta caida", source_module="ia_service")
+        return _respuesta("APROBADA")
+
+    monkeypatch.setattr(evaluacion_mod, "analyze", _falla)
+    ctx = _contexto(["OFE-0001", "OFE-0002"])
+    ctx.candidatas.sort(key=lambda c: str(c["id"]))
+    res = ejecutar_evaluacion(ctx)
+    assert res.estado == "completada"
+    # OFE-0001 agoto sus 2 intentos y quedo pendiente; OFE-0002 se aprobo.
+    fila1 = buscar_por_id("ofertas_descubiertas", "OFE-0001")
+    assert fila1 is not None
+    assert fila1["estado"] == "preparada"
+    assert fila1["resultado_evaluacion_inicial"] == "N/A"
+    fila2 = buscar_por_id("ofertas_descubiertas", "OFE-0002")
+    assert fila2 is not None
+    assert fila2["estado"] == "aceptada_ei"
+    assert len(_eventos("evaluacion_fallida")) == 1
+    assert res.contexto is not None
+    assert res.contexto.contador_errores == 1
+
+
+def test_respuesta_invalida_reintente_en_la_misma_puerta(
+    temp_db_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _sembrar("OFE-0001")
+    monkeypatch.setattr(evaluacion_mod, "analyze", lambda *a, **k: {"decision": "APROBADA"})
+    res = ejecutar_evaluacion(_contexto(["OFE-0001"]))
+    assert res.estado == "completada"
+    fila = buscar_por_id("ofertas_descubiertas", "OFE-0001")
+    assert fila is not None
+    assert fila["estado"] == "preparada"
+    assert len(_eventos("evaluacion_fallida")) == 1
+
+
+def test_fallo_de_principal_rota_a_alterna_y_registra_puerta(
+    temp_db_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from shared.errors import LLMError
+
+    _sembrar("OFE-0001")
+
+    def _principal_caida(*a: Any, **k: Any) -> dict[str, str]:
+        raise LLMError("001", "puerta caida", source_module="ia_service")
+
+    llamadas = {"n": 0}
+
+    def _alterna_responde(
+        prompt: str, contexto: dict[str, str], modelo: str, clave: str
+    ) -> dict[str, str]:
+        llamadas["n"] += 1
+        assert modelo == "google/gemma-4-31b-it"
+        assert clave == "OPENROUTER_API_KEY_1"
+        return _respuesta("APROBADA")
+
+    monkeypatch.setattr(evaluacion_mod, "analyze", _principal_caida)
+    monkeypatch.setattr(evaluacion_mod, "analyze_openrouter", _alterna_responde)
+    ctx = _contexto(["OFE-0001"])
+    ctx.config_evaluacion["puertas_alternas"] = [
+        {
+            "nombre": "openrouter-1",
+            "modelo": "google/gemma-4-31b-it",
+            "clave_ref": "OPENROUTER_API_KEY_1",
+        }
+    ]
+    res = ejecutar_evaluacion(ctx)
+    assert res.estado == "completada"
+    assert llamadas["n"] == 1
+    fila = buscar_por_id("ofertas_descubiertas", "OFE-0001")
+    assert fila is not None
+    assert fila["estado"] == "aceptada_ei"
+    guardado = json.loads(str(fila["resultado_evaluacion_inicial"]))
+    assert guardado["puerta"] == "openrouter-1"
+    eventos = _eventos("oferta_aprobada")
+    assert len(eventos) == 1
+    assert "puerta=openrouter-1" in str(eventos[0]["evidencia"])
+
+
+def test_cupo_agotado_frena_y_fija_cierre_por_cupo(
+    temp_db_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from shared.errors import LLMError
+
+    _sembrar("OFE-0001")
+    _sembrar("OFE-0002")
+
+    def _cupo(*a: Any, **k: Any) -> dict[str, str]:
+        raise LLMError("003", "AI Cloud responded with code 429", source_module="ia_service")
+
+    monkeypatch.setattr(evaluacion_mod, "analyze", _cupo)
+    ctx = _contexto(["OFE-0001", "OFE-0002"])
+    ctx.candidatas.sort(key=lambda c: str(c["id"]))
+    res = ejecutar_evaluacion(ctx)
+    assert res.estado == "completada"
+    assert res.contexto is not None
+    assert res.contexto.motivo_cierre == "cupo_agotado"
+    # Solo la primera se intento; la segunda ni se toco.
+    assert len(_eventos("evaluacion_fallida")) == 1
+    fila2 = buscar_por_id("ofertas_descubiertas", "OFE-0002")
+    assert fila2 is not None
+    assert fila2["estado"] == "preparada"
+
+
+# ---------------------------------------------------------------- Limpieza de entrada
+
+
+def test_limpieza_deja_intacta_la_descripcion_corta() -> None:
+    texto = "Únete al mejor equipo.\nBuscamos Desarrollador Python con PySpark."
+    assert _limpiar_descripcion_para_ia(texto) == texto
+
+
+def test_limpieza_quita_beneficios_y_avisos_del_final() -> None:
+    texto = (
+        "Responsibilities\nBuild data pipelines.\n"
+        "Benefits\nHealth insurance.\n"
+        "Equal Opportunity\nWe are an equal opportunity employer."
+    )
+    limpio = _limpiar_descripcion_para_ia(texto)
+    assert "Build data pipelines" in limpio
+    assert "Benefits" not in limpio
+    assert "Health insurance" not in limpio
+    assert "equal opportunity employer" not in limpio
+
+
+def test_limpieza_salta_propaganda_inicial_hasta_el_rol() -> None:
+    texto = (
+        "About Us\nWe are the best company in the world.\n"
+        "Responsibilities\nDesign the planning process.\n"
+        "Benefits\nFree coffee."
+    )
+    limpio = _limpiar_descripcion_para_ia(texto)
+    assert "best company" not in limpio
+    assert "Design the planning process" in limpio
+    assert "Free coffee" not in limpio
+
+
+def test_limpieza_no_toca_menciones_dentro_del_rol() -> None:
+    texto = "Responsibilities\nWe offer benefits including remote work."
+    assert _limpiar_descripcion_para_ia(texto) == texto
+
+
+def test_limpieza_con_tope_alto_de_seguridad() -> None:
+    texto = "Responsibilities\n" + ("linea de rol. " * 2000)
+    limpio = _limpiar_descripcion_para_ia(texto)
+    assert len(limpio) == 6000
+    assert limpio.startswith("Responsibilities")
+
+
+def test_limpieza_todo_ruido_devuelve_el_original() -> None:
+    texto = "Benefits\nFree coffee."
+    assert _limpiar_descripcion_para_ia(texto) == texto
+
+
+def test_la_ia_recibe_limpio_y_la_base_guarda_el_original(
+    temp_db_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    descripcion = (
+        "Responsibilities\nBuild data pipelines.\nBenefits\nHealth insurance."
+    )
+    _sembrar("OFE-0001", descripcion=descripcion)
+    recibidas: dict[str, str] = {}
+
+    def _ia(prompt: str, contexto: dict[str, str], purpose: str = "") -> dict[str, str]:
+        recibidas.update(contexto)
+        return _respuesta("DESCARTADA", veto="v1")
+
+    monkeypatch.setattr(evaluacion_mod, "analyze", _ia)
+    res = ejecutar_evaluacion(_contexto(["OFE-0001"]))
+    assert res.estado == "completada"
+    assert "Health insurance" not in recibidas["descripcion_original"]
+    fila = buscar_por_id("ofertas_descubiertas", "OFE-0001")
+    assert fila is not None
+    assert str(fila["descripcion_original"]) == descripcion
+
+
+def test_mencion_no_reportada_en_texto_real_si_llama_a_la_ia(
+    temp_db_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _sembrar(
+        "OFE-0001",
+        descripcion="Rol de transformación con datos no reportada antes en otra empresa.",
+    )
+    llamadas = {"n": 0}
+
+    def _ia(*a: Any, **k: Any) -> dict[str, str]:
+        llamadas["n"] += 1
+        return _respuesta("APROBADA")
+
+    monkeypatch.setattr(evaluacion_mod, "analyze", _ia)
+    res = ejecutar_evaluacion(_contexto(["OFE-0001"]))
+    assert res.estado == "completada"
+    assert llamadas["n"] == 1
+    fila = buscar_por_id("ofertas_descubiertas", "OFE-0001")
+    assert fila is not None
+    assert fila["estado"] == "aceptada_ei"
+
+
+# ---------------------------------------------------------------- Abortos
+
+
+def test_sin_contexto_aborta() -> None:
+    res = ejecutar_evaluacion(None)
+    assert res.estado == "abortada"
+    assert res.codigo == "ERR-01"
+
+
+def test_candidata_sin_id_aborta(temp_db_file: Path) -> None:
+    ctx = RunContext(
+        config_evaluacion=dict(EVALUACION_VALIDA),
+        candidatas=[{"titulo": "sin id"}],
+        id_corrida="COR-TEST",
+    )
+    res = ejecutar_evaluacion(ctx)
+    assert res.estado == "abortada"
+    assert res.codigo == "ERR-01"

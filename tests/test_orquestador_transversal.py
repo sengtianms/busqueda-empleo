@@ -454,8 +454,11 @@ def test_flujo_real_de_preparacion_como_modulo(
     assert any(c["total_preparadas"] == 1 for c in leer_tabla("corridas"))
 
 
-def test_registro_declara_los_dos_modulos_del_pipeline() -> None:
-    assert [m.nombre for m in MODULOS] == ["descubrimiento", "preparacion"]
+def test_registro_declara_los_tres_modulos_del_pipeline() -> None:
+    # Fase 6: evaluacion se declara tercero tras preparacion; el `orquestador:`
+    # de ajustes lo habilita solo tras su vuelta de verificacion solo (D48).
+    assert [m.nombre for m in MODULOS] == ["descubrimiento", "preparacion", "evaluacion"]
     estados = {(m.estado_entrada, m.estado_salida) for m in MODULOS}
     assert ("-", "descubierta") in estados
     assert ("descubierta", "preparada/duplicada") in estados
+    assert ("preparada", "aceptada_ei/descartada_ei") in estados

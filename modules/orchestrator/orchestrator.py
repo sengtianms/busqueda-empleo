@@ -20,6 +20,7 @@ from typing import Any, Callable, TypeVar
 from loguru import logger
 
 from modules.discovery.orchestrator import ejecutar_flujo as flujo_descubrimiento
+from modules.evaluation.orchestrator import ejecutar_flujo as flujo_evaluacion
 from modules.preparation.orchestrator import ejecutar_flujo as flujo_preparacion
 from shared.config import load
 from shared.persistence import (
@@ -58,6 +59,12 @@ MODULOS: list[ModuloOrquestado] = [
         estado_entrada="descubierta",
         estado_salida="preparada/duplicada",
         ejecutar_flujo=flujo_preparacion,
+    ),
+    ModuloOrquestado(
+        "evaluacion",
+        estado_entrada="preparada",
+        estado_salida="aceptada_ei/descartada_ei",
+        ejecutar_flujo=flujo_evaluacion,
     ),
 ]
 

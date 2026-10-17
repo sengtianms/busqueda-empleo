@@ -211,3 +211,112 @@ def analyze(
 
     logger.debug("Response received from AI | prompt_id={} | provider={}", prompt_id, provider)
     return _validate_response(raw_response)
+
+
+_URL_OPENROUTER = "https://openrouter.ai/api/v1/chat/completions"
+
+
+def _clave_openrouter(referencia: str) -> str:
+    """Reads an alternate-door key from the private file (never the repo).
+
+    Keys live only in `config/.env` (loaded into `config["_env"]`); here
+    only their reference names travel (ficha M3 pending item 1).
+    """
+    env = load().get("_env", {})
+    clave = env.get(referencia, "") if isinstance(env, dict) else ""
+    if not clave or not str(clave).strip():
+        raise ConfigurationError(
+            "003",
+            f"Missing private key '{referencia}' (config/.env)",
+            source_module="ia_service",
+        )
+    return str(clave)
+
+
+def _send_openrouter(prompt: str, modelo: str, referencia_clave: str) -> str:
+    """POST a prompt to an OpenRouter alternate door (same-model rotation).
+
+    No retry decorator here: the evaluation node owns attempts and door
+    rotation (ficha M3 RN-07). Quota exhaustion surfaces with its status so
+    the node can close by quota in order. Timeout and sampling follow the
+    `ai_cloud` settings (D45 determinism), like the principal cloud route.
+    """
+    clave = _clave_openrouter(referencia_clave)
+    nube = _get_cloud_config()
+    opciones = nube.get("options", {})
+    temperatura = float(opciones.get("temperature", 0.0)) if isinstance(opciones, dict) else 0.0
+    try:
+        respuesta = httpx.post(
+            _URL_OPENROUTER,
+            json={
+                "model": modelo,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": temperatura,
+            },
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {clave}",
+            },
+            timeout=float(nube.get("timeout", 120)),
+        )
+        respuesta.raise_for_status()
+        datos = respuesta.json()
+        opciones = datos.get("choices", [])
+        if not opciones:
+            raise LLMError(
+                "003",
+                "OpenRouter response without choices",
+                source_module="ia_service",
+            )
+        return str(opciones[0].get("message", {}).get("content", ""))
+    except httpx.ConnectError:
+        raise LLMError(
+            "001",
+            "Could not connect to OpenRouter",
+            source_module="ia_service",
+        )
+    except httpx.TimeoutException:
+        raise LLMError(
+            "002",
+            f"Timeout connecting to OpenRouter ({nube.get('timeout', 120)}s)",
+            source_module="ia_service",
+        )
+    except httpx.HTTPStatusError as e:
+        codigo = e.response.status_code
+        if codigo in (401, 403):
+            raise LLMError(
+                "003",
+                f"OpenRouter key rejected (status {codigo})",
+                source_module="ia_service",
+            )
+        if codigo == 429:
+            raise LLMError(
+                "003",
+                "OpenRouter quota exhausted (status 429)",
+                source_module="ia_service",
+            )
+        raise LLMError(
+            "003",
+            f"OpenRouter responded with code {codigo}",
+            source_module="ia_service",
+        )
+
+
+def analyze_openrouter(
+    prompt_id: str, context: dict[str, Any], modelo: str, referencia_clave: str
+) -> dict[str, Any]:
+    """Evaluates a prompt through an OpenRouter alternate door."""
+    template = load_prompt(prompt_id)
+    final_prompt = render_prompt(template, context)
+    logger.debug(
+        "Sending prompt to alternate door | prompt_id={} | model={}",
+        prompt_id,
+        modelo,
+    )
+    raw_response = _send_openrouter(final_prompt, modelo, referencia_clave)
+    logger.debug(
+        "Response received from alternate door | prompt_id={} | model={}",
+        prompt_id,
+        modelo,
+    )
+    return _validate_response(raw_response)

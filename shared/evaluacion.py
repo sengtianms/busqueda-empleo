@@ -51,6 +51,15 @@ def validar_evaluacion(
     for puerta in puertas:
         if not isinstance(puerta, dict):
             return "puertas_alternas invalida (cada puerta debe ser un objeto)"
+        nombre = puerta.get("nombre", "")
+        if not isinstance(nombre, str):
+            return "puertas_alternas invalida (nombre de puerta debe ser texto)"
+        modelo = puerta.get("modelo", "")
+        if not isinstance(modelo, str) or not modelo.strip():
+            return "puertas_alternas invalida (cada puerta requiere 'modelo')"
+        clave_ref = puerta.get("clave_ref", "")
+        if not isinstance(clave_ref, str) or not clave_ref.strip():
+            return "puertas_alternas invalida (cada puerta requiere 'clave_ref')"
     if configuracion is None:
         return "configuracion global ausente (ruta ai_routing.evaluation)"
     if not isinstance(configuracion, dict):

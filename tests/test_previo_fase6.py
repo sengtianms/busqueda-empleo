@@ -135,6 +135,41 @@ def test_validador_rechaza_puertas_no_lista() -> None:
     assert validar_evaluacion(seccion, _config_ok()) is not None
 
 
+def test_validador_rechaza_puerta_con_nombre_no_texto() -> None:
+    seccion = _seccion_ok()
+    seccion["puertas_alternas"] = [{"nombre": 5}]
+    assert validar_evaluacion(seccion, _config_ok()) is not None
+
+
+def test_validador_rechaza_puerta_sin_modelo() -> None:
+    seccion = _seccion_ok()
+    seccion["puertas_alternas"] = [{"nombre": "alterna", "clave_ref": "K"}]
+    assert validar_evaluacion(seccion, _config_ok()) is not None
+
+
+def test_validador_rechaza_puerta_sin_clave() -> None:
+    seccion = _seccion_ok()
+    seccion["puertas_alternas"] = [{"nombre": "alterna", "modelo": "m"}]
+    assert validar_evaluacion(seccion, _config_ok()) is not None
+
+
+def test_validador_acepta_tres_puertas_openrouter() -> None:
+    from shared import config as config_module
+
+    config_module.reload_config()
+    config = config_module.load()
+    assert validar_evaluacion(config.get("evaluacion"), config) is None
+    assert len(config["evaluacion"]["puertas_alternas"]) == 3
+
+
+def test_template_privado_reserva_las_tres_llaves() -> None:
+    from pathlib import Path
+
+    plantilla = Path("config/.env.template").read_text(encoding="utf-8")
+    for i in (1, 2, 3):
+        assert f"OPENROUTER_API_KEY_{i}=" in plantilla
+
+
 def test_validador_rechaza_ruta_ausente() -> None:
     config = _config_ok()
     del config["ai_routing"]
