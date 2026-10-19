@@ -2,11 +2,13 @@
 
 Process node, batch over the whole candidate list (sheet pasos funcionales
 1-8). For every offer in `preparada` (FIFO order from INICIO): take the 4
-fields as stored (VAL-02, no interpretation), request the 5-veto evaluation
-from the routed AI (paso 3, up to 2 attempts per sheet `max_attempts: 2`
-with pause between offers), validate the answer (paso 4, VAL-04), and
-persist immediately per offer (RN-02: final state + full result column +
-event with `id_oferta` + counter) before taking the next one.
+fields as stored (VAL-02, no interpretation), request the role's main
+deliverable plus the 5-veto evaluation from the routed AI (paso 3, up to 2
+attempts per sheet `max_attempts: 2` with pause between offers), validate
+the answer (paso 4, VAL-04: deliverable + vetos + coherent decision +
+justification), and persist immediately per offer (RN-02: final state +
+full result column + event with `id_oferta` + counter) before taking the
+next one.
 
 Golden rule (RN-05): on doubt or missing information the offer passes — with
 one approved exception: an empty, `N/A`/`N/R` or unreported description is a
@@ -57,11 +59,13 @@ _SENALES_CUPO = (
 # Descripción sin contenido evaluable → V3 FAIL sin llamar a la IA (excepción
 # aprobada a la REGLA DE ORO; la oferta queda descartada, no pendiente).
 _DESCRIPCIONES_VACIAS = {"", "n/a", "n/r", "no reportada", "no_reportada", "nr"}
+_SALTOS_DE_LINEA = "\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029"
 
 
 class ResultadoVetos(BaseModel):
-    """Validated `{v1..v5, decision, justificacion}` JSON from the prompt."""
+    """Validated `{entregable_principal, v1..v5, decision, justificacion}` JSON."""
 
+    entregable_principal: str
     v1: str
     v2: str
     v3: str
@@ -220,13 +224,25 @@ def _limpiar_descripcion_para_ia(descripcion: str) -> str:
 
 
 def _validar_respuesta(respuesta: Any) -> ResultadoVetos:
-    """VAL-04: 5 vetos present, coherent decision, one-line justification (≤ 60 words)."""
+    """VAL-04: deliverable (one line, ≤20 words) and veto answer validation."""
     if not isinstance(respuesta, dict):
         raise ValueError("la respuesta no es un objeto JSON")
     try:
         validada = ResultadoVetos.model_validate(respuesta)
     except Exception as exc:
         raise ValueError(f"respuesta con campos faltantes o tipos invalidos: {exc}") from exc
+    entregable = (validada.entregable_principal or "").strip()
+    if not entregable:
+        raise ValueError("entregable_principal vacio")
+    if any(c in entregable for c in _SALTOS_DE_LINEA):
+        raise ValueError("entregable_principal debe ser una sola linea")
+    if entregable.upper() in {"N/A", "N/R"}:
+        raise ValueError("entregable_principal sin contenido")
+    if len(entregable.split()) > 20:
+        raise ValueError("entregable_principal supera 20 palabras")
+    if '"' in entregable:
+        raise ValueError("entregable_principal con comillas dobles")
+    validada = validada.model_copy(update={"entregable_principal": entregable})
     for campo in ("v1", "v2", "v3", "v4", "v5"):
         if getattr(validada, campo) not in ("PASS", "FAIL"):
             raise ValueError(f"{campo} debe ser PASS o FAIL")
@@ -239,7 +255,7 @@ def _validar_respuesta(respuesta: Any) -> ResultadoVetos:
     justificacion = validada.justificacion or ""
     if not justificacion.strip():
         raise ValueError("justificacion vacia")
-    if "\n" in justificacion:
+    if any(c in justificacion for c in _SALTOS_DE_LINEA):
         raise ValueError("justificacion debe ser una sola linea")
     if len(justificacion.split()) > 60:
         raise ValueError("justificacion supera 60 palabras")
@@ -376,6 +392,7 @@ def _anotar_oferta(
         return False
     resultado_json = json.dumps(
         {
+            "entregable_principal": validada.entregable_principal,
             "v1": validada.v1,
             "v2": validada.v2,
             "v3": validada.v3,
@@ -428,6 +445,7 @@ def _anotar_oferta(
 def _v3_fail() -> ResultadoVetos:
     """Synthetic V3-FAIL result for the empty-description fast path."""
     return ResultadoVetos(
+        entregable_principal="N/A",
         v1="PASS",
         v2="PASS",
         v3="FAIL",

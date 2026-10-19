@@ -59,7 +59,14 @@ def _sembrar(oferta_id: str, descripcion: str = "Descripcion valida de la oferta
 
 
 def _respuesta(decision: str = "APROBADA") -> dict[str, str]:
-    base = {"v1": "PASS", "v2": "PASS", "v3": "PASS", "v4": "PASS", "v5": "PASS"}
+    base = {
+        "entregable_principal": "Proceso de planeación y criterios de priorización",
+        "v1": "PASS",
+        "v2": "PASS",
+        "v3": "PASS",
+        "v4": "PASS",
+        "v5": "PASS",
+    }
     if decision == "DESCARTADA":
         base["v2"] = "FAIL"
     return {**base, "decision": decision, "justificacion": "Rol compatible con el perfil"}

@@ -486,13 +486,24 @@ Format: `D<n>` — module/business decisions; `C<n>` — prompt/design alignment
 ### D51. Evaluation justification upgraded: evidence-backed explanations, 60-word cap, prompt v4 (2026-10-17)
 
 - **Date:** 2026-10-17
-- **Status:** In effect
+- **Status:** In effect for the evidence-backed justification rule; prompt version superseded by D52 (2026-10-19).
 - **Context:** During the approved-offer sample review (14 `aceptada_ei` from the full clean-DB run), the user found the stored justificaciones uninformative — prompt v3 caps them at 20 words/one line ("Rol senior de analítica para sistemas de decisión"), so every explanation reads as a template and does not support calibration decisions. The VAL-04 validator mirrors the same 20-word cap, so the model cannot elaborate even if the prompt allowed it.
 - **Decision:**
   1. **Prompt `compatibility.md` v4:** the justification must explain THE offer, not a generic one — for APROBADA: the organizational-focus axis it satisfies (operational systems / decision & information systems / organizational design & transformation), concrete evidence quoted from the description (single quotes) and the modality/location viability; for DESCARTADA: the veto (V1–V5) plus the exact description data triggering it. Template phrases valid for any offer (e.g. "rol compatible con el perfil") are explicitly prohibited. Cap raised 20 → 60 words; the single-line/no-double-quotes/no-backslash/no-braces format rules are unchanged.
   2. **Validator:** `_validar_respuesta` raises its word cap to 60 with a boundary test (60 OK / 61 rejected). No schema, veto rules, doors or flow changes; stored `resultado_evaluacion_inicial` keeps richer text going forward (historical rows keep their short v3 text).
   3. **Scope:** applies identically to the principal door and the three OpenRouter alternates (same prompt + validator, D50).
 - **Impact:** More informative audit trail for human sample review without touching veto semantics, persistence or flow; intelligence input unchanged. 617 tests.
+
+### D52. Evaluation prompt v5: deliverable-first V1, refined golden rule, calibration examples, persisted `entregable_principal` (2026-10-19)
+
+- **Date:** 2026-10-19
+- **Status:** In effect
+- **Context:** After reviewing v4's calibration, the user supplied a new `compatibility.md` text (v5): it makes the role's main deliverable explicit before deciding V1, narrows the golden rule to the semantic interpretation of the role (V1/V3, and V2 only when the offer gives no years or level), states that generic business phrases do not create ambiguity, adds three calibration examples, and requires every discard veto to be named in the justification. The stored result had no deliverable field and the official docs described v4.
+- **Decision:**
+  1. **Prompt `compatibility.md` v5:** objective and golden-rule scope aligned; V1 split into three explicit steps (identify `entregable_principal` first, classify the deliverable as organizational mechanism vs. specialized technical artifact, then apply the three organizational axes and the mixed-role rules); V2 evaluates explicit years/level literally and falls back to the golden rule only when the offer gives neither; V3 unchanged; V4/V5 stay literal when modality/location are missing; three calibration examples included (data scientist, supply-chain planning manager, head of decision analytics); output JSON puts `entregable_principal` first (one line, ≤ 20 words, no double quotes); discard justifications must name ALL triggering vetoes; 60-word justification cap retained.
+  2. **Persistence and validation:** `ResultadoVetos` gains the required `entregable_principal`; `_validar_respuesta` enforces non-empty (rejecting the `N/A`/`N/R` sentinels), one line, ≤ 20 words and no double quotes; `_anotar_oferta` stores it first inside the `resultado_evaluacion_inicial` JSON. The V3-FAIL empty-description fast path bypasses VAL-04 and stores `N/A` (D31) as the reserved exception. No schema change: the column already exists; historical rows keep their previous JSON without the field.
+  3. **Docs alignment:** Module 3 ficha (RN-04, VAL-04, as-built notes), DOC-13A (`resultado_evaluacion_inicial` description + version history), database-tables reference, MVP plan, tracker, AGENTS.md and README updated from v4 to v5/D52.
+- **Impact:** Prompt, validator and stored result payload change; V1/V2 evaluation guidance is refined while V3/V4/V5 semantics, flow and schema stay untouched; live DB untouched. Tests add deliverable boundary cases. 624 tests.
 
 ## Prompt/design alignment decisions
 
@@ -557,6 +568,7 @@ Source: DOC-APPENDIX 9A — archived 2026-08-11; content consolidated here uncha
 
 | Version | Date | Change |
 |---|---|---|
+| 1.36 | 2026-10-19 | Added D52 (evaluation prompt v5: deliverable-first V1 with persisted `entregable_principal`, refined golden-rule scope, calibration examples, all-veto discard justifications; validator enforces one line/≤20 words/no double quotes; no schema change; tracker 6.2; 624 tests). |
 | 1.35 | 2026-10-17 | Added D51 (evaluation justification upgraded: prompt `compatibility.md` v4 requires evidence-backed per-offer explanations — axis + quoted description evidence + viability for APROBADA, veto + triggering data for DESCARTADA, generic template phrases prohibited; word cap 20 → 60 in prompt and VAL-04 validator; no schema/veto/flow changes; tracker 6.2; 617 tests). |
 | 1.34 | 2026-10-15 | Added D49 (Module 3 build: 4-node evaluation flow + prompt v3 + description hygiene for AI input + legacy scoring retirement + solo run COR-0004 42/27/0 + transversal third enabled; tracker Phase 6 complete; 609 tests). |
 | 1.33 | 2026-10-15 | Added D48 (Module 3 docs alignment before build: new `evaluacion:` settings with legacy scoring kept deprecated until the build retires `decision_engine`; `resultado_evaluacion_inicial`, `aceptada_ei`/`descartada_ei`, `total_aprobadas`/`total_descartadas`, `cupo_agotado`, per-offer events, 3-module lock in DOC-13A v1.16 + database-tables; Phase 6 plan/tracker replaced by the 4-node sheet plan; transversal third after solo run; no code/schema/DB changes; 563 tests). |

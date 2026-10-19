@@ -35,7 +35,14 @@ EVALUACION_VALIDA: dict[str, Any] = {
 
 
 def _respuesta(decision: str = "APROBADA", veto: str = "v1") -> dict[str, str]:
-    base = {"v1": "PASS", "v2": "PASS", "v3": "PASS", "v4": "PASS", "v5": "PASS"}
+    base = {
+        "entregable_principal": "  Proceso de planeación y criterios de priorización  ",
+        "v1": "PASS",
+        "v2": "PASS",
+        "v3": "PASS",
+        "v4": "PASS",
+        "v5": "PASS",
+    }
     if decision == "DESCARTADA":
         base[veto] = "FAIL"
     return {**base, "decision": decision, "justificacion": "Rol compatible con el perfil buscado"}
@@ -82,6 +89,54 @@ def test_validar_respuesta_aprobada_ok() -> None:
     assert validada.decision == "APROBADA"
 
 
+def test_validar_respuesta_sin_entregable_principal() -> None:
+    mala = _respuesta("APROBADA")
+    del mala["entregable_principal"]
+    with pytest.raises(ValueError):
+        _validar_respuesta(mala)
+
+
+def test_validar_respuesta_entregable_vacio() -> None:
+    mala = _respuesta("APROBADA")
+    mala["entregable_principal"] = "   "
+    with pytest.raises(ValueError):
+        _validar_respuesta(mala)
+
+
+def test_validar_respuesta_entregable_centinela() -> None:
+    mala = _respuesta("APROBADA")
+    mala["entregable_principal"] = "N/A"
+    with pytest.raises(ValueError):
+        _validar_respuesta(mala)
+
+
+def test_validar_respuesta_entregable_mas_de_20_palabras() -> None:
+    mala = _respuesta("APROBADA")
+    mala["entregable_principal"] = " ".join(f"palabra{i}" for i in range(21))
+    with pytest.raises(ValueError):
+        _validar_respuesta(mala)
+
+
+def test_validar_respuesta_entregable_exacto_20_palabras_ok() -> None:
+    buena = _respuesta("APROBADA")
+    buena["entregable_principal"] = " ".join(f"palabra{i}" for i in range(20))
+    assert _validar_respuesta(buena).decision == "APROBADA"
+
+
+def test_validar_respuesta_entregable_multilinea() -> None:
+    mala = _respuesta("APROBADA")
+    mala["entregable_principal"] = "Proceso de planeación\r\ncon criterios"
+    with pytest.raises(ValueError):
+        _validar_respuesta(mala)
+
+
+def test_validar_respuesta_entregable_con_comillas_dobles() -> None:
+    mala = _respuesta("APROBADA")
+    mala["entregable_principal"] = 'Proceso "S&OP"'
+    with pytest.raises(ValueError):
+        _validar_respuesta(mala)
+
+
 def test_validar_respuesta_incoherente() -> None:
     mala = _respuesta("APROBADA")
     mala["v2"] = "FAIL"
@@ -121,6 +176,8 @@ def test_aprobada_persiste_estado_resultado_y_evento(
     assert fila is not None
     assert fila["estado"] == "aceptada_ei"
     guardado = json.loads(str(fila["resultado_evaluacion_inicial"]))
+    assert next(iter(guardado)) == "entregable_principal"
+    assert guardado["entregable_principal"] == "Proceso de planeación y criterios de priorización"
     assert guardado["decision"] == "APROBADA"
     assert guardado["puerta"] == "principal"
     eventos = _eventos("oferta_aprobada")
@@ -168,6 +225,7 @@ def test_descripcion_vacia_descarta_sin_llamar_a_la_ia(
     assert fila is not None
     assert fila["estado"] == "descartada_ei"
     guardado = json.loads(str(fila["resultado_evaluacion_inicial"]))
+    assert guardado["entregable_principal"] == "N/A"
     assert guardado["v3"] == "FAIL"
     assert guardado["puerta"] == "sin_llamada"
 

@@ -201,7 +201,7 @@ Flujo por oferta, en orden FIFO (orden obligatorio):
 |---|---|---|---|
 | 1 | **Armar los datos** | Toma título, descripción, modalidad y ubicación tal cual vienen | Lista del contexto |
 | 2 | **Pedir la evaluación** | Llama a la inteligencia con los 5 controles; ante fallo de puerta reintenta hasta 2 veces; pausa entre ofertas | Inteligencia elegida |
-| 3 | **Validar la respuesta** | Verifica 5 controles presentes, decisión coherente con ellos y explicación corta en una línea | Respuesta del paso 2 |
+| 3 | **Validar la respuesta** | Verifica entregable principal, 5 controles presentes, decisión coherente con ellos y explicación corta en una línea | Respuesta del paso 2 |
 | 4 | **Anotar el resultado** | Marca estado, guarda el resultado completo, escribe el evento y suma en su cuenta | Pasos 2-3 |
 
 En fallo persistente del paso 2 o respuesta inválida tras los reintentos: evento de error con `id_oferta`; la oferta queda pendiente de revisar en `preparada` y se continúa con la siguiente. **Todos los eventos de oferta llevan `id_oferta`, éxito y fallo.**
@@ -224,8 +224,8 @@ En fallo persistente del paso 2 o respuesta inválida tras los reintentos: event
 - **RN-01**: por lotes: este nodo evalúa toda la lista antes de entregar control.
 - **RN-02**: persistencia inmediata por oferta: cada resultado validado se escribe en la tabla de una vez (estado + columna de resultado + evento + cuenta) antes de tomar la siguiente.
 - **RN-03**: la aprobada se marca `aceptada_ei` y la descartada `descartada_ei`, pasando por `evaluada` en el mismo movimiento. `aceptada_ei` / `descartada_ei` son estados propios de esta fase y se suman al catálogo oficial (la fase profunda usará los suyos).
-- **RN-04**: la columna `resultado_evaluacion_inicial` guarda el resultado completo (v1–v5, decisión, explicación). `DEFAULT 'N/A'`; pendiente de evaluar = `'N/A'`.
-- **RN-05**: la inteligencia recibe exactamente 4 datos (título, descripción, modalidad, ubicación). Ante duda o falta de información en tema, nivel o calidad, no descarta — con una excepción aprobada: sin descripción o con marca de no reportada → V3 FAIL. Modalidad y ubicación se aplican al pie de la letra aunque falte el dato.
+- **RN-04**: la columna `resultado_evaluacion_inicial` guarda el resultado completo (entregable principal, v1–v5, decisión, explicación). `DEFAULT 'N/A'`; pendiente de evaluar = `'N/A'`.
+- **RN-05**: la inteligencia recibe exactamente 4 datos (título, descripción, modalidad, ubicación). Ante duda real sobre la naturaleza del rol, no descarta: la regla de oro cubre V1/V3 y V2 solo cuando no hay años ni nivel; los datos explícitos (años, nivel, entregable claro) se evalúan literalmente y las frases genéricas de negocio no crean ambigüedad. Excepción aprobada: sin descripción o con marca de no reportada → V3 FAIL. Modalidad y ubicación se aplican al pie de la letra aunque falte el dato.
 - **RN-06**: reintento por oferta hasta 2 veces ante fallo de puerta o respuesta inválida; si persiste → pendiente en `preparada` (siguiente oferta, siguiente vuelta).
 - **RN-07**: cambio de puerta ante fallo verificado de puerta (cupo lleno, puerta caída o sin respuesta, llave rechazada); ante respuesta mal formada se reintenta en la misma puerta sin tocar la siguiente. Puertas agotadas → pendientes y cierre por cupo.
 - **RN-08**: pausa entre ofertas siempre, configurable.
@@ -236,7 +236,7 @@ En fallo persistente del paso 2 o respuesta inválida tras los reintentos: event
 - **VAL-01**: insumos presentes (lista no vacía, configuración, ruta de inteligencia).
 - **VAL-02**: los 4 datos tomados tal cual (sin interpretar ni completar).
 - **VAL-03**: política de reintentos cumplida (≤ 2 por oferta); pausa aplicada entre ofertas.
-- **VAL-04**: respuesta con v1–v5 presentes, decisión coherente con ellos y explicación en una línea de máximo 60 palabras con evidencia de la oferta (v4, D51).
+- **VAL-04**: respuesta con `entregable_principal` (una línea, máximo 20 palabras, sin comillas dobles y con contenido real, no `N/A`/`N/R`), v1–v5 presentes, decisión coherente con ellos y explicación en una línea de máximo 60 palabras con evidencia de la oferta (v5, D52).
 - **VAL-05**: oferta anotada respeta D31 (sin vacíos); columna de resultado diligenciada o `'N/A'` si pendiente.
 - **VAL-06**: evento escrito con `id_oferta`; evidencia acotada.
 
@@ -283,6 +283,7 @@ En fallo persistente del paso 2 o respuesta inválida tras los reintentos: event
 - Higiene de entrada (D49): la descripción enviada a la IA se limpia de secciones de ruido (empresa, beneficios, avisos EN/ES) con tope alto de seguridad; el original guardado no se toca (desviación aprobada de VAL-02 solo para la descripción; título, modalidad y ubicación van tal cual).
 - Prompt `compatibility.md` v3 (D49): V1 con prueba del beneficiario final y exclusión estructural de fontanería de datos e infraestructura.
 - Prompt `compatibility.md` v4 (D51): la justificación exige evidencia concreta de la oferta (eje + cita del texto + viabilidad, o veto + dato que lo activa), prohibición de frases genéricas y tope de 60 palabras (antes 20 en v3).
+- Prompt `compatibility.md` v5 (D52): V1 con tres pasos (entregable principal primero, clasificación mecanismo/artefacto, ejes y roles mixtos), regla de oro acotada, ejemplos de calibración y descartes que nombran todos los vetos; `entregable_principal` se valida en una línea de máximo 20 palabras y se guarda en `resultado_evaluacion_inicial`. La ruta V3-FAIL sin descripción no pasa por VAL-04 y guarda `entregable_principal = "N/A"` (D31).
 - Columna nueva `resultado_evaluacion_inicial` (`TEXT DEFAULT 'N/A'`, migración aditiva idempotente).
 - Puertas alternas del mismo modelo con rotación de llaves (llaves solo en el archivo privado); la puerta que respondió queda en la evidencia.
 - Sin valores fijos: reintentos, pausas y modelo desde ajustes.
@@ -291,7 +292,7 @@ En fallo persistente del paso 2 o respuesta inválida tras los reintentos: event
 1. **Leer insumos**. Entrada: contexto, configuración, ruta de inteligencia. Proceso: verificar lista no vacía, ajustes completos y ruta existente. Salida: insumos. Val: VAL-01. Err: ERR-01.
 2. **Tomar la siguiente oferta**. Entrada: lista FIFO. Proceso: la más antigua sin procesar de esta vuelta; tomar sus 4 datos tal cual. Salida: oferta en mano. Val: VAL-02. Err: ERR-01.
 3. **Pedir la evaluación**. Entrada: 4 datos, reintentos, puertas. Proceso: llamar con los 5 controles; fallo de puerta → reintento y cambio de puerta verificado; pausa entre ofertas. Salida: respuesta o fallo persistente. Val: VAL-03. Err: ERR-02, EVT-03.
-4. **Validar la respuesta**. Entrada: respuesta. Proceso: 5 controles presentes, decisión coherente, explicación en una línea. Salida: válida o inválida. Val: VAL-04. Err: ERR-03, EVT-03.
+4. **Validar la respuesta**. Entrada: respuesta. Proceso: entregable principal, 5 controles presentes, decisión coherente, explicación en una línea. Salida: válida o inválida. Val: VAL-04. Err: ERR-03, EVT-03.
 5. **Anotar aprobada**. Entrada: respuesta válida aprobada. Proceso: marcar `aceptada_ei` vía `evaluada`; guardar resultado completo; evento de éxito; sumar en aprobadas. Salida: oferta anotada. Val: VAL-05, VAL-06. Err: ERR-04.
 6. **Anotar descartada**. Entrada: respuesta válida descartada. Proceso: marcar `descartada_ei` vía `evaluada`; guardar resultado completo; evento con control que frenó; sumar en descartadas. Salida: oferta anotada. Val: VAL-05, VAL-06. Err: ERR-04.
 7. **Anotar pendiente**. Entrada: fallo persistente. Proceso: evento de error; oferta sigue en `preparada` con resultado `'N/A'`; sumar en errores; continuar. Salida: oferta pendiente. Val: VAL-05, VAL-06. Err: ninguna.
