@@ -505,6 +505,18 @@ Format: `D<n>` — module/business decisions; `C<n>` — prompt/design alignment
   3. **Docs alignment:** Module 3 ficha (RN-04, VAL-04, as-built notes), DOC-13A (`resultado_evaluacion_inicial` description + version history), database-tables reference, MVP plan, tracker, AGENTS.md and README updated from v4 to v5/D52.
 - **Impact:** Prompt, validator and stored result payload change; V1/V2 evaluation guidance is refined while V3/V4/V5 semantics, flow and schema stay untouched; live DB untouched. Tests add deliverable boundary cases. 624 tests.
 
+### D53. Numeric sequential-order rule for official ids (post-10k hardening) (2026-10-19)
+
+- **Date:** 2026-10-19
+- **Status:** In effect
+- **Context:** The last survivor of the documented known-limitations list (session 34): FIFO candidate reads (M2/M3 `leer_candidatas_*`, RN-07 `id ASC`) and the duplicate-original rules (T4 smallest id / T6 smaller-id-only) compare `OFE-…` ids AS TEXT. With the 4-digit padded sequence, `'OFE-9999' > 'OFE-10000'` lexicographically, so from 10.000 offers per prefix the FIFO order inverts silently and a newer duplicate could be chosen as the original. At current incremental volumes (~27–130 offers/run, dedup across runs) the 10k boundary is hours-of-runtime away only in a long-lived DB — a latent correctness bug, not a present defect.
+- **Decision:**
+  1. **Shared numeric key:** new `numero_secuencial_id(id)` in `shared/utilidades.py` — the number after the dash as `int` (`OFE-0042` → 42); 0 for unparsable values (defensive).
+  2. **Persistence reads (`shared/persistence/_consultas.py`):** both FIFO reads order by `fecha_descubrimiento ASC, numero_secuencial ASC` via `CAST(substr(id, instr(id,'-')+1) AS INTEGER)`; `leer_ultima_corrida_cerrada` breaks `fecha_fin` ties by numeric `id_corrida DESC` (highest sequence = latest launch).
+  3. **Duplicate rules (`modules/preparation/nodes/verificacion.py`):** T4 collision and T6 smaller-id-only comparisons go numeric (T6 through the `candidato_no_antiguo` eligibility check). The business rules are unchanged — only the comparator.
+  4. **ROWID ordering was rejected:** coupling canonical age to the physical row layout is fragile after VACUUM; the explicit numeric key is deterministic and documented. Id generation, format, stored values and dedup keys are untouched — no schema or data migration.
+- **Impact:** Ordering behavior for volume growth covered by 7 new tests (FIFO ≥10k tie, corrida tiebreak, index collision T4, T6 eligibility, key cases; existing overtime-tie comment re-anchored). Fichas M2/M3 RN-07 as-built notes + AGENTS.md test count updated. 631 tests.
+
 ## Prompt/design alignment decisions
 
 ### C2. Detailed Evaluation entity uses Spanish attribute names
@@ -568,6 +580,7 @@ Source: DOC-APPENDIX 9A — archived 2026-08-11; content consolidated here uncha
 
 | Version | Date | Change |
 |---|---|---|
+| 1.37 | 2026-10-19 | Added D53 (numeric sequential-order rule for official ids: shared `numero_secuencial_id`, both FIFO reads + `leer_ultima_corrida_cerrada` tiebreak re-keyed numerically in `_consultas.py`, duplicate T4/T6 comparisons numeric in `verificacion.py`; closes the documented 10k lexicographic-order known limitation with zero data migration and no schema changes; ROWID ordering rejected; 631 tests). |
 | 1.36 | 2026-10-19 | Added D52 (evaluation prompt v5: deliverable-first V1 with persisted `entregable_principal`, refined golden-rule scope, calibration examples, all-veto discard justifications; validator enforces one line/≤20 words/no double quotes; no schema change; tracker 6.2; 624 tests). |
 | 1.35 | 2026-10-17 | Added D51 (evaluation justification upgraded: prompt `compatibility.md` v4 requires evidence-backed per-offer explanations — axis + quoted description evidence + viability for APROBADA, veto + triggering data for DESCARTADA, generic template phrases prohibited; word cap 20 → 60 in prompt and VAL-04 validator; no schema/veto/flow changes; tracker 6.2; 617 tests). |
 | 1.34 | 2026-10-15 | Added D49 (Module 3 build: 4-node evaluation flow + prompt v3 + description hygiene for AI input + legacy scoring retirement + solo run COR-0004 42/27/0 + transversal third enabled; tracker Phase 6 complete; 609 tests). |

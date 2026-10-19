@@ -5,6 +5,7 @@ from shared.utilidades import (
     espera_manual_navegador,
     normalizar_nombre_empresa,
     normalizar_texto,
+    numero_secuencial_id,
     ruta_perfil_navegador,
     ventana_navegador,
 )
@@ -36,6 +37,24 @@ def test_normalizar_texto_simbolos() -> None:
 
 def test_normalizar_texto_vacio() -> None:
     assert normalizar_texto("") == ""
+
+
+def test_numero_secuencial_id_extrae_el_numero_d53() -> None:
+    assert numero_secuencial_id("OFE-0042") == 42
+    assert numero_secuencial_id("EVT-0007") == 7
+    assert numero_secuencial_id("COR-0005") == 5
+
+
+def test_numero_secuencial_id_ordena_cronologicamente_miles_d53() -> None:
+    assert numero_secuencial_id("OFE-9999") < numero_secuencial_id("OFE-10000")
+    assert numero_secuencial_id("OFE-10001") > numero_secuencial_id("OFE-09999")
+    assert numero_secuencial_id("EVT-123456") == 123456
+
+
+def test_numero_secuencial_id_valores_defensivos_d53() -> None:
+    assert numero_secuencial_id("") == 0
+    assert numero_secuencial_id("OFE-A") == 0
+    assert numero_secuencial_id("COR") == 0
 
 
 def test_normalizar_nombre_empresa_conserva_caracteres_d41() -> None:

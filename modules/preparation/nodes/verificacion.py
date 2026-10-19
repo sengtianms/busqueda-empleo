@@ -20,11 +20,14 @@ Approved interpretation notes (sub-phase 5.4):
   would falsely equate different companies, breaking RN-02's same-company
   requirement. They only receive the verification marker.
 - T4: when several candidates tie, the original is the OLDEST offer
-  (smallest `id`, FIFO guarantee of RN-07).
-- T6: a pending may only match candidates with a SMALLER id. Within a same
-  pass the ids are sequential (RN-07: oldest prepared first is the original),
-  so this makes the older offer the original and prevents two intra-lot
-  duplicates from marking each other mutually.
+  (smallest sequential `id`, FIFO guarantee of RN-07) compared numerically
+  via `numero_secuencial_id` (D53 — the raw-text order flips past 9.999
+  offers per prefix).
+- T6: a pending may only match candidates with a SMALLER sequential id
+  (numeric via `numero_secuencial_id`, D53). Within a same pass the ids are
+  sequential (RN-07: oldest prepared first is the original), so this makes
+  the older offer the original and prevents two intra-lot duplicates from
+  marking each other mutually.
 """
 
 from dataclasses import dataclass
@@ -41,7 +44,7 @@ from shared.persistence import (
     registrar_evento,
 )
 from shared.retry import ejecutar_con_reintento
-from shared.utilidades import ahora, normalizar_texto
+from shared.utilidades import ahora, normalizar_texto, numero_secuencial_id
 
 # Values meaning "no usable data" for the fuzzy stage (RN-08) and for the
 # same-company requirement (P1).
@@ -166,8 +169,10 @@ def _construir_indice(universo: list[dict[str, Any]]) -> tuple[
         descripcion_norm = normalizar_texto(str(fila.get("descripcion_original", "")))
         oferta_id = str(fila["id"])
         clave = (titulo_norm, empresa_id)
-        # Keep the oldest id on collision (T4).
-        if clave not in indice_exacto or oferta_id < indice_exacto[clave]:
+        # Keep the oldest id on collision (T4, numeric per D53).
+        if clave not in indice_exacto or numero_secuencial_id(oferta_id) < numero_secuencial_id(
+            indice_exacto[clave]
+        ):
             indice_exacto[clave] = oferta_id
         candidatos_difusos.setdefault(empresa_id, []).append(
             (oferta_id, titulo_norm, descripcion_norm)
@@ -195,9 +200,12 @@ def _buscar_etapa_2(
     id_propio = str(pendiente.get("id"))
     mejor: tuple[str, float, float] | None = None
     for candidato_id, titulo_candidato, descripcion_candidato in candidatos:
-        # Only an OLDER offer can be the original (T6); offers marked this
-        # pass are no longer candidates (no chains).
-        if candidato_id >= id_propio or candidato_id in marcadas_en_pasada:
+        # Only an OLDER offer can be the original (T6, numeric per D53);
+        # offers marked this pass are no longer candidates (no chains).
+        candidato_no_antiguo = numero_secuencial_id(candidato_id) >= numero_secuencial_id(
+            id_propio
+        )
+        if candidato_no_antiguo or candidato_id in marcadas_en_pasada:
             continue
         if descripcion_candidato in _SIN_DATO:
             continue
@@ -209,7 +217,9 @@ def _buscar_etapa_2(
         )
         if pct_descripcion < umbral_descripcion:
             continue
-        if mejor is None or candidato_id < mejor[0]:
+        if mejor is None or numero_secuencial_id(candidato_id) < numero_secuencial_id(
+            mejor[0]
+        ):
             mejor = (candidato_id, pct_titulo, pct_descripcion)
     return mejor
 

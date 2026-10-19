@@ -59,7 +59,7 @@ Error fatal de inicialización o concurrencia activa producen terminación contr
 - **RN-04**: este nodo no valida si hay ofertas pendientes; esa validación es del nodo de decisión siguiente.
 - **RN-05**: este nodo no accede a la inteligencia artificial (eso es del nodo Evaluación inicial).
 - **RN-06**: la corrida procesa todas las ofertas en `preparada` (sin tope por vuelta); el tiempo se acota por las pausas configuradas.
-- **RN-07**: selección FIFO — más antiguas primero; las pendientes de corridas previas que sigan en `preparada` vuelven a juntarse en orden.
+- **RN-07**: selección FIFO — más antiguas primero; las pendientes de corridas previas que sigan en `preparada` vuelven a juntarse en orden. *(As-built D53: el desempate por identificador compara su NÚMERO secuencial (`numero_secuencial_id`) — la comparación textual invierte el orden a partir de 10.000 ofertas por prefijo.)*
 - **RN-08**: el modelo a utilizar se confirma en la ruta existente (`ai_routing.evaluation` con su modelo en la nube) y no se duplica en la sección `evaluacion:`.
 
 ### Validaciones

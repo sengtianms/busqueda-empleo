@@ -59,7 +59,7 @@ Error fatal de inicialización o concurrencia activa producen terminación contr
 - **RN-04**: este nodo no valida si hay ofertas pendientes; esa validación es del nodo de decisión siguiente.
 - **RN-05**: este nodo no accede a LinkedIn ni a páginas de ofertas (eso es del nodo Preparación).
 - **RN-06**: la corrida procesa todas las ofertas en `descubierta` (sin `max_ofertas_por_corrida`); el tiempo se acota por las pausas configuradas. *(As-built D42: la pausa entre ofertas es aleatoria uniforme en [base − jitter, base + jitter] — `pausa_jitter_segundos`, 0 = fija; más humana que un intervalo idéntico y ~30 % más rápida con base 1,2 s.)*
-- **RN-07**: selección FIFO — más antiguas primero; las fallidas de corridas previas quedaron en `descubierta` y vuelven a intentarse en orden.
+- **RN-07**: selección FIFO — más antiguas primero; las fallidas de corridas previas quedaron en `descubierta` y vuelven a intentarse en orden. *(As-built D53: el desempate por identificador compara su NÚMERO secuencial (`numero_secuencial_id`) — la comparación textual invierte el orden a partir de 10.000 ofertas por prefijo.)*
 
 ### Validaciones
 - **VAL-01**: `id_corrida` único y no nulo.
@@ -360,7 +360,7 @@ Detectar, entre las ofertas ya preparadas, cuáles son la misma oferta publicada
 - **RN-04**: etapa 2 = título difuso ≥ `umbral_titulo` **y** descripción difusa ≥ `umbral_descripcion` (ambas, RapidFuzz), solo sobre candidatos de la misma empresa.
 - **RN-05**: universo = `preparada` con `id_duplicidad = 'N/A'` (incluidas las del lote actual — el Módulo 1 puede haber capturado la misma oferta dos veces en la misma corrida); se excluyen las `duplicada` (evita cadenas: X ≈ Y ≈ Z → X siempre apunta a Z, el original) y las `descubierta` (aún sin descripción).
 - **RN-06**: conjunto a evaluar = `preparada` con `fecha_ultima_verificacion = ''` (pendientes, de esta corrida o corridas anteriores). Sin este marcador el nodo no sabría qué ofertas ya fueron verificadas y re-verificaría todo el histórico en cada corrida.
-- **RN-07**: el original nunca cambia; el FIFO de INICIO garantiza que el más antiguo se preparó primero y es el original.
+- **RN-07**: el original nunca cambia; el FIFO de INICIO garantiza que el más antiguo se preparó primero y es el original. *(As-built D53: los desempates T4/T6 de duplicidad comparan el NÚMERO secuencial del id, no su texto — el orden textual se rompe a partir de 10.000 ofertas por prefijo.)*
 - **RN-08**: descripción `N/A` → sin candidato de etapa 2 (similitud 0; sin falsos positivos).
 - **RN-09**: `fecha_ultima_verificacion` la escribe **solo este nodo** (marcador "última verificación de duplicidad"; columna exenta de D31).
 - **RN-10**: fallo de BD en una oferta → reintento (`ejecutar_con_reintento`); si persiste → la oferta queda `preparada` sin verificar (pendiente) y se continúa; la próxima corrida la retoma. Oferta nunca penalizada sin verificar.

@@ -23,6 +23,7 @@ from shared.persistence import (
     leer_tabla,
 )
 from shared.retry import should_retry
+from shared.utilidades import normalizar_texto
 
 CONFIG_RAPIDO: dict[str, Any] = {
     "umbral_titulo": 90,
@@ -181,6 +182,28 @@ def test_cadena_de_tres_intra_lote_apunta_al_primero() -> None:
 
 # --- P1: empresas N/A excluidas ----------------------------------------------
 
+def test_indice_exacto_desempate_numerico_miles_d53() -> None:
+    """T4: collision on the same `(titulo, empresa)` with ids of 4 and 5
+    digits — the OLDEST sequential number wins even though the raw-text
+    order would keep the newer one ('OFE-9998' > 'OFE-10001' as text)."""
+    universo: list[dict[str, Any]] = [
+        {
+            "id": "OFE-10001",
+            "titulo": "Ingeniero de Datos Senior",
+            "empresa_id": "EMP-1",
+            "descripcion_original": DESC_A,
+        },
+        {
+            "id": "OFE-9998",
+            "titulo": "INGENIERO DE DATOS SENIOR",
+            "empresa_id": "EMP-1",
+            "descripcion_original": DESC_A,
+        },
+    ]
+    indice_exacto, _ = verificacion._construir_indice(universo)
+    assert indice_exacto[("ingeniero de datos senior", "EMP-1")] == "OFE-9998"
+
+
 @pytest.mark.usefixtures("temp_db_file")
 def test_pendiente_sin_empresa_nunca_matchea() -> None:
     _insertar("OFE-001", marcador=True)
@@ -248,6 +271,25 @@ def test_rn08_descripcion_sin_dato_no_compara_difuso() -> None:
     _insertar("OFE-002", titulo="Datos Senior Ingeniero de")
     resultado = ejecutar_verificacion(_contexto())
     assert resultado.duplicadas == 0
+
+
+def test_etapa_2_t6_acepta_original_de_miles_d53() -> None:
+    """T6: the candidate must be numerically OLDER. The text rule would
+    wrongly block a 4-digit original ('OFE-9998') against a 5-digit pending
+    ('OFE-10002') because 'OFE-9998' >= 'OFE-10002' as text — the numeric
+    comparison (D53) keeps the real order: 9998 < 10002, so the pending
+    matches its true original."""
+    pendiente: dict[str, Any] = {
+        "id": "OFE-10002",
+        "titulo": "Ingeniero de Datos Senior",
+        "descripcion_original": DESC_B,
+    }
+    candidatos: list[tuple[str, str, str]] = [
+        ("OFE-9998", "ingeniero de datos senior", normalizar_texto(DESC_A)),
+    ]
+    mejor = verificacion._buscar_etapa_2(pendiente, candidatos, 90.0, 85.0, set())
+    assert mejor is not None
+    assert mejor[0] == "OFE-9998"
 
 
 # --- Universo -----------------------------------------------------------------

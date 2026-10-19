@@ -1644,8 +1644,65 @@ def test_leer_candidatas_descubiertas_orden_fifo(temp_db_file: Path) -> None:
         {"id": "OFE-0003", "enlace": "e3", "fecha_descubrimiento": "2026-08-20 10:00:00"},
     )
     filas = leer_candidatas_descubiertas()
-    # Empate de fecha entre OFE-0001 y OFE-0002: el id ASC rompe el empate.
+    # Empate de fecha entre OFE-0001 y OFE-0002: el número secuencial rompe
+    # el empate (D53, orden numérico del identificador).
     assert [f["id"] for f in filas] == ["OFE-0003", "OFE-0001", "OFE-0002"]
+
+
+def test_leer_candidatas_descubiertas_orden_fifo_miles_d53(temp_db_file: Path) -> None:
+    # La comparación lexicográfica invierte el orden a partir de 10.000
+    # ('OFE-9999' > 'OFE-10000' como texto): la clave numérica (D53) mantiene
+    # el ciclo de vida real con la misma fecha de descubrimiento.
+    for id_oferta in ("OFE-10001", "OFE-0002", "OFE-9998", "OFE-10000"):
+        escribir_fila(
+            "ofertas_descubiertas",
+            {
+                "id": id_oferta,
+                "enlace": f"https://example.com/{id_oferta}",
+                "fecha_descubrimiento": "2026-08-21 09:00:00",
+            },
+        )
+    filas = leer_candidatas_descubiertas()
+    assert [f["id"] for f in filas] == [
+        "OFE-0002",
+        "OFE-9998",
+        "OFE-10000",
+        "OFE-10001",
+    ]
+
+
+def test_leer_ultima_corrida_cerrada_desempate_numerico_d53(temp_db_file: Path) -> None:
+    # Con la misma fecha_fin, la corrida con número MAYOR es la más reciente
+    # (se lanzó después): el desempate numérico (D53) la elige, el texto
+    # ('COR-9998' > 'COR-10000') habría elegido la antigua.
+    from shared.persistence import (
+        actualizar_corrida,
+        leer_ultima_corrida_cerrada,
+        registrar_corrida,
+    )
+
+    for corrida_id, fecha_inicio in (
+        ("COR-9998", "2026-08-21 08:00:00"),
+        ("COR-10000", "2026-08-21 08:10:00"),
+    ):
+        registrar_corrida(
+            {
+                "id_corrida": corrida_id,
+                "fecha_inicio": fecha_inicio,
+                "estado": "en_ejecucion",
+            }
+        )
+        actualizar_corrida(
+            corrida_id,
+            {
+                "estado": "completada",
+                "fecha_fin": "2026-08-21 08:30:00",
+                "motivo_terminacion": "corrida_completada",
+            },
+        )
+    fila = leer_ultima_corrida_cerrada("2026-08-21 00:00:00")
+    assert fila is not None
+    assert fila["id_corrida"] == "COR-10000"
 
 
 def test_leer_candidatas_descubiertas_excluye_otros_estados(

@@ -5,6 +5,7 @@ Unless noted, decisions from previous sessions remain in effect.
 ## Sessions index
 | № | Date | Session ID | Summary |
 |---|---|---|---|
+| 40 | 19/10/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Measured health audit from the primary records concluded no structural refactor was justified (run telemetry: five green runs, full pipeline ~2.5 min per 27 offers); evaluation prompt v5 work unified into main by fast-forward merge with full battery, push, and work-branch deletion (single-branch state restored); post-10k id-ordering limitation closed with a shared numeric key over candidate loads, run tiebreaks and duplicate originals, zero data migration, seven regression tests; both closing reviewers green; evaluation calibration audit (3 approvals → 0 on the same offers after the v5 rebuild) left pending by user choice |
 | 39 | 17/10/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Phase 6 completed (Module 3 built, verified on a solo run and on a full clean-DB orchestrated run); three OpenRouter alternate doors programmed with per-offer rotation and live-verified; evaluator justifications upgraded to evidence-backed explanations after the sample review; minor documentation polish (test counts, full-run registration, database counts, README index) |
 | 38 | 15/10/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Module 3 sheet built node by node (4 nodes, veto design, closure motives and metrics, prompt v2, separate flow-diagram image); 5-point pre-build gate recorded ahead of Phase 6; docs-only alignment batch applied across settings, data model, tables reference, decision record, plan, tracker and transversal sheet (D48); plan/tracker verified against the sheet and sub-phase build strategy confirmed; Previo Fase 6 built alone on approval (new result field and states, run counters, settings validator, preflight check, live DB migrated with backup); module nodes not started |
 | 37 | 08/09/2026 | `ses_f7ef9f510ffe2YkCmvje0FKH6S` | Entry unblocked after OS reinstall with a persistent session (one manual login, later runs automatic); window fixed to a normal size with content following resizes; guest completion path proven still anonymous from real evidence; polish batch with shared settings readers plus decision record and operations docs; full runs green with zero errors |
@@ -33,6 +34,28 @@ Unless noted, decisions from previous sessions remain in effect.
 | 14 | 09/08/2026 | `ses_01bcc78adffemcqFEiZxT52Eli` | Sub-fase 4.4: capture/registration nodes implemented, audited, and post-audit fixes applied (FK-free schema, name columns, upsert tests) |
 | 13 | 08/08/2026 | `ses_01be77680ffeuyoKct4Qrfx1GG` | Repo sync to `fase-4`; new `/save` section with general git commit and push guidance |
 | 12 | 08/08/2026 | `ses_01c089ce2ffe9MvQT4F1pC0MJN` | Sub-fase 4.2 deep audit + post-audit fixes (credentials mapping, playwright lifecycle) |
+
+## Session 40 — 19/10/2026
+`ses_f4af1b961ffe5t8xNspW5U761x` · `main`
+
+**Topics**
+- Full-context recovery from the four primary records, then a measured health audit of the built machinery (telemetry of the five latest runs, file sizes, test surface) concluding there is no structural refactor to justify — only two small evidence-backed items
+- Health numbers verified live: last five runs with zero errors, full pipeline at ~2.5 min per 27 offers, style/type checks clean; the big cleanups from prior sessions confirmed as still paying off
+- Evaluation prompt v5 work unified into the main line by fast-forward merge with the full battery re-run, push to GitHub, and deletion of the completed work branch — single-branch state restored
+- Post-10k identifier-ordering limitation closed: a shared numeric key now governs candidate ordering, run tiebreaks and duplicate-original selection; identifiers, stored values and the database untouched, zero data migration
+- Seven regression tests added (ten-thousand-boundary FIFO tie, run tiebreak, duplicate-index collision, numeric eligibility, key cases), all failing under the old text rule
+- Closing reviews green on both axes (code and documents); one one-line docstring clarification applied from the code review
+- Evaluation calibration audit left pending by user choice: the same 27 offers scored 3 approvals before the v5 rebuild and 0 in today's re-evaluation, to be ruled on separately
+
+**Decisions**
+- D53: numeric sequential-order rule for official ids — shared number-after-dash key ordering candidate loads (oldest first) and closed-run tiebreaks (latest first); duplicate-original rules compare numerically (business rules unchanged, comparator only); physical insertion order rejected as the key (fragile after VACUUM); no schema, id-format or data migration
+- Decisions from previous sessions remain in effect
+
+**Status**
+- Phase 6 complete ✅ (now unified into the main line); Phases 7–9 pending ⬜
+- Evaluation calibration audit ⬜ pending user decision (may gate Phase 7 planning)
+- ruff 0 · mypy 0 · pytest 631 passing
+- Active branch: `main` (single-branch state; work branch deleted after merge)
 
 ## Session 39 — 17/10/2026
 `ses_f4af1b961ffe5t8xNspW5U761x` · `fase-6`

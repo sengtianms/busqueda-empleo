@@ -64,6 +64,24 @@ def normalizar_nombre_empresa(texto: str) -> str:
     return " ".join(texto.lower().split())
 
 
+def numero_secuencial_id(id_valor: str) -> int:
+    """Número secuencial de un identificador oficial (`PREFIJO-NNNN`, anexo 5A).
+
+    Clave numérica para ordenar y comparar identificadores por ciclo de vida
+    (D53): la comparación lexicográfica se rompe a partir de
+    10.000 ('OFE-9999' > 'OFE-10000' por texto, aunque 9999 es más antiguo).
+    'OFE-0042' → 42; 'OFE-9999' → 9999; 'OFE-10000' → 10000. Devuelve 0 ante
+    un valor sin parte numérica final (defensivo; no ocurre en producción).
+    """
+    if not id_valor:
+        return 0
+    parte = id_valor.rsplit("-", 1)[-1]
+    try:
+        return int(parte)
+    except ValueError:
+        return 0
+
+
 def _entero_positivo(valor: Any, defecto: int) -> int:
     """Entero positivo tolerante para ajustes numéricos (0/negativo → defecto)."""
     try:

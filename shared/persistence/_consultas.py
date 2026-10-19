@@ -5,6 +5,17 @@ from typing import Any
 from ._conexion import _connection, _deserialize
 
 
+def _orden_secuencial_sql(columna: str) -> str:
+    """SQL numeric key of an official id (`PREFIJO-NNNN`, D53): the number
+    after the dash cast to integer. Ordering by the raw text flips once the
+    sequence passes 9.999 (`'OFE-9999' > 'OFE-10000'` as text, older first
+    is the only correct order) — numbers order by true age with zero data
+    migration. Unparsable (defensive) values sort as 0. Valid only for
+    single-dash `PREFIJO-NNNN` ids (the current generator), the same
+    assumption `numero_secuencial_id` makes."""
+    return f"CAST(substr({columna}, instr({columna}, '-') + 1) AS INTEGER)"
+
+
 def leer_tabla(
     tabla: str, filtros: dict[str, Any] | None = None
 ) -> list[dict[str, Any]]:
@@ -30,15 +41,16 @@ def leer_tabla(
 def leer_candidatas_descubiertas() -> list[dict[str, Any]]:
     """Reads offers in `descubierta` in FIFO order (Módulo 2 INICIO, VAL-06).
 
-    FIFO selection per ficha M2 RN-07: oldest discovery date first, `id ASC`
-    as tiebreaker. Lives in the persistence layer so functional modules never
-    write SQL directly (architecture rule).
+    FIFO selection per ficha M2 RN-07: oldest discovery date first, smallest
+    sequential id as tiebreaker (numeric per D53, see `_orden_secuencial_sql`).
+    Lives in the persistence layer so functional modules never write SQL
+    directly (architecture rule).
     """
     conn = _connection()
     try:
         cursor = conn.execute(
             "SELECT * FROM ofertas_descubiertas WHERE estado = 'descubierta' "
-            "ORDER BY fecha_descubrimiento ASC, id ASC"
+            f"ORDER BY fecha_descubrimiento ASC, {_orden_secuencial_sql('id')} ASC"
         )
         results: list[dict[str, Any]] = []
         for f in cursor.fetchall():
@@ -54,15 +66,16 @@ def leer_candidatas_descubiertas() -> list[dict[str, Any]]:
 def leer_candidatas_preparadas() -> list[dict[str, Any]]:
     """Reads offers in `preparada` in FIFO order (Módulo 3 INICIO, VAL-06).
 
-    FIFO selection per ficha M3 RN-07: oldest discovery date first, `id ASC`
-    as tiebreaker. Lives in the persistence layer so functional modules never
-    write SQL directly (architecture rule).
+    FIFO selection per ficha M3 RN-07: oldest discovery date first, smallest
+    sequential id as tiebreaker (numeric per D53, see `_orden_secuencial_sql`).
+    Lives in the persistence layer so functional modules never write SQL
+    directly (architecture rule).
     """
     conn = _connection()
     try:
         cursor = conn.execute(
             "SELECT * FROM ofertas_descubiertas WHERE estado = 'preparada' "
-            "ORDER BY fecha_descubrimiento ASC, id ASC"
+            f"ORDER BY fecha_descubrimiento ASC, {_orden_secuencial_sql('id')} ASC"
         )
         results: list[dict[str, Any]] = []
         for f in cursor.fetchall():
@@ -166,7 +179,9 @@ def leer_ultima_corrida_cerrada(
     window. "Closed" means `fecha_fin` populated (never ''/NULL/'N/A' per the
     D31 no-empty-field rule). `excluir_ids` removes already-attributed runs
     (the scheduled run itself and previously derived modules) so attribution
-    stays one-to-one; ordering is by `fecha_fin DESC LIMIT 1`.
+    stays one-to-one; ordering is by `fecha_fin DESC` with the largest
+    sequential `id_corrida` breaking equal timestamps (numeric per D53 — the
+    highest sequence launched last).
     """
     exclusiones = list(excluir_ids or [])
     placeholders = ", ".join(f":excl_{i}" for i in range(len(exclusiones))) or ":ninguno"
@@ -177,7 +192,7 @@ def leer_ultima_corrida_cerrada(
         "SELECT * FROM corridas "
         "WHERE fecha_fin NOT IN ('', 'N/A') AND fecha_inicio >= :desde "
         f"AND id_corrida NOT IN ({placeholders}) "
-        "ORDER BY fecha_fin DESC, id_corrida DESC LIMIT 1"
+        f"ORDER BY fecha_fin DESC, {_orden_secuencial_sql('id_corrida')} DESC LIMIT 1"
     )
     conn = _connection()
     try:
