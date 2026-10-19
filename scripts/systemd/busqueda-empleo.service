@@ -1,0 +1,8 @@
+[Unit]
+Description=Job search scheduled run (discovery > preparation > initial evaluation), decision D54
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/Proyectos/Automatización búsqueda de empleo
+ExecStart=/bin/bash "%h/Proyectos/Automatización búsqueda de empleo/scripts/corrida_programada.sh"
+TimeoutStartSec=2700

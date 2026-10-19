@@ -1,6 +1,8 @@
 # MVP Execution Plan — Job Search Automation
 Working document: exact MVP build order, step by step, based on approved documents (DOC-00 to DOC-13, Annexes 5A, 5B, 5C, 9A).
 
+> **Scope note (decision D55, 2026-10-19):** Version 1 ships Phases 0–6 only — Modules 1–3 plus the transversal orchestrator and the scheduled automation (decision D54). Phases 7–8 are deferred to future versions, and Phase 9 is adapted: the orchestrator entry point (`python -m modules.orchestrator`) replaces the five-module `run_mvp.py`, and its end-to-end verification is the V1 battery.
+
 ## Phase 0. Startup Preparation
 - Confirm MVP scope against DOC-01, DOC-08, DOC-09 (LinkedIn only source).
 - Work rules: one task at a time; no advancing without approval.
@@ -210,7 +212,7 @@ Build strategy: functional sub-phases grouping nodes by testable unit, per canon
 | 6.3 — Closure and module orchestrator | Finalizar Proceso (metrics by events with DISTINCT `id_oferta`, official motive/state table incl. `sin_pendientes`/`corrida_completada`/`cupo_agotado`, best-effort close, ownership-safe lock release) + module flow orchestrator (`ejecutar_flujo`, mirror of Preparation) | 1 terminal + 1 integration |
 | 6.4 — Solo real run, transversal third, doc closure | Solo real verification run of the module; on pass, transversal joins third after Preparation (`orquestador.modulos`, result read from DB as the others); physical migrations (`resultado_evaluacion_inicial`, `total_aprobadas`/`total_descartadas`, states) land with the build; legacy scoring keys + old engine retired; as-built notes, database-tables writers per module, README, AGENTS.md status/test count; code-reviewer + docs-reviewer | E2E verification + doc closure |
 
-## Phase 7. Module 4 — Deep Processing
+## Phase 7. Module 4 — Deep Processing (deferred to post-V1 versions — decision D55)
 - Create `modules/processing/`.
 - Load accepted offers from evaluation.
 - Invoke LLM with `prompts/processing/`: vacancy diagnosis; strategic extraction (key requirements, culture, differentiators); application design (strengths to highlight, gaps to mitigate); input generation (draft cover letter, interview prep).
@@ -219,7 +221,7 @@ Build strategy: functional sub-phases grouping nodes by testable unit, per canon
 - Error handling: ER-LLM, ER-INT.
 - Tests: real prompts + real offer → inspect quality; mock responses → validate parsing/structures.
 
-## Phase 8. Module 5 — Results Management
+## Phase 8. Module 5 — Results Management (deferred to post-V1 versions — decision D55)
 - Create `modules/management/`.
 - Implement: full per-offer history, state management, tracking.
 - Reports: offer summary (processed, discarded, pending); export to compatible format (`data/output/`).
@@ -227,7 +229,9 @@ Build strategy: functional sub-phases grouping nodes by testable unit, per canon
 - Error handling: ER-DB, ER-DAT.
 - Tests: unit (queries, filters, export); integration (real data → generated report).
 
-## Phase 9. MVP Integration
+## Phase 9. MVP Integration (adapted to the V1 scope — decision D55)
+
+> Adapted for V1: the orchestrator entry point already chains the three active modules and D54's timer fires it automatically; `run_mvp.py` is superseded. Remaining V1 content: the real verification battery (2026-10-19 scheduled run COR-0006→0009) and final approval.
 - Create `scripts/run_mvp.py` — orchestrator running all 5 phases in sequence.
 - Test full end-to-end flow with small set of real offers.
 - Verify: logs, errors, states, persistence, generated files.

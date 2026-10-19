@@ -22,7 +22,7 @@ All official documentation is located in `docs/`:
 
 ## Status
 
-Phases 0–6 complete: Module 1 (Opportunity Discovery), Module 2 (Offer Preparation), Module 3 (Initial Evaluation) and the transversal orchestrator are implemented, tested (624 tests) and running in production use — the pipeline discovers, prepares and evaluates offers end-to-end (latest full run: 65 offers → 65 prepared + 4 duplicates → 14 approved + 47 discarded, 0 errors; the v5 prompt with evidence-backed justifications and persisted main deliverable applies to subsequent runs). Phases 7–9 (Processing, Management, MVP integration) pending.
+Version 1 is complete (decisions D54–D56, 2026-10-19): Phases 0–6 — Module 1 (Opportunity Discovery), Module 2 (Offer Preparation), Module 3 (Initial Evaluation) and the transversal orchestrator — run the full loop end-to-end, both manually and automatically: a system timer fires a complete run 10 minutes after the computer powers on and repeats it every 3 hours while the machine is on (decision D54); first scheduled run: discovery → preparation (47 prepared + 1 duplicate) → evaluation → 7 approved / 39 justified discards, 0 chain errors. Phases 7–8 (deep processing, results management) are deferred to future versions (D55). 643 tests.
 
 ## Running the pipeline
 
@@ -43,6 +43,28 @@ Notes:
 - `preflight.py --db` expects an explicit database path as an argument; omit it to check the default `data/job_search.db`.
 - Logs default to INFO; set `LOG_LEVEL=DEBUG` in `.env` for verbose output.
 - All persistent data lives in `data/job_search.db`; backups are stored under `data/backup/`.
+
+## Scheduled automation
+
+A user-level system timer fires the full pipeline automatically (decision D54): first run 10 minutes after the computer powers on, then every 3 hours counted from each run, stopping at shutdown. No fixed times — the day's drag run recovers overnight postings because the capture window is the last 24 hours and repeats are resolved by the dedup rules.
+
+Every batch reports its verdict to the desktop (decision D57): a notification with the true counts on success, the failing module + motive on failure, and a benign "another run was in progress" notice on skip — all read from the official trace, and every verdict also lands in the batch's journal line, so nothing is lost if the machine was unattended.
+
+```bash
+# Install and activate (installing past the 10-min mark fires the drag run immediately)
+bash scripts/instalar_programador.sh
+
+# Next automated run / log of the automated runs
+systemctl --user list-timers busqueda-empleo.timer
+journalctl --user -u busqueda-empleo.service -b
+
+# Remove the scheduler (manual runs remain available)
+bash scripts/instalar_programador.sh --desinstalar
+```
+
+Notes:
+- A scheduled run is skipped cleanly if another one is still in progress (the global lock resolves manual/automatic collisions); a failing preflight aborts the run leaving evidence in the journal; a stalled run is killed at 45 minutes so the next scheduled run stays healthy.
+- Each tanda reuses the persistent LinkedIn session; if the account challenges (verification/new login), the tanda ends gracefully and the next manual run re-enables everything from the visible window.
 
 ## LinkedIn session (persistent login)
 

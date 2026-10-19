@@ -170,6 +170,15 @@
 
 ---
 
+## Ajuste de alcance — Versión 1 (2026-10-19)
+
+| # | Ajuste | Fuente | Estado | Notas |
+|---|--------|--------|--------|-------|
+| — | Alcance oficial de la Versión 1 y encendido automático | Decisiones D54–D56 | ✅ | V1 = Fases 0–6 (Módulos 1–3 + orquestador + encendido automático). Programador del sistema operativo activo: arrastre 10 min tras encender y repetición cada 3 h hasta apagar (unidades y scripts versionados; README con instalación/estado/desinstalación). Verificación real: corrida programada COR-0006→0009 en 4m 51s — 48 declaradas, 47 preparadas + 1 duplicada (OFE-0063→OFE-0056), 7 aprobadas / 39 descartadas justificadas, 0 errores de cadena (1 oferta sufrió `preparacion_fallida` 429 en la pasada 1 y se recuperó con la pasada 2; avisos ERR-08 transitorios sin dejar ofertas sin clasificar — nada quedó pendiente). D55: Módulos 4–5 (Fases 7–8) postergados a versiones futuras — sus filas ⬜ permanecen como planificación, no como pendientes de la V1; Fase 9 adaptada (el encadenador existente sustituye run_mvp.py y la batería real la cierra). D56: comportamiento estricto del evaluador v5 confirmado como deseado — auditoría de calibración cerrada sin hallazgos. |
+| — | Notificaciones del veredicto de cada tanda | Decisión D57 | ✅ | Cada tanda (o su fallo de arranque) avisa en el escritorio: éxito con las cifras reales leídas de la traza oficial, fallo con módulo y motivo, y omisión benigna cuando otra tanda va en curso; todo veredicto también queda en la bitácora de la tanda. La tanda programada se identifica por su evento-resumen propio (no por "última cerrada": un módulo puede cerrar en el mismo segundo — caso real COR-0009 vs COR-0006). Integrado en el envoltorio de la tanda; entrega mejor esfuerzo que nunca altera el resultado. Verificado en vivo con la cadena de la mañana; 12 pruebas nuevas; 643 tests. |
+
+---
+
 ## Phase 7. Module 4 — Deep Processing
 
 | # | Task | Source docs | Status | Notes |

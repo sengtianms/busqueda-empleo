@@ -5,6 +5,7 @@ Unless noted, decisions from previous sessions remain in effect.
 ## Sessions index
 | № | Date | Session ID | Summary |
 |---|---|---|---|
+| 41 | 19/10/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Version 1 closed officially: scope cut to Modules 1–3 + orchestrator + scheduled automation (OS-level timer with post-boot drag run and 3-hour cadence, wrapper with preflight gate, installer tooling, versioned units), first live automatic run verified end-to-end; evaluation v5 strict behavior confirmed by the user and calibration audit closed with no findings; verdict notifications added afterward — desktop popups driven by the official trace with skip-vs-error distinction, live-verified against the morning chain (643 tests) |
 | 40 | 19/10/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Measured health audit from the primary records concluded no structural refactor was justified (run telemetry: five green runs, full pipeline ~2.5 min per 27 offers); evaluation prompt v5 work unified into main by fast-forward merge with full battery, push, and work-branch deletion (single-branch state restored); post-10k id-ordering limitation closed with a shared numeric key over candidate loads, run tiebreaks and duplicate originals, zero data migration, seven regression tests; both closing reviewers green; evaluation calibration audit (3 approvals → 0 on the same offers after the v5 rebuild) left pending by user choice |
 | 39 | 17/10/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Phase 6 completed (Module 3 built, verified on a solo run and on a full clean-DB orchestrated run); three OpenRouter alternate doors programmed with per-offer rotation and live-verified; evaluator justifications upgraded to evidence-backed explanations after the sample review; minor documentation polish (test counts, full-run registration, database counts, README index) |
 | 38 | 15/10/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Module 3 sheet built node by node (4 nodes, veto design, closure motives and metrics, prompt v2, separate flow-diagram image); 5-point pre-build gate recorded ahead of Phase 6; docs-only alignment batch applied across settings, data model, tables reference, decision record, plan, tracker and transversal sheet (D48); plan/tracker verified against the sheet and sub-phase build strategy confirmed; Previo Fase 6 built alone on approval (new result field and states, run counters, settings validator, preflight check, live DB migrated with backup); module nodes not started |
@@ -34,6 +35,35 @@ Unless noted, decisions from previous sessions remain in effect.
 | 14 | 09/08/2026 | `ses_01bcc78adffemcqFEiZxT52Eli` | Sub-fase 4.4: capture/registration nodes implemented, audited, and post-audit fixes applied (FK-free schema, name columns, upsert tests) |
 | 13 | 08/08/2026 | `ses_01be77680ffeuyoKct4Qrfx1GG` | Repo sync to `fase-4`; new `/save` section with general git commit and push guidance |
 | 12 | 08/08/2026 | `ses_01c089ce2ffe9MvQT4F1pC0MJN` | Sub-fase 4.2 deep audit + post-audit fixes (credentials mapping, playwright lifecycle) |
+
+## Session 41 — 19/10/2026
+`ses_f4af1b961ffe5t8xNspW5U761x` · `ajuste-final-v1`
+
+**Topics**
+- Version 1 closed: official scope = discover → prepare → initial evaluation chained automatically; deep-processing and results-management phases deferred to future versions; the existing orchestrator entry replaces the old five-module launcher in the plan
+- Scheduled automation deployed at the OS level: drag run 10 minutes after power-on, repeats every 3 hours while the machine is on, no fixed clock times; overnight gaps covered by the 24-hour capture window and dedup
+- Wrapper hardening: preflight gate before launching per the orchestrator's own entry criteria, venv guard, timeout cap, versioned system units installed in the user session, installer/uninstaller tooling, README scheduled-automation section
+- First live automatic run verified end-to-end (~5 min): 48 declared, 47 prepared + 1 duplicate resolved, 7 approved / 39 justified discards, 0 chain errors; one transient offer failure self-recovered on the second pass — nothing left pending
+- Evaluation strictness settled with the user: the strict rebuild's all-discard outcome on the earlier sample reflects their profile and intent, calibration audit closed with no findings
+- Verdict notifications: every scheduled batch (or a failed start) now posts a desktop popup — success counts / failure motive / benign "another batch in progress" notice — always mirrored into the batch's journal line; same channel as the user's other desktop automations, zero new dependencies
+- Notifier reads its verdict from the official trace (batch hour and counts from the run rows and the scheduled batch's own summary marker); a same-second module closure nearly misattributed the batch during live verification — marker-based identification plus a regression test fixed it
+- Preflight "another batch already running" counted as a benign skip, not an error; delivery stays best-effort and never alters the run's result
+- 12 notifier tests mirroring the house fixtures; battery green (lint/type-check clean, 643 passing); closing reviewers approved, 6 minor hardening suggestions applied
+- Docs closed with user approval: decision record rows for the scheduled automation, the scope cut and the evaluator confirmation; scope notes and deferred tags in the MVP plan; README status/sections; operating-contract status; tracker scope section + notification row
+
+**Decisions**
+- D54 (2026-10-19): scheduled automation — user-level OS timer (10-minute post-boot drag run + 3-hour cadence), versioned units, wrapper + installer tooling (decision log v1.38)
+- D55 (2026-10-19): Version-1 scope cut — Modules 1–3 + orchestrator + scheduling official; Phases 7–8 deferred to future versions; Phase 9 adapted to the three-module chain
+- D56 (2026-10-19): evaluation v5 strict behavior confirmed as desired; calibration audit closed with no findings — never reopened absent an explicit user request
+- D57 (2026-10-19): batch verdict notifications — desktop popup + journal verdict line read from the official trace, scheduled batch identified by its summary marker (same-second module closure case), preflight lock → benign skip, best-effort delivery (decision log v1.39)
+- Decisions from previous sessions remain in effect
+
+**Status**
+- Version 1 ✅ (tracker scope section) · verdict notifications ✅ (tracker row); 643 tests passing · ruff 0 · mypy 0
+- Scheduled automation live; the next automatic batch fires ~3 h after the previous activation, now with its notification
+- Session history + all session changes committed in this /save; single commit + push
+- Branch: `ajuste-final-v1` · no merge (merge to `main` awaits explicit user authorization)
+- Next: Phase 7 (Module 4 — Deep Processing) is the V2 starting point, deferred until the user requests it
 
 ## Session 40 — 19/10/2026
 `ses_f4af1b961ffe5t8xNspW5U761x` · `main`

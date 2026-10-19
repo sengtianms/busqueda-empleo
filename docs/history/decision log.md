@@ -517,6 +517,46 @@ Format: `D<n>` — module/business decisions; `C<n>` — prompt/design alignment
   4. **ROWID ordering was rejected:** coupling canonical age to the physical row layout is fragile after VACUUM; the explicit numeric key is deterministic and documented. Id generation, format, stored values and dedup keys are untouched — no schema or data migration.
 - **Impact:** Ordering behavior for volume growth covered by 7 new tests (FIFO ≥10k tie, corrida tiebreak, index collision T4, T6 eligibility, key cases; existing overtime-tie comment re-anchored). Fichas M2/M3 RN-07 as-built notes + AGENTS.md test count updated. 631 tests.
 
+### D54. Scheduled automation deployed: user timer drives the daily loop (2026-10-19)
+
+- **Date:** 2026-10-19
+- **Status:** In effect
+- **Context:** The user wants both modes: manual (preflight + run commands) and automatic. The machine is on daily ~08:00–22:00 and off ~10 h overnight; postings must still be caught with no fixed clock times. Verified deployment facts (2026-10-19): user-level systemd timers already in use by the user, `Linger=yes` (timers run before desktop login), `ollama.service` enabled (IA ready at boot), persistent LinkedIn session + `.env` in place; the 24 h canonical capture window (D27) plus capture dedup (`id_externo`) and Module 2 duplicate verification make repeated runs non-duplicating and an any-hour drag run sufficient.
+- **Decision:**
+  1. **Cadence:** first run 10 minutes after power-on (`OnBootSec=10min`; activating the timer later the same day fires the elapsed drag run immediately), then repeats every 3 hours counted from each run start (`OnUnitActiveSec=3h`); powering off stops everything (no fixed times, no overnight runs — the next boot's drag run covers the full window).
+  2. **Units:** user-scope `busqueda-empleo.timer` + `busqueda-empleo.service` (`Type=oneshot`, `TimeoutStartSec=2700` so a stalled run dies at 45 min; journal captures output; no restart loop). Both versioned in `scripts/systemd/` using the `%h` home specifier — no machine-specific absolute paths in the repo.
+  3. **Run content:** wrapper `scripts/corrida_programada.sh` (repo cd → `.venv/bin/python scripts/preflight.py --ia`, non-zero exit aborts the chain → `exec .venv/bin/python -m modules.orchestrator`) — the official scheduled entry chaining the three active modules.
+  4. **Ops:** `scripts/instalar_programador.sh` installs/activates (and `--desinstalar` cleanly removes) the units; manual runs unchanged; a run meeting another in progress exits `concurrencia` via the existing global lock; systemd never starts the same running service twice, so double triggers are benign.
+- **Impact:** Operational only — zero code/schema changes; ~5 tandas/day while the machine is on, consistent with the moderate-usage account-protection principles (DE-LI-005/006). First live verification (COR-0006→0009, 2026-10-19 16:11): scheduled run completed in 4 m 51 s — 48 declared offers, 47 prepared + 1 duplicate detected (OFE-0063→OFE-0056), 7 approved / 39 justified discards, 0 chain errors; one offer hit a detail-page 429 authwall in pass 1 (`preparacion_fallida`) and was recovered in pass 2 — closure `pendientes=0`, nothing left pending; 3 transient ERR-08 warnings left no offer unclassified. README gained the scheduled-mode section.
+
+### D55. Version-1 scope cut official: Modules 1–3 scheduled; Modules 4–5 deferred to future versions (2026-10-19)
+
+- **Date:** 2026-10-19
+- **Status:** In effect
+- **Context:** The official MVP plan declared five modules (Phase 7 Module 4 Deep Processing, Phase 8 Module 5 Results Management) and a Phase 9 built around a five-module `run_mvp.py`. The user does not need Modules 4–5 now: Modules 1–3 already deliver the full loop discover → prepare → evaluate under one command, and D54 fires it automatically on power-on.
+- **Decision:**
+  1. **V1 official scope = Phases 0–6:** Modules 1–3 + transversal orchestrator + scheduled automation (D54). Version 1 closes with this session's real verification run and doc closure.
+  2. **Phases 7–8 are deferred to future versions, not dropped:** their plan entries stay as the V2 starting point; tracker keeps their ⬜ rows annotated by the scope note (no new phase tables).
+  3. **Phase 9 adapted:** `run_mvp.py` is superseded by the existing orchestrator entry point (it already chains every active module via `orquestador.modulos`); its five-module end-to-end test is replaced by the three-module verification battery; final MVP approval = the V1 closing report.
+  4. Docs aligned: plan scope note + deferred tags on the Phase 7/8 headings, tracker scope section, README status.
+- **Impact:** Documentation truthfully says V1 = 3 modules; a new developer reads the V1 baseline and the intact V2 path. No code impact; no DOC-13A/database-tables touches (no data-model change).
+
+### D56. Evaluation v5 strict behavior confirmed as desired — calibration audit closed with no findings (2026-10-19)
+
+- **Date:** 2026-10-19
+- **Status:** In effect
+- **Context:** COR-0005 (prompt v5) discarded all 27 offers where the pre-v5 sample had split 3 approved / 27 discarded. Open interpretation question at session close: had v5 become erroneously strict?
+- **Decision:** The user reviewed the outcomes and settles it: the 3 earlier approvals were NOT aligned with their experience, knowledge and professional profile; the strict v5 outcome that discards all 27 is correct and sought, each discard justified per offer (veto name + quoted description evidence). Therefore the calibration audit is CLOSED with no findings, the pending item leaves the board, no prompt/config changes are made, and future sessions must not reopen the evaluator's behavior absent an explicit user request.
+- **Impact:** Evaluation semantics, prompt versions and statistics untouched; 631 tests unchanged. Today's live run under the frozen behavior (COR-0009): 7 approved / 39 justified discards — consistent with the user's intent.
+
+### D57. Batch verdict notifications: desktop popup driven by the official trace (2026-10-19)
+
+- **Date:** 2026-10-19
+- **Status:** In effect
+- **Context:** Users receive desktop notifications from their other automations (vault backup, password sync) through the OS's standard `notify-send` channel — verified working in the user's session. The scheduled pipeline reported its verdicts only inside the system journal, visible only on manual review.
+- **Decision:** After every scheduled batch (or preflight failure / unexpected exit), the wrapper's verdict notifier reports the outcome as a desktop notification AND a journal line: success (module metrics read from the official trace — module run rows for discovery/`total_ofertas`, preparation/`total_preparadas`+`total_duplicadas`, evaluation/`total_aprobadas`+`total_descartadas`, chain errors from the scheduled run's `total_errores`), failure (module + motive parsed from the scheduled run's `modulo_fallido` summary events, or the supplied preflight/hard-exit text, always with the where-to-look hint), or benign skip (preflight lost to a fresh "corrida activa" lock is an omission, not an error). The scheduled batch is identified by its own `corrida_programada` summary event — NOT by "last closed row", because a module can close on the very same second and a numeric-id tiebreak would misidentify it (observed live on COR-0009 vs COR-0006, same `fecha_fin` second). Implementation: `scripts/notificar_veredicto.py` (read-only; examiner functions unit-testable, delivery best-effort in ERR-04 style — a notification failure never alters the run or its exit code) wired into `scripts/corrida_programada.sh`, which now also exports `DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus` so the popup lands whenever a notification daemon is in session (user logged in); without it, the verdict remains journalled. Zero config keys, zero schema changes, zero new dependencies.
+- **Impact:** Observability-only batch: no module, schema, prompt or scheduling behavior touched; 12 new tests (`tests/test_notificar_veredicto.py`) incl. the same-second misidentification regression and reviewer hardening (guard on every notifier route, crash-proof extraction, tag cleanup, named caps, emitter-rejection/fallback/truncation cases); verified live against the real morning chain (COR-0006→0009 verdict printed with true metrics). 643 tests.
+
 ## Prompt/design alignment decisions
 
 ### C2. Detailed Evaluation entity uses Spanish attribute names
@@ -580,6 +620,8 @@ Source: DOC-APPENDIX 9A — archived 2026-08-11; content consolidated here uncha
 
 | Version | Date | Change |
 |---|---|---|
+| 1.39 | 2026-10-19 | Added D57 (batch verdict notifications: wrapper integrates `scripts/notificar_veredicto.py` — desktop popup + journal line for success/failure/skip verdicts read from the official trace; scheduled batch identified by its `corrida_programada` event to avoid the same-second module-row misidentification observed live on COR-0009; preflight "corrida activa" counted as benign skip; `DBUS_SESSION_BUS_ADDRESS` exported in the wrapper so popups land whenever the user is logged in; best-effort delivery never alters run results; no config/schema/dep changes; 12 new tests; 643 tests). |
+| 1.38 | 2026-10-19 | Added D54–D56 (version-1 operational close: OS-level scheduled automation — user timer with 10-minute post-boot drag run and 3 h cadence, wrapper + installer scripts + versioned units under `scripts/systemd/`, README scheduled section, first live verification COR-0006→0009; official V1 scope cut to Modules 1–3 with Phases 7–8 deferred to future versions and Phase 9 adapted to the three-module orchestrator; evaluation v5 strict behavior confirmed as desired — calibration audit closed, no findings). |
 | 1.37 | 2026-10-19 | Added D53 (numeric sequential-order rule for official ids: shared `numero_secuencial_id`, both FIFO reads + `leer_ultima_corrida_cerrada` tiebreak re-keyed numerically in `_consultas.py`, duplicate T4/T6 comparisons numeric in `verificacion.py`; closes the documented 10k lexicographic-order known limitation with zero data migration and no schema changes; ROWID ordering rejected; 631 tests). |
 | 1.36 | 2026-10-19 | Added D52 (evaluation prompt v5: deliverable-first V1 with persisted `entregable_principal`, refined golden-rule scope, calibration examples, all-veto discard justifications; validator enforces one line/≤20 words/no double quotes; no schema change; tracker 6.2; 624 tests). |
 | 1.35 | 2026-10-17 | Added D51 (evaluation justification upgraded: prompt `compatibility.md` v4 requires evidence-backed per-offer explanations — axis + quoted description evidence + viability for APROBADA, veto + triggering data for DESCARTADA, generic template phrases prohibited; word cap 20 → 60 in prompt and VAL-04 validator; no schema/veto/flow changes; tracker 6.2; 617 tests). |

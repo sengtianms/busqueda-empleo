@@ -1,0 +1,10 @@
+[Unit]
+Description=Job search scheduler: drag run 10 min after power-on, then every 3 h (decision D54)
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=3h
+Unit=busqueda-empleo.service
+
+[Install]
+WantedBy=timers.target
