@@ -5,6 +5,7 @@ Unless noted, decisions from previous sessions remain in effect.
 ## Sessions index
 | № | Date | Session ID | Summary |
 |---|---|---|---|
+| 42 | 20/10/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Evaluation prompt v6 registered officially (user text verbatim, reorganized for model legibility); production database purged at user request and a fresh full run through the official scheduled path verified end-to-end on the clean database (64 discovered → 64 prepared + 5 duplicates → 1 approved / 58 justified discards, 0 chain errors) with the desktop verdict popup delivered; the save's single commit also carries the parallel door-rotation hardening built against the morning hang (652 tests) |
 | 41 | 19/10/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Version 1 closed officially: scope cut to Modules 1–3 + orchestrator + scheduled automation (OS-level timer with post-boot drag run and 3-hour cadence, wrapper with preflight gate, installer tooling, versioned units), first live automatic run verified end-to-end; evaluation v5 strict behavior confirmed by the user and calibration audit closed with no findings; verdict notifications added afterward — desktop popups driven by the official trace with skip-vs-error distinction, live-verified against the morning chain (643 tests) |
 | 40 | 19/10/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Measured health audit from the primary records concluded no structural refactor was justified (run telemetry: five green runs, full pipeline ~2.5 min per 27 offers); evaluation prompt v5 work unified into main by fast-forward merge with full battery, push, and work-branch deletion (single-branch state restored); post-10k id-ordering limitation closed with a shared numeric key over candidate loads, run tiebreaks and duplicate originals, zero data migration, seven regression tests; both closing reviewers green; evaluation calibration audit (3 approvals → 0 on the same offers after the v5 rebuild) left pending by user choice |
 | 39 | 17/10/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Phase 6 completed (Module 3 built, verified on a solo run and on a full clean-DB orchestrated run); three OpenRouter alternate doors programmed with per-offer rotation and live-verified; evaluator justifications upgraded to evidence-backed explanations after the sample review; minor documentation polish (test counts, full-run registration, database counts, README index) |
@@ -35,6 +36,28 @@ Unless noted, decisions from previous sessions remain in effect.
 | 14 | 09/08/2026 | `ses_01bcc78adffemcqFEiZxT52Eli` | Sub-fase 4.4: capture/registration nodes implemented, audited, and post-audit fixes applied (FK-free schema, name columns, upsert tests) |
 | 13 | 08/08/2026 | `ses_01be77680ffeuyoKct4Qrfx1GG` | Repo sync to `fase-4`; new `/save` section with general git commit and push guidance |
 | 12 | 08/08/2026 | `ses_01c089ce2ffe9MvQT4F1pC0MJN` | Sub-fase 4.2 deep audit + post-audit fixes (credentials mapping, playwright lifecycle) |
+
+## Session 42 — 20/10/2026
+`ses_f4af1b961ffe5t8xNspW5U761x` · `ajuste-final-v1`
+
+**Topics**
+- Evaluation prompt v6 into force: the user's text accepted verbatim and reorganized for model legibility — candidate profile with explicit seek/avoid lists, golden rule tightened against generic and aspirational phrases, V1 application rules with a wider artifact catalog, V2 defined by real leadership/design authority, V3 discarding requirements-only descriptions, six calibration examples; response contract, validator and provider doors untouched
+- Prompt-only change verified on its consumption path: placeholders survive the substituting renderer exactly; no code or settings adjust, the new text activates by itself on the next evaluation
+- Production database purged at user request with no backup taken: every table's records wiped to zero, structure preserved, official id counters restarted from the beginning
+- Fresh full run through the official scheduled path on the clean database (~8 min): discovery captured 64 new offers over the 24-hour window, preparation prepared all 64 with 5 duplicates resolved and the opening LinkedIn temporary walls self-recovered by its retries, initial evaluation returned 1 approved / 58 justified discards, 0 chain errors — nothing left pending classification
+- v6 behavior visible in the verdicts: the accepted offer is a decision/information-systems management role justified with quoted description evidence; sampled discards each name the veto controls that applied (individual-execution technical roles failed on the two main controls even with Senior titles)
+- Desktop verdict popup verified again in production with the clean-run counts
+- Pending-change inventory requested by the user before gating the save: the single commit also carries the parallel door-rotation hardening answering today's hung batch (per-door wait cap with immediate rotation, fallen doors remembered for the rest of the run, honest stop when every provider fails)
+
+**Decisions**
+- D58 (2026-10-19): evaluation prompt v6 — user-authored text verbatim, structured into titled sections/lists; candidate profile + tightened golden rule + real-seniority criteria; output contract unchanged (decision log v1.40)
+- Decisions from previous sessions remain in effect
+
+**Status**
+- Prompt v6 registered ✅ (tracker 6.5) · door-rotation hardening ✅ (tracker 6.6, parallel work carried in this commit); 652 tests passing · ruff 0 · mypy 0
+- Database running clean: it holds only the verification run's 64 offers, three green module rows and the complete trace, ready for the user's own review of v6 verdicts
+- Session history and all pending branch changes committed in this /save (single commit + push)
+- Branch: `ajuste-final-v1` · no merge (merging to `main` awaits explicit user authorization)
 
 ## Session 41 — 19/10/2026
 `ses_f4af1b961ffe5t8xNspW5U761x` · `ajuste-final-v1`

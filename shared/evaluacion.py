@@ -29,6 +29,9 @@ def validar_evaluacion(
     jitter = seccion.get("pausa_jitter_segundos")
     if jitter is not None and (not _es_numero(jitter) or jitter < 0):
         return "pausa_jitter_segundos invalida (numerico >= 0)"
+    timeout_puerta = seccion.get("timeout_puerta_segundos")
+    if not _es_numero(timeout_puerta) or timeout_puerta <= 0:
+        return "timeout_puerta_segundos invalido (numerico > 0)"
     reintentos = seccion.get("retries")
     if not isinstance(reintentos, dict):
         return "retries ausente o no es un objeto"

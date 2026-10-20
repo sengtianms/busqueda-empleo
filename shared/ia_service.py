@@ -147,8 +147,13 @@ def _send_local(prompt: str) -> str:
     )
 
 
-@retry_decorator()
-def _send_cloud(prompt: str) -> str:
+def _send_cloud(prompt: str, timeout: float | None = None) -> str:
+    """Un intento a la ruta cloud, sin reintentos internos (D59).
+
+    El llamador decide la política: la evaluación rota de puerta al primer
+    fallo (su nodo es dueño de los intentos); los propósitos que no rotan
+    usan `_send_cloud_con_reintentos`.
+    """
     cfg = _get_cloud_config()
     headers: dict[str, str] = {
         "Content-Type": "application/json",
@@ -166,9 +171,15 @@ def _send_cloud(prompt: str) -> str:
         f"{cfg['endpoint']}/api/generate",
         headers,
         payload,
-        cfg["timeout"],
+        float(timeout) if timeout is not None else cfg["timeout"],
         "AI Cloud",
     )
+
+
+@retry_decorator()
+def _send_cloud_con_reintentos(prompt: str, timeout: float | None = None) -> str:
+    """Cloud route with the shared retry policy (default `analyze` path)."""
+    return _send_cloud(prompt, timeout)
 
 
 def _validate_response(raw_response: str) -> dict[str, Any]:
@@ -196,8 +207,19 @@ def _validate_response(raw_response: str) -> dict[str, Any]:
 
 
 def analyze(
-    prompt_id: str, context: dict[str, Any], purpose: str = "evaluation"
+    prompt_id: str,
+    context: dict[str, Any],
+    purpose: str = "evaluation",
+    *,
+    timeout: float | None = None,
+    reintentar: bool = True,
 ) -> dict[str, Any]:
+    """Renders a prompt and asks the routed provider.
+
+    `timeout` overrides the route's configured wait. `reintentar=False`
+    skips the shared retry wrapper so the caller can rotate providers on
+    the first failure (evaluation door policy, D59).
+    """
     template = load_prompt(prompt_id)
     final_prompt = render_prompt(template, context)
 
@@ -205,7 +227,10 @@ def analyze(
     logger.debug("Sending prompt to AI | prompt_id={} | provider={}", prompt_id, provider)
 
     if provider == "cloud":
-        raw_response = _send_cloud(final_prompt)
+        if reintentar:
+            raw_response = _send_cloud_con_reintentos(final_prompt, timeout)
+        else:
+            raw_response = _send_cloud(final_prompt, timeout)
     else:
         raw_response = _send_local(final_prompt)
 
@@ -233,16 +258,20 @@ def _clave_openrouter(referencia: str) -> str:
     return str(clave)
 
 
-def _send_openrouter(prompt: str, modelo: str, referencia_clave: str) -> str:
+def _send_openrouter(
+    prompt: str, modelo: str, referencia_clave: str, timeout: float | None = None
+) -> str:
     """POST a prompt to an OpenRouter alternate door (same-model rotation).
 
     No retry decorator here: the evaluation node owns attempts and door
     rotation (ficha M3 RN-07). Quota exhaustion surfaces with its status so
     the node can close by quota in order. Timeout and sampling follow the
-    `ai_cloud` settings (D45 determinism), like the principal cloud route.
+    `ai_cloud` settings (D45 determinism), like the principal cloud route;
+    `timeout` overrides the configured wait per door (D59).
     """
     clave = _clave_openrouter(referencia_clave)
     nube = _get_cloud_config()
+    espera = float(timeout) if timeout is not None else float(nube.get("timeout", 120))
     opciones = nube.get("options", {})
     temperatura = float(opciones.get("temperature", 0.0)) if isinstance(opciones, dict) else 0.0
     try:
@@ -257,7 +286,7 @@ def _send_openrouter(prompt: str, modelo: str, referencia_clave: str) -> str:
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {clave}",
             },
-            timeout=float(nube.get("timeout", 120)),
+            timeout=espera,
         )
         respuesta.raise_for_status()
         datos = respuesta.json()
@@ -278,7 +307,7 @@ def _send_openrouter(prompt: str, modelo: str, referencia_clave: str) -> str:
     except httpx.TimeoutException:
         raise LLMError(
             "002",
-            f"Timeout connecting to OpenRouter ({nube.get('timeout', 120)}s)",
+            f"Timeout connecting to OpenRouter ({espera}s)",
             source_module="ia_service",
         )
     except httpx.HTTPStatusError as e:
@@ -303,7 +332,12 @@ def _send_openrouter(prompt: str, modelo: str, referencia_clave: str) -> str:
 
 
 def analyze_openrouter(
-    prompt_id: str, context: dict[str, Any], modelo: str, referencia_clave: str
+    prompt_id: str,
+    context: dict[str, Any],
+    modelo: str,
+    referencia_clave: str,
+    *,
+    timeout: float | None = None,
 ) -> dict[str, Any]:
     """Evaluates a prompt through an OpenRouter alternate door."""
     template = load_prompt(prompt_id)
@@ -313,7 +347,7 @@ def analyze_openrouter(
         prompt_id,
         modelo,
     )
-    raw_response = _send_openrouter(final_prompt, modelo, referencia_clave)
+    raw_response = _send_openrouter(final_prompt, modelo, referencia_clave, timeout)
     logger.debug(
         "Response received from alternate door | prompt_id={} | model={}",
         prompt_id,

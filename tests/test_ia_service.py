@@ -215,3 +215,104 @@ def test_analyze_local(mock_post: MagicMock, tmp_path: Path) -> None:
 
     prompt_file.unlink()
     category.rmdir()
+
+
+def test_analyze_sin_reintento_hace_un_solo_intento(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """D59: la evaluación desactiva el reintento interno y pasa su espera."""
+    from shared import ia_service
+
+    monkeypatch.setattr(ia_service, "load_prompt", lambda _: "plantilla")
+    monkeypatch.setattr(ia_service, "render_prompt", lambda template, _: template)
+    monkeypatch.setattr(ia_service, "_route_provider", lambda _: "cloud")
+    llamado = {"n": 0}
+
+    def _send(prompt: str, timeout: float | None = None) -> str:
+        llamado["n"] += 1
+        assert timeout == 30
+        raise LLMError(
+            "002", "Timeout connecting to AI Cloud (30s)", source_module="ia_service"
+        )
+
+    monkeypatch.setattr(ia_service, "_send_cloud", _send)
+    monkeypatch.setattr(
+        ia_service,
+        "_send_cloud_con_reintentos",
+        MagicMock(side_effect=AssertionError("no debe reintentar")),
+    )
+    with pytest.raises(LLMError):
+        ia_service.analyze("p", {}, timeout=30, reintentar=False)
+    assert llamado["n"] == 1
+
+
+def test_analyze_por_defecto_conserva_el_reintento_compartido(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Los propósitos que no rotan siguen usando la política de reintentos."""
+    from shared import ia_service
+
+    monkeypatch.setattr(ia_service, "load_prompt", lambda _: "plantilla")
+    monkeypatch.setattr(ia_service, "render_prompt", lambda template, _: template)
+    monkeypatch.setattr(ia_service, "_route_provider", lambda _: "cloud")
+    llamado = {"n": 0}
+
+    def _send(prompt: str, timeout: float | None = None) -> str:
+        llamado["n"] += 1
+        assert timeout == 45
+        return '{"ok": true}'
+
+    monkeypatch.setattr(ia_service, "_send_cloud_con_reintentos", _send)
+    monkeypatch.setattr(
+        ia_service,
+        "_send_cloud",
+        MagicMock(side_effect=AssertionError("debe usar el envoltorio")),
+    )
+    assert ia_service.analyze("p", {}, timeout=45) == {"ok": True}
+    assert llamado["n"] == 1
+
+
+def test_analyze_openrouter_pasa_el_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    from shared import ia_service
+
+    monkeypatch.setattr(ia_service, "load_prompt", lambda _: "plantilla")
+    monkeypatch.setattr(ia_service, "render_prompt", lambda template, _: template)
+    llamado: dict[str, object] = {}
+
+    def _send(
+        prompt: str, modelo: str, referencia_clave: str, timeout: float | None = None
+    ) -> str:
+        llamado.update(modelo=modelo, clave=referencia_clave, timeout=timeout)
+        return '{"ok": true}'
+
+    monkeypatch.setattr(ia_service, "_send_openrouter", _send)
+    res = ia_service.analyze_openrouter(
+        "p", {}, "google/gemma-4-31b-it", "OPENROUTER_API_KEY_1", timeout=25
+    )
+    assert res == {"ok": True}
+    assert llamado == {
+        "modelo": "google/gemma-4-31b-it",
+        "clave": "OPENROUTER_API_KEY_1",
+        "timeout": 25,
+    }
+
+
+def test_send_openrouter_pasa_el_timeout_a_httpx(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """D59: la espera por puerta llega al POST de la puerta alterna."""
+    from shared import config as config_module
+    from shared import ia_service
+
+    real = config_module.load()
+    fake = {**real, "_env": {"OPENROUTER_API_KEY_1": "clave"}}
+    monkeypatch.setattr(ia_service, "load", lambda: fake)
+    with patch("shared.ia_service.httpx.post") as mock_post:
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = {
+            "choices": [{"message": {"content": "{}"}}]
+        }
+        ia_service._send_openrouter(
+            "prompt", "google/gemma-4-31b-it", "OPENROUTER_API_KEY_1", timeout=25
+        )
+    assert mock_post.call_args.kwargs["timeout"] == 25

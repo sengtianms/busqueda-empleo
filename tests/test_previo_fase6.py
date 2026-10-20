@@ -14,6 +14,7 @@ def _seccion_ok() -> dict[str, Any]:
     return {
         "pausa_entre_ofertas_segundos": 1.2,
         "pausa_jitter_segundos": 0.4,
+        "timeout_puerta_segundos": 60,
         "retries": {
             "max_attempts": 2,
             "base_wait_seconds": 2,
@@ -127,6 +128,18 @@ def test_validador_rechaza_pausa_negativa() -> None:
     seccion = _seccion_ok()
     seccion["pausa_entre_ofertas_segundos"] = -1
     assert validar_evaluacion(seccion, _config_ok()) is not None
+
+
+def test_validador_rechaza_timeout_de_puerta_ausente() -> None:
+    seccion = _seccion_ok()
+    del seccion["timeout_puerta_segundos"]
+    assert "timeout_puerta_segundos" in str(validar_evaluacion(seccion, _config_ok()))
+
+
+def test_validador_rechaza_timeout_de_puerta_no_positivo() -> None:
+    seccion = _seccion_ok()
+    seccion["timeout_puerta_segundos"] = 0
+    assert "timeout_puerta_segundos" in str(validar_evaluacion(seccion, _config_ok()))
 
 
 def test_validador_rechaza_puertas_no_lista() -> None:

@@ -3,8 +3,10 @@
 Process node, batch over the whole candidate list (sheet pasos funcionales
 1-8). For every offer in `preparada` (FIFO order from INICIO): take the 4
 fields as stored (VAL-02, no interpretation), request the role's main
-deliverable plus the 5-veto evaluation from the routed AI (paso 3, up to 2
-attempts per sheet `max_attempts: 2` with pause between offers), validate
+deliverable plus the 5-veto evaluation from the routed AI (paso 3: one
+attempt per door until one answers, `timeout_puerta_segundos` each; up to 2
+attempts on the SAME door only when the answer is invalid, with pause
+between offers), validate
 the answer (paso 4, VAL-04: deliverable + vetos + coherent decision +
 justification), and persist immediately per offer (RN-02: final state +
 full result column + event with `id_oferta` + counter) before taking the
@@ -15,13 +17,15 @@ one approved exception: an empty, `N/A`/`N/R` or unreported description is a
 V3 FAIL and the offer is discarded without calling the AI. Modality and
 location apply literally even when the data is missing (V4/V5).
 
-Door policy (RN-07): a verified door failure (quota, down door, key
-rejected) rotates to the next ordered alternate door of the same model; an
-invalid answer retries on the SAME door. Exhausted attempts on one offer
-leave it pending in `preparada` with `resultado_evaluacion_inicial = 'N/A'`
-and continue with the next (RN-06/RN-09). When every door reports an
-exhausted quota, calls stop and the rest stays pending for a quota-ordered
-close (`cupo_agotado` fixed on the context for Finalizar Proceso).
+Door policy (RN-07, D59): a door that fails within its wait
+(`timeout_puerta_segundos`) — quota, down door, rejected key — is marked
+down for the rest of the run and the next healthy door of the same model is
+tried immediately; an invalid answer retries on the SAME door. Exhausted
+attempts on one offer leave it pending in `preparada` with
+`resultado_evaluacion_inicial = 'N/A'` and continue with the next
+(RN-06/RN-09). When no healthy door remains, calls stop and the rest stays
+pending; if every door fell for quota the context fixes `cupo_agotado`,
+otherwise Finalizar Proceso derives the motive from the metrics.
 """
 
 import json
@@ -38,7 +42,6 @@ from shared.errors import InternalError
 from shared.ia_service import analyze, analyze_openrouter
 from shared.models import OfferState
 from shared.persistence import actualizar_fila, registrar_evento
-from shared.retry import ejecutar_con_reintento
 from shared.state_machine import transition
 from shared.utilidades import ahora
 
@@ -76,7 +79,7 @@ class ResultadoVetos(BaseModel):
 
 
 class FalloEvaluacion(Exception):
-    """Failure carrying a retryable flow code for the shared retry helper."""
+    """Failure of one offer's evaluation request (flow code + detail)."""
 
     def __init__(self, codigo_motivo: str, detalle: str) -> None:
         super().__init__(f"{codigo_motivo}: {detalle}")
@@ -271,6 +274,11 @@ def _es_cupo_agotado(detalle: str) -> bool:
     return any(senal in texto for senal in _SENALES_CUPO)
 
 
+def _timeout_puerta_valido(valor: Any) -> bool:
+    """VAL-01: the per-door wait must be a positive number (D59)."""
+    return isinstance(valor, (int, float)) and not isinstance(valor, bool) and valor > 0
+
+
 def _puertas(contexto: RunContext) -> list[dict[str, str]]:
     """Ordered doors: principal first, then the configured alternates.
 
@@ -295,72 +303,111 @@ def _puertas(contexto: RunContext) -> list[dict[str, str]]:
     return puertas
 
 
+def _marcar_puerta_caida(contexto: RunContext, nombre: str, motivo: str) -> None:
+    """D59: recuerda una puerta caída durante el resto de la corrida.
+
+    El registro va al log (no a `eventos`) para no alterar las métricas de
+    cierre: `total_errores`/`total_sucesos` cuentan eventos del ciclo de
+    vida de la corrida, no incidencias de infraestructura de la IA.
+    """
+    if nombre in contexto.puertas_caidas:
+        return
+    contexto.puertas_caidas[nombre] = motivo
+    logger.warning(
+        f"D59 | run={contexto.id_corrida} | puerta_descartada | {nombre} | {motivo}"
+    )
+
+
+def _todas_las_puertas_caidas(
+    contexto: RunContext, puertas: list[dict[str, str]]
+) -> bool:
+    """True when every configured door is already marked down for this run."""
+    return all(puerta["nombre"] in contexto.puertas_caidas for puerta in puertas)
+
+
+def _todas_las_puertas_por_cupo(
+    contexto: RunContext, puertas: list[dict[str, str]]
+) -> bool:
+    """True when every door fell specifically for quota exhaustion (D59)."""
+    return all(
+        _es_cupo_agotado(contexto.puertas_caidas.get(puerta["nombre"], ""))
+        for puerta in puertas
+    )
+
+
 def _pedir_evaluacion(
     contexto: RunContext, datos_ia: dict[str, str]
 ) -> tuple[ResultadoVetos | None, str, FalloEvaluacion | None]:
-    """Requests the veto evaluation with door rotation (RN-07, ≤ 2 attempts).
+    """Requests the veto evaluation with immediate door rotation (D59).
 
     Returns (validated answer or None, responding door name, final failure or
-    None). A door failure rotates to the next door on retry; an invalid
-    answer retries on the same door.
+    None). A door that fails (timeout, connection, quota, rejected key) is
+    marked down for the rest of the run and the next healthy door is tried
+    at once; an invalid answer retries on the SAME door up to
+    `retries.max_attempts` and never rotates (RN-07). When every door is
+    down, the last failure is returned (or an aggregated detail if the
+    doors were already down when the offer arrived).
     """
-    reintentos = contexto.config_evaluacion["retries"]
+    seccion = contexto.config_evaluacion
+    reintentos = seccion["retries"]
+    max_intentos_respuesta = int(reintentos["max_attempts"])
+    espera_base = float(reintentos["base_wait_seconds"])
+    espera_max = float(reintentos["max_wait_seconds"])
+    multiplicador = float(reintentos["multiplier"])
+    timeout = float(seccion["timeout_puerta_segundos"])
     puertas = _puertas(contexto)
-    puerta_actual = [0]
-    ultimo_fallo: list[FalloEvaluacion] = []
+    ultimo_fallo: FalloEvaluacion | None = None
 
-    def _intentar() -> tuple[ResultadoVetos, str]:
-        puerta = puertas[puerta_actual[0]]
-        try:
-            if puerta["clave_ref"]:
-                respuesta = analyze_openrouter(
-                    PROMPT_EVALUACION, datos_ia, puerta["modelo"], puerta["clave_ref"]
+    for puerta in puertas:
+        nombre = puerta["nombre"]
+        if nombre in contexto.puertas_caidas:
+            continue
+        for intento in range(1, max_intentos_respuesta + 1):
+            try:
+                if puerta["clave_ref"]:
+                    respuesta = analyze_openrouter(
+                        PROMPT_EVALUACION,
+                        datos_ia,
+                        puerta["modelo"],
+                        puerta["clave_ref"],
+                        timeout=timeout,
+                    )
+                else:
+                    respuesta = analyze(
+                        PROMPT_EVALUACION,
+                        datos_ia,
+                        purpose="evaluation",
+                        timeout=timeout,
+                        reintentar=False,
+                    )
+            except Exception as exc:
+                _marcar_puerta_caida(contexto, nombre, str(exc))
+                ultimo_fallo = FalloEvaluacion(
+                    "puerta_evaluacion_no_disponible", f"{nombre}: {exc}"
                 )
-            else:
-                respuesta = analyze(PROMPT_EVALUACION, datos_ia, purpose="evaluation")
-        except Exception as exc:
-            raise FalloEvaluacion(
-                "puerta_evaluacion_no_disponible", f"{puerta['nombre']}: {exc}"
-            ) from exc
-        try:
-            return _validar_respuesta(respuesta), puerta["nombre"]
-        except ValueError as exc:
-            raise FalloEvaluacion(
-                "respuesta_evaluacion_invalida", f"{puerta['nombre']}: {exc}"
-            ) from exc
+                break
+            try:
+                return _validar_respuesta(respuesta), nombre, None
+            except ValueError as exc:
+                ultimo_fallo = FalloEvaluacion(
+                    "respuesta_evaluacion_invalida", f"{nombre}: {exc}"
+                )
+                if intento >= max_intentos_respuesta:
+                    # RN-07: una respuesta mal formada no cambia de puerta.
+                    return None, nombre, ultimo_fallo
+                espera = min(espera_base * (multiplicador ** (intento - 1)), espera_max)
+                if espera > 0:
+                    time.sleep(espera)
 
-    def _intentar_registrado() -> tuple[ResultadoVetos, str]:
-        try:
-            return _intentar()
-        except FalloEvaluacion as fallo:
-            ultimo_fallo.append(fallo)
-            raise
-
-    def _al_reintento() -> None:
-        if (
-            ultimo_fallo
-            and ultimo_fallo[-1].codigo_motivo == "puerta_evaluacion_no_disponible"
-            and puerta_actual[0] + 1 < len(puertas)
-        ):
-            puerta_actual[0] += 1
-
-    resultado, _intentos = ejecutar_con_reintento(
-        _intentar_registrado,
-        al_reintento=_al_reintento,
-        al_fallo_final=lambda exc, n: exc,
-        max_attempts=int(reintentos["max_attempts"]),
-        base_wait=float(reintentos["base_wait_seconds"]),
-        max_wait=float(reintentos["max_wait_seconds"]),
-        multiplier=float(reintentos["multiplier"]),
-        contexto_log=contexto.id_corrida,
-    )
-    if isinstance(resultado, FalloEvaluacion):
-        return None, puertas[puerta_actual[0]]["nombre"], resultado
-    if isinstance(resultado, BaseException):
-        fallo = FalloEvaluacion("puerta_evaluacion_no_disponible", str(resultado))
-        return None, puertas[puerta_actual[0]]["nombre"], fallo
-    validada, puerta = resultado
-    return validada, puerta, None
+    if ultimo_fallo is None:
+        detalle = "; ".join(
+            f"{nombre}: {motivo}" for nombre, motivo in contexto.puertas_caidas.items()
+        )
+        ultimo_fallo = FalloEvaluacion(
+            "puerta_evaluacion_no_disponible",
+            f"todas las puertas caidas ({detalle or 'sin puertas disponibles'})",
+        )
+    return None, "", ultimo_fallo
 
 
 def _primer_veto(validada: ResultadoVetos) -> str:
@@ -479,6 +526,7 @@ def ejecutar_evaluacion(contexto: RunContext | None) -> ResultadoEvaluacion:
         or not isinstance(seccion, dict)
         or not isinstance(seccion.get("retries"), dict)
         or seccion.get("retries", {}).get("max_attempts") != 2
+        or not _timeout_puerta_valido(seccion.get("timeout_puerta_segundos"))
     ):
         registrar_evento(
             id_corrida=id_corrida,
@@ -553,15 +601,26 @@ def ejecutar_evaluacion(contexto: RunContext | None) -> ResultadoEvaluacion:
                     evidencia=f"{fallo.codigo_motivo}: {fallo.detalle}",
                     id_oferta=id_oferta,
                 )
-                if _es_cupo_agotado(fallo.detalle):
-                    # Cupo agotado en las puertas: se deja de llamar; el
-                    # resto queda pendiente y el cierre es por cupo.
-                    contexto.motivo_cierre = "cupo_agotado"
-                    contexto.motivo_marca_temporal = ahora()
-                    logger.warning(
-                        f"cupo_agotado | run={id_corrida} | "
-                        f"ofertas restantes quedan pendientes"
-                    )
+                puertas = _puertas(contexto)
+                if fallo.codigo_motivo == "puerta_evaluacion_no_disponible" and (
+                    _todas_las_puertas_caidas(contexto, puertas)
+                ):
+                    if _todas_las_puertas_por_cupo(contexto, puertas):
+                        # Cupo agotado en TODAS las puertas: cierre por cupo.
+                        contexto.motivo_cierre = "cupo_agotado"
+                        contexto.motivo_marca_temporal = ahora()
+                        logger.warning(
+                            f"cupo_agotado | run={id_corrida} | {fallo.detalle} | "
+                            f"ofertas restantes quedan pendientes"
+                        )
+                    else:
+                        # D59: sin puertas sanas no se sigue llamando; el
+                        # motivo lo deriva Finalizar (error_total si no hubo
+                        # ninguna evaluación; corrida_completada si ya hubo).
+                        logger.warning(
+                            f"puertas_agotadas | run={id_corrida} | {fallo.detalle} | "
+                            f"ofertas restantes quedan pendientes"
+                        )
                     break
             else:
                 # Pasos 5-6 — anotar aprobada o descartada.

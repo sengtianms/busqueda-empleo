@@ -24,6 +24,7 @@ from shared.persistence import buscar_por_id, leer_tabla
 EVALUACION_VALIDA: dict[str, Any] = {
     "pausa_entre_ofertas_segundos": 0,
     "pausa_jitter_segundos": 0,
+    "timeout_puerta_segundos": 60,
     "retries": {
         "max_attempts": 2,
         "base_wait_seconds": 0,
@@ -233,9 +234,27 @@ def test_descripcion_vacia_descarta_sin_llamar_a_la_ia(
 # ---------------------------------------------------------------- Fallos por oferta
 
 
-def test_fallo_persistente_deja_pendiente_y_continua(
+def test_configuracion_sin_timeout_de_puerta_aborta(
     temp_db_file: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """VAL-01/D59: sin espera por puerta válida no se llama a la IA."""
+    _sembrar("OFE-0001")
+    ctx = _contexto(["OFE-0001"])
+    del ctx.config_evaluacion["timeout_puerta_segundos"]
+
+    def _boom(*a: Any, **k: Any) -> dict[str, str]:
+        raise AssertionError("la IA no debe llamarse sin timeout de puerta")
+
+    monkeypatch.setattr(evaluacion_mod, "analyze", _boom)
+    res = ejecutar_evaluacion(ctx)
+    assert res.estado == "abortada"
+    assert res.codigo == "ERR-01"
+
+
+def test_fallo_de_puerta_sin_alternas_detiene_sin_reintentar(
+    temp_db_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """D59: una puerta caída no se reintenta; sin puertas sanas no se sigue."""
     from shared.errors import LLMError
 
     _sembrar("OFE-0001")
@@ -244,25 +263,29 @@ def test_fallo_persistente_deja_pendiente_y_continua(
 
     def _falla(*a: Any, **k: Any) -> dict[str, str]:
         llamadas["n"] += 1
-        if llamadas["n"] <= 2:
-            raise LLMError("001", "puerta caida", source_module="ia_service")
-        return _respuesta("APROBADA")
+        assert k["timeout"] == 60
+        assert k["reintentar"] is False
+        raise LLMError("001", "puerta caida", source_module="ia_service")
 
     monkeypatch.setattr(evaluacion_mod, "analyze", _falla)
     ctx = _contexto(["OFE-0001", "OFE-0002"])
     ctx.candidatas.sort(key=lambda c: str(c["id"]))
     res = ejecutar_evaluacion(ctx)
     assert res.estado == "completada"
-    # OFE-0001 agoto sus 2 intentos y quedo pendiente; OFE-0002 se aprobo.
+    # Un solo intento: la puerta caida no se reintenta en la misma corrida.
+    assert llamadas["n"] == 1
+    assert res.contexto is not None
+    # El motivo no se fija aquí: lo deriva Finalizar (error_total/corrida_completada).
+    assert res.contexto.motivo_cierre is None
+    assert "principal" in res.contexto.puertas_caidas
     fila1 = buscar_por_id("ofertas_descubiertas", "OFE-0001")
     assert fila1 is not None
     assert fila1["estado"] == "preparada"
     assert fila1["resultado_evaluacion_inicial"] == "N/A"
     fila2 = buscar_por_id("ofertas_descubiertas", "OFE-0002")
     assert fila2 is not None
-    assert fila2["estado"] == "aceptada_ei"
+    assert fila2["estado"] == "preparada"
     assert len(_eventos("evaluacion_fallida")) == 1
-    assert res.contexto is not None
     assert res.contexto.contador_errores == 1
 
 
@@ -270,9 +293,21 @@ def test_respuesta_invalida_reintente_en_la_misma_puerta(
     temp_db_file: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _sembrar("OFE-0001")
-    monkeypatch.setattr(evaluacion_mod, "analyze", lambda *a, **k: {"decision": "APROBADA"})
+    llamadas = {"n": 0}
+
+    def _invalida(*a: Any, **k: Any) -> dict[str, str]:
+        llamadas["n"] += 1
+        return {"decision": "APROBADA"}
+
+    monkeypatch.setattr(evaluacion_mod, "analyze", _invalida)
     res = ejecutar_evaluacion(_contexto(["OFE-0001"]))
     assert res.estado == "completada"
+    # RN-07/D59: la respuesta mal formada reintenta en la misma puerta y no
+    # la marca caida (la puerta respondio).
+    assert llamadas["n"] == 2
+    assert res.contexto is not None
+    assert res.contexto.puertas_caidas == {}
+    assert res.contexto.contador_errores == 1
     fila = buscar_por_id("ofertas_descubiertas", "OFE-0001")
     assert fila is not None
     assert fila["estado"] == "preparada"
@@ -292,11 +327,12 @@ def test_fallo_de_principal_rota_a_alterna_y_registra_puerta(
     llamadas = {"n": 0}
 
     def _alterna_responde(
-        prompt: str, contexto: dict[str, str], modelo: str, clave: str
+        prompt: str, contexto: dict[str, str], modelo: str, clave: str, **k: Any
     ) -> dict[str, str]:
         llamadas["n"] += 1
         assert modelo == "google/gemma-4-31b-it"
         assert clave == "OPENROUTER_API_KEY_1"
+        assert k["timeout"] == 60
         return _respuesta("APROBADA")
 
     monkeypatch.setattr(evaluacion_mod, "analyze", _principal_caida)
@@ -320,6 +356,91 @@ def test_fallo_de_principal_rota_a_alterna_y_registra_puerta(
     eventos = _eventos("oferta_aprobada")
     assert len(eventos) == 1
     assert "puerta=openrouter-1" in str(eventos[0]["evidencia"])
+
+
+def test_puerta_caida_se_recuerda_en_las_siguientes_ofertas(
+    temp_db_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """D59: una puerta que cae no se vuelve a llamar en la misma corrida."""
+    from shared.errors import LLMError
+
+    _sembrar("OFE-0001")
+    _sembrar("OFE-0002")
+    principal = {"n": 0}
+
+    def _principal_caida(*a: Any, **k: Any) -> dict[str, str]:
+        principal["n"] += 1
+        raise LLMError("001", "puerta caida", source_module="ia_service")
+
+    alternas = {"n": 0}
+
+    def _alterna_responde(*a: Any, **k: Any) -> dict[str, str]:
+        alternas["n"] += 1
+        return _respuesta("APROBADA")
+
+    monkeypatch.setattr(evaluacion_mod, "analyze", _principal_caida)
+    monkeypatch.setattr(evaluacion_mod, "analyze_openrouter", _alterna_responde)
+    ctx = _contexto(["OFE-0001", "OFE-0002"])
+    ctx.candidatas.sort(key=lambda c: str(c["id"]))
+    ctx.config_evaluacion["puertas_alternas"] = [
+        {
+            "nombre": "openrouter-1",
+            "modelo": "google/gemma-4-31b-it",
+            "clave_ref": "OPENROUTER_API_KEY_1",
+        }
+    ]
+    res = ejecutar_evaluacion(ctx)
+    assert res.estado == "completada"
+    # La principal se intento una sola vez; la alterna respondio las dos.
+    assert principal["n"] == 1
+    assert alternas["n"] == 2
+    assert res.contexto is not None
+    assert list(res.contexto.puertas_caidas) == ["principal"]
+    for oferta_id in ("OFE-0001", "OFE-0002"):
+        fila = buscar_por_id("ofertas_descubiertas", oferta_id)
+        assert fila is not None
+        assert fila["estado"] == "aceptada_ei"
+
+
+def test_todas_las_puertas_caidas_cierra_sin_llamar(
+    temp_db_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """D59: al caer todas las puertas se deja de llamar; el resto queda pendiente."""
+    from shared.errors import LLMError
+
+    _sembrar("OFE-0001")
+    _sembrar("OFE-0002")
+    llamadas = {"n": 0}
+
+    def _caida(*a: Any, **k: Any) -> dict[str, str]:
+        llamadas["n"] += 1
+        raise LLMError(
+            "002", "Timeout connecting to AI Cloud (60s)", source_module="ia_service"
+        )
+
+    monkeypatch.setattr(evaluacion_mod, "analyze", _caida)
+    monkeypatch.setattr(evaluacion_mod, "analyze_openrouter", _caida)
+    ctx = _contexto(["OFE-0001", "OFE-0002"])
+    ctx.candidatas.sort(key=lambda c: str(c["id"]))
+    ctx.config_evaluacion["puertas_alternas"] = [
+        {
+            "nombre": f"openrouter-{numero}",
+            "modelo": "google/gemma-4-31b-it",
+            "clave_ref": f"OPENROUTER_API_KEY_{numero}",
+        }
+        for numero in (1, 2, 3)
+    ]
+    res = ejecutar_evaluacion(ctx)
+    assert res.estado == "completada"
+    # 4 puertas intentadas una vez; la segunda oferta ni se toca.
+    assert llamadas["n"] == 4
+    assert res.contexto is not None
+    assert res.contexto.motivo_cierre is None
+    assert len(res.contexto.puertas_caidas) == 4
+    fila2 = buscar_por_id("ofertas_descubiertas", "OFE-0002")
+    assert fila2 is not None
+    assert fila2["estado"] == "preparada"
+    assert len(_eventos("evaluacion_fallida")) == 1
 
 
 def test_cupo_agotado_frena_y_fija_cierre_por_cupo(
@@ -406,7 +527,9 @@ def test_la_ia_recibe_limpio_y_la_base_guarda_el_original(
     _sembrar("OFE-0001", descripcion=descripcion)
     recibidas: dict[str, str] = {}
 
-    def _ia(prompt: str, contexto: dict[str, str], purpose: str = "") -> dict[str, str]:
+    def _ia(
+        prompt: str, contexto: dict[str, str], purpose: str = "", **k: Any
+    ) -> dict[str, str]:
         recibidas.update(contexto)
         return _respuesta("DESCARTADA", veto="v1")
 

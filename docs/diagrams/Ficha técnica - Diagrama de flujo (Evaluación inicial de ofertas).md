@@ -1,6 +1,6 @@
 # Especificación canónica densificada — Módulo 3: Evaluación inicial de ofertas
 
-**Base de decisiones:** diagrama general del módulo aprobado (objetivo principal, 4 objetivos secundarios: el de copiar y organizar se retiró al eliminar el nodo, 4 nodos: Inicio, Hay ofertas por procesar, Evaluación inicial, Cierre). La evaluación inicial la realiza la inteligencia artificial elegida con 5 controles de veto sobre 4 datos de la oferta (título, descripción, modalidad, ubicación). Sin tope por vuelta; reintentos 2; la apertura no accede a la inteligencia artificial. El modelo a utilizar se confirma en la ruta existente (`ai_routing.evaluation` + modelo de la nube) sin duplicarlo en la sección `evaluacion:`. Al completar la ficha se reemplazarán las claves viejas de puntaje por las nuevas en ajustes y documentos, todo a la vez. Estructura espejo de las fichas de los Módulos 1 y 2.
+**Base de decisiones:** diagrama general del módulo aprobado (objetivo principal, 4 objetivos secundarios: el de copiar y organizar se retiró al eliminar el nodo, 4 nodos: Inicio, Hay ofertas por procesar, Evaluación inicial, Cierre). La evaluación inicial la realiza la inteligencia artificial elegida con 5 controles de veto sobre 4 datos de la oferta (título, descripción, modalidad, ubicación). Sin tope por vuelta; 2 intentos por respuesta inválida en la misma puerta; espera máxima configurable por puerta con rotación inmediata ante caída y memoria de puertas caídas por corrida (D59); la apertura no accede a la inteligencia artificial. El modelo a utilizar se confirma en la ruta existente (`ai_routing.evaluation` + modelo de la nube) sin duplicarlo en la sección `evaluacion:`. Al completar la ficha se reemplazarán las claves viejas de puntaje por las nuevas en ajustes y documentos, todo a la vez. Estructura espejo de las fichas de los Módulos 1 y 2.
 
 ## Convenciones comunes
 
@@ -10,7 +10,7 @@
 - **Registro**: en `"errores o sucesos"` (`eventos`); si no está disponible, registro crítico local (consola/archivo documentado). Todo evento incluye `id_corrida`, marca_temporal, tipo y descripción; los eventos de oferta incluyen `id_oferta`.
 - **Aborto**: terminación inmediata en `"Finalizar Proceso"` con estado `abortada` y motivo `error_critico`/`aborto`.
 - **Terminación controlada/normal**: cierre sin trabajo (`sin_pendientes`) o con trabajo (`corrida_completada`); lo registra `"Finalizar Proceso"`.
-- **Reintentos**: máximo global configurable (`retries`, sección `evaluacion:`); solo son reintentables los códigos declarados en cada nodo. Credenciales, tokens y cookies nunca se registran, evidencian ni persisten. La inteligencia artificial nunca frena la vuelta completa (best-effort por oferta: si falla tras los reintentos, la oferta queda pendiente de revisar y se continúa).
+- **Reintentos**: máximo global configurable (`retries`, sección `evaluacion:`); solo son reintentables los códigos declarados en cada nodo. Credenciales, tokens y cookies nunca se registran, evidencian ni persisten. La inteligencia artificial nunca frena la vuelta completa (best-effort por oferta: si falla tras los reintentos, la oferta queda pendiente de revisar y se continúa), salvo que no quede ninguna puerta sana (D59). **D59:** un fallo de puerta no consume reintentos — la puerta se descarta al primer fallo y se pasa de inmediato a la siguiente; los 2 intentos aplican solo a respuestas inválidas en la misma puerta.
 - **Regla de datos (D31)**: ningún campo vacío — `N/A`/`N/R` cuando no aplica; exenciones: `id_externo` (dedup) y `fecha_ultima_verificacion` (marcador de verificación del Módulo 2).
 
 ---
@@ -27,7 +27,7 @@ Instanciar la corrida de evaluación (corrida propia del módulo) y preparar el 
 ### Descripción funcional
 Al recibir disparador:
 1. Crea instancia de corrida con `id_corrida` único y `fecha_inicio`.
-2. Carga configuración y valida nivel global: **toda** la sección `evaluacion:` — reintentos (`max_attempts: 2`), `pausa_entre_ofertas_segundos` — más la ruta existente de la inteligencia (`ai_routing.evaluation` con su modelo en la nube).
+2. Carga configuración y valida nivel global: **toda** la sección `evaluacion:` — reintentos (`max_attempts: 2`), `pausa_entre_ofertas_segundos`, `timeout_puerta_segundos` — más la ruta existente de la inteligencia (`ai_routing.evaluation` con su modelo en la nube).
 3. Verifica disponibilidad y permisos de escritura de la BD del módulo (prueba de escritura con rollback).
 4. Valida concurrencia mediante bloqueo persistente **global compartido** con los Módulos 1 y 2.
 5. Carga ofertas candidatas: SELECT de `ofertas_descubiertas` con estado `preparada`, orden FIFO (`fecha_descubrimiento ASC, id ASC`).
@@ -43,7 +43,7 @@ Error fatal de inicialización o concurrencia activa producen terminación contr
 
 ### Entradas
 - Disparador manual (hoy) o programado (futuro).
-- Almacén de configuración: sección `evaluacion:` completa (reintentos, pausa) + ruta existente de la inteligencia (`ai_routing.evaluation`) + `concurrencia` (umbral de obsolescencia) + `retries`.
+- Almacén de configuración: sección `evaluacion:` completa (reintentos, pausa, espera máxima por puerta) + ruta existente de la inteligencia (`ai_routing.evaluation`) + `concurrencia` (umbral de obsolescencia) + `retries`.
 - Estado persistente de bloqueo, si existe.
 - BD con `ofertas_descubiertas`.
 
@@ -64,7 +64,7 @@ Error fatal de inicialización o concurrencia activa producen terminación contr
 
 ### Validaciones
 - **VAL-01**: `id_corrida` único y no nulo.
-- **VAL-02**: configuración global: sección `evaluacion:` completa y con rangos válidos (reintentos coherentes con `max_attempts: 2`, pausas ≥ 0) más ruta `ai_routing.evaluation` existente con su modelo declarado.
+- **VAL-02**: configuración global: sección `evaluacion:` completa y con rangos válidos (reintentos coherentes con `max_attempts: 2`, pausas ≥ 0, `timeout_puerta_segundos` numérico > 0) más ruta `ai_routing.evaluation` existente con su modelo declarado.
 - **VAL-03**: BD: conexión abierta y prueba de escritura exitosa con rollback.
 - **VAL-04**: bloqueo legible; obsolescencia por marca_temporal contra umbral configurable; marcas temporales coherentes.
 - **VAL-05**: contexto completo antes de entregar control (`hubo_candidatas` presente).
@@ -108,12 +108,12 @@ Error fatal de inicialización o concurrencia activa producen terminación contr
 - Espejo del INICIO de los Módulos 1 y 2: mismo mecanismo de bloqueo, `sondear_escritura`, `registrar_corrida` y `generar_id`.
 - Orden obligatorio: configuración antes que BD; candidatas después de BD y bloqueo.
 - No acceder a la inteligencia artificial ni a plataformas; sin credenciales.
-- Sin valores fijos: reintentos y pausas desde la sección `evaluacion:`; el modelo desde la ruta existente.
+- Sin valores fijos: reintentos, pausas y espera máxima por puerta desde la sección `evaluacion:`; el modelo desde la ruta existente.
 - Pausa por defecto espejo de Preparación (base 1,2 s con variación 0,4 s).
 
 ### Pasos funcionales
 1. **Recibir disparador e instanciar corrida**. Entrada: evento manual/programado. Proceso: crear instancia, generar `id_corrida`, fecha_inicio. Salida: instancia. Val: VAL-01. Err: ERR-01.
-2. **Cargar configuración y validar nivel global**. Entrada: almacén de configuración. Proceso: leer y validar la sección `evaluacion:` completa (claves y rangos) más la ruta `ai_routing.evaluation` con su modelo. Salida: configuración cruda en contexto. Val: VAL-02. Err: ERR-02, ERR-03, ERR-04.
+2. **Cargar configuración y validar nivel global**. Entrada: almacén de configuración. Proceso: leer y validar la sección `evaluacion:` completa (claves y rangos, incluida la espera máxima por puerta) más la ruta `ai_routing.evaluation` con su modelo. Salida: configuración cruda en contexto. Val: VAL-02. Err: ERR-02, ERR-03, ERR-04.
 3. **Verificar BD**. Entrada: parámetros de conexión. Proceso: abrir conexión; prueba de escritura con rollback. Salida: conexión disponible. Val: VAL-03. Err: ERR-05.
 4. **Validar concurrencia**. Entrada: `id_corrida`, estado de bloqueo, umbral. Proceso: leer bloqueo global compartido; activo no obsoleto → terminación controlada; obsoleto → sobrescribir y continuar; inexistente → marcar bloqueo. Salida: bloqueo adquirido o terminación. Val: VAL-04. Err: ERR-06, ERR-07, ERR-08, ERR-09.
 5. **Cargar ofertas candidatas**. Entrada: BD. Proceso: SELECT `preparada` orden FIFO (`fecha_descubrimiento ASC, id ASC`). Salida: lista de candidatas. Val: VAL-06. Err: ERR-05.
@@ -200,14 +200,14 @@ Flujo por oferta, en orden FIFO (orden obligatorio):
 | # | Paso | Qué hace | Fuente |
 |---|---|---|---|
 | 1 | **Armar los datos** | Toma título, descripción, modalidad y ubicación tal cual vienen | Lista del contexto |
-| 2 | **Pedir la evaluación** | Llama a la inteligencia con los 5 controles; ante fallo de puerta reintenta hasta 2 veces; pausa entre ofertas | Inteligencia elegida |
+| 2 | **Pedir la evaluación** | Llama a la inteligencia con los 5 controles; espera máxima por puerta y rotación inmediata a la siguiente si no responde; pausa entre ofertas | Inteligencia elegida |
 | 3 | **Validar la respuesta** | Verifica entregable principal, 5 controles presentes, decisión coherente con ellos y explicación corta en una línea | Respuesta del paso 2 |
 | 4 | **Anotar el resultado** | Marca estado, guarda el resultado completo, escribe el evento y suma en su cuenta | Pasos 2-3 |
 
-En fallo persistente del paso 2 o respuesta inválida tras los reintentos: evento de error con `id_oferta`; la oferta queda pendiente de revisar en `preparada` y se continúa con la siguiente. **Todos los eventos de oferta llevan `id_oferta`, éxito y fallo.**
+En fallo persistente del paso 2 o respuesta inválida tras los intentos: evento de error con `id_oferta`; la oferta queda pendiente de revisar en `preparada` y se continúa con la siguiente, salvo que no quede ninguna puerta sana (D59: se deja de llamar y el resto queda pendiente). **Todos los eventos de oferta llevan `id_oferta`, éxito y fallo.**
 
 ### Entradas
-- Contexto: lista de candidatas no vacía, `id_corrida`, configuración (`pausa_entre_ofertas_segundos`, reintentos `max_attempts: 2`), contadores (`aprobadas`, `descartadas`, `errores`).
+- Contexto: lista de candidatas no vacía, `id_corrida`, configuración (`pausa_entre_ofertas_segundos`, `timeout_puerta_segundos`, reintentos `max_attempts: 2`), contadores (`aprobadas`, `descartadas`, `errores`) y memoria de puertas caídas de la corrida.
 - BD: `ofertas_descubiertas`.
 - Servicio de inteligencia (puerta principal + puertas alternas del mismo modelo).
 
@@ -226,16 +226,16 @@ En fallo persistente del paso 2 o respuesta inválida tras los reintentos: event
 - **RN-03**: la aprobada se marca `aceptada_ei` y la descartada `descartada_ei`, pasando por `evaluada` en el mismo movimiento. `aceptada_ei` / `descartada_ei` son estados propios de esta fase y se suman al catálogo oficial (la fase profunda usará los suyos).
 - **RN-04**: la columna `resultado_evaluacion_inicial` guarda el resultado completo (entregable principal, v1–v5, decisión, explicación). `DEFAULT 'N/A'`; pendiente de evaluar = `'N/A'`.
 - **RN-05**: la inteligencia recibe exactamente 4 datos (título, descripción, modalidad, ubicación). Ante duda real sobre la naturaleza del rol, no descarta: la regla de oro cubre V1/V3 y V2 solo cuando no hay años ni nivel; los datos explícitos (años, nivel, entregable claro) se evalúan literalmente y las frases genéricas de negocio no crean ambigüedad. Excepción aprobada: sin descripción o con marca de no reportada → V3 FAIL. Modalidad y ubicación se aplican al pie de la letra aunque falte el dato.
-- **RN-06**: reintento por oferta hasta 2 veces ante fallo de puerta o respuesta inválida; si persiste → pendiente en `preparada` (siguiente oferta, siguiente vuelta).
-- **RN-07**: cambio de puerta ante fallo verificado de puerta (cupo lleno, puerta caída o sin respuesta, llave rechazada); ante respuesta mal formada se reintenta en la misma puerta sin tocar la siguiente. Puertas agotadas → pendientes y cierre por cupo.
+- **RN-06**: hasta 2 intentos en la MISMA puerta ante respuesta inválida; un fallo de puerta no se reintenta. Si la respuesta sigue inválida → pendiente en `preparada` (siguiente oferta, siguiente vuelta). **D59.**
+- **RN-07**: cambio inmediato de puerta ante fallo verificado (sin respuesta dentro de `timeout_puerta_segundos`, cupo lleno, llave rechazada): la puerta se marca caída y no se vuelve a llamar durante el resto de la corrida; se usa la siguiente puerta sana. Ante respuesta mal formada se reintenta en la misma puerta sin tocar la siguiente. Sin puertas sanas → pendientes y se deja de llamar (cierre por cupo solo si TODAS las puertas cayeron por cupo; si no, el motivo lo deriva Finalizar). **D59.**
 - **RN-08**: pausa entre ofertas siempre, configurable.
 - **RN-09**: descartar es decisión de negocio (suceso), no error. Solo el fallo de inteligencia es error.
-- **RN-10**: evidencia acotada con la puerta que respondió; trazabilidad `id_corrida` + `id_oferta`. Credenciales, tokens y llaves nunca se registran.
+- **RN-10**: evidencia acotada con la puerta que respondió; trazabilidad `id_corrida` + `id_oferta`. Credenciales, tokens y llaves nunca se registran. La caída de una puerta se registra en el log de la corrida (sin evento, para no alterar las métricas de cierre). **D59.**
 
 ### Validaciones
 - **VAL-01**: insumos presentes (lista no vacía, configuración, ruta de inteligencia).
 - **VAL-02**: los 4 datos tomados tal cual (sin interpretar ni completar).
-- **VAL-03**: política de reintentos cumplida (≤ 2 por oferta); pausa aplicada entre ofertas.
+- **VAL-03**: política de intentos cumplida: ≤ 2 por respuesta inválida en la misma puerta; una sola llamada por puerta ante fallo (sin reintento interno); espera máxima por puerta respetada; pausa aplicada entre ofertas. **D59.**
 - **VAL-04**: respuesta con `entregable_principal` (una línea, máximo 20 palabras, sin comillas dobles y con contenido real, no `N/A`/`N/R`), v1–v5 presentes, decisión coherente con ellos y explicación en una línea de máximo 60 palabras con evidencia de la oferta (v5, D52).
 - **VAL-05**: oferta anotada respeta D31 (sin vacíos); columna de resultado diligenciada o `'N/A'` si pendiente.
 - **VAL-06**: evento escrito con `id_oferta`; evidencia acotada.
@@ -254,7 +254,7 @@ En fallo persistente del paso 2 o respuesta inválida tras los reintentos: event
 | Código | Error / evento | Reint. | Detección | Registro / acción | Estado |
 |---|---|---|:---:|---|---|---|
 | ERR-01 | Insumos ausentes/corruptos | No | 1 | Evento crítico; aborto | `abortada` |
-| ERR-02 | Fallo de puerta (cupo, caída, llave) | Sí | Paso 2 | Reintento y cambio de puerta verificado; agotadas → pendiente y se continúa | pendiente de revisar |
+| ERR-02 | Fallo de puerta (cupo, caída, llave, sin respuesta) | No (rota) | Paso 2 | Rotación inmediata a la siguiente puerta sana; la caída se recuerda y no se reintenta en la corrida; agotadas → pendiente y se deja de llamar | pendiente de revisar |
 | ERR-03 | Respuesta inválida | Sí | Paso 3 | Reintento en la misma puerta; agotado → pendiente y se continúa | pendiente de revisar |
 | ERR-04 | Fallo persistente de anotación de una oferta | No | Paso 4 | Evento crítico; aborto | `abortada` |
 | EVT-01 | `oferta_aprobada` | No | Paso 4 | Suceso con `id_oferta` | continúa |
@@ -264,7 +264,7 @@ En fallo persistente del paso 2 o respuesta inválida tras los reintentos: event
 ### Escenarios límite
 - Descripción vacía, `N/A` o con marca de no reportada → V3 FAIL (excepción aprobada a la regla principal); la oferta queda descartada.
 - Modalidad o ubicación ausentes → V4/V5 literales.
-- Cupo agotado en todas las puertas → se deja de llamar; el resto queda pendiente; cierre por cupo.
+- Sin puertas sanas (todas caídas o con cupo agotado) → se deja de llamar; el resto queda pendiente; cierre por cupo si el motivo es cupo, o motivo derivado por Finalizar (`error_total` si no hubo ninguna evaluación; `corrida_completada` si ya hubo resultados). **D59.**
 - Vuelta frenada a mitad → lo anotado persiste; lo no tomado sigue en `preparada`.
 - Sin aprobadas → entrega control igual al Cierre.
 
@@ -286,12 +286,13 @@ En fallo persistente del paso 2 o respuesta inválida tras los reintentos: event
 - Prompt `compatibility.md` v5 (D52): V1 con tres pasos (entregable principal primero, clasificación mecanismo/artefacto, ejes y roles mixtos), regla de oro acotada, ejemplos de calibración y descartes que nombran todos los vetos; `entregable_principal` se valida en una línea de máximo 20 palabras y se guarda en `resultado_evaluacion_inicial`. La ruta V3-FAIL sin descripción no pasa por VAL-04 y guarda `entregable_principal = "N/A"` (D31).
 - Columna nueva `resultado_evaluacion_inicial` (`TEXT DEFAULT 'N/A'`, migración aditiva idempotente).
 - Puertas alternas del mismo modelo con rotación de llaves (llaves solo en el archivo privado); la puerta que respondió queda en la evidencia.
-- Sin valores fijos: reintentos, pausas y modelo desde ajustes.
+- Política de puertas D59 (as-built): cada puerta recibe un único intento por oferta con la espera `evaluacion.timeout_puerta_segundos` (60 s por defecto); si falla se marca caída en la memoria del contexto (no se vuelve a llamar en la corrida) y se pasa de inmediato a la siguiente. La ruta principal ya no aplica su reintento interno de 3 × 120 s (`reintentar=False`); la rotación la gobierna el nodo. La respuesta inválida conserva sus 2 intentos en la misma puerta, con la espera de `retries` entre intentos. La caída se registra en el log (`puerta_descartada`) y, al agotarse todas, `puertas_agotadas` con el último motivo; no se escriben eventos, para no inflar `total_errores`/`total_sucesos` ni alterar el motivo de cierre. `cupo_agotado` solo se fija si TODAS las puertas cayeron por cupo.
+- Sin valores fijos: reintentos, espera por puerta, pausas y modelo desde ajustes.
 
 ### Pasos funcionales
 1. **Leer insumos**. Entrada: contexto, configuración, ruta de inteligencia. Proceso: verificar lista no vacía, ajustes completos y ruta existente. Salida: insumos. Val: VAL-01. Err: ERR-01.
 2. **Tomar la siguiente oferta**. Entrada: lista FIFO. Proceso: la más antigua sin procesar de esta vuelta; tomar sus 4 datos tal cual. Salida: oferta en mano. Val: VAL-02. Err: ERR-01.
-3. **Pedir la evaluación**. Entrada: 4 datos, reintentos, puertas. Proceso: llamar con los 5 controles; fallo de puerta → reintento y cambio de puerta verificado; pausa entre ofertas. Salida: respuesta o fallo persistente. Val: VAL-03. Err: ERR-02, EVT-03.
+3. **Pedir la evaluación**. Entrada: 4 datos, espera máxima por puerta, puertas. Proceso: llamar con los 5 controles; fallo de puerta → marcarla caída y pasar de inmediato a la siguiente sana; respuesta inválida → reintentar en la misma puerta; pausa entre ofertas. Salida: respuesta o fallo persistente. Val: VAL-03. Err: ERR-02, EVT-03.
 4. **Validar la respuesta**. Entrada: respuesta. Proceso: entregable principal, 5 controles presentes, decisión coherente, explicación en una línea. Salida: válida o inválida. Val: VAL-04. Err: ERR-03, EVT-03.
 5. **Anotar aprobada**. Entrada: respuesta válida aprobada. Proceso: marcar `aceptada_ei` vía `evaluada`; guardar resultado completo; evento de éxito; sumar en aprobadas. Salida: oferta anotada. Val: VAL-05, VAL-06. Err: ERR-04.
 6. **Anotar descartada**. Entrada: respuesta válida descartada. Proceso: marcar `descartada_ei` vía `evaluada`; guardar resultado completo; evento con control que frenó; sumar en descartadas. Salida: oferta anotada. Val: VAL-05, VAL-06. Err: ERR-04.
@@ -386,6 +387,6 @@ No se sobrescribe `ofertas_descubiertas.id_corrida` (sigue siendo la corrida de 
 
 ## Pendientes de construcción e integración (aprobados)
 
-1. **Puertas alternas (D50, construido):** sección propia en ajustes con el modelo y la lista de llaves en orden — la primera que responde manda. Tres puertas OpenRouter con el mismo Gemma 4 31B (`google/gemma-4-31b-it`, refs `OPENROUTER_API_KEY_1/2/3`). Las llaves viven solo en el archivo privado; aquí solo sus nombres.
+1. **Puertas alternas (D50, construido; política D59):** sección propia en ajustes con el modelo y la lista de llaves en orden — la primera que responde manda, con rotación inmediata ante caída y memoria de puertas caídas por corrida (D59). Tres puertas OpenRouter con el mismo Gemma 4 31B (`google/gemma-4-31b-it`, refs `OPENROUTER_API_KEY_1/2/3`). Las llaves viven solo en el archivo privado; aquí solo sus nombres.
 2. **Orquestador del módulo:** espejo del de Preparación — recorrido lineal INICIO → decisión → Evaluación → Cierre, con cierre para toda vuelta registrada.
 3. **Orquestador transversal:** tras la vuelta real de verificación del módulo solo, este módulo se suma tercero en la lista tras Preparación, con su resultado leído desde la base como los demás.

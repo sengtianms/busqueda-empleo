@@ -33,7 +33,7 @@ Prerequisites: Python virtual environment at `.venv/`, the Ollama desktop app ru
 .venv/bin/python scripts/preflight.py --ia
 
 # 2. Full scheduled run (discovery -> preparation)
-.venv/bin/python -m modules.orchestrator
+A
 
 # 3. Diagnose any past run (stages, offers by state, errors, catalogs)
 .venv/bin/python scripts/reporte_corrida.py

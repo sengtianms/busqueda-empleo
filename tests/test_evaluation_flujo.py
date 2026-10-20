@@ -25,6 +25,7 @@ from shared.utilidades import ahora
 EVALUACION: dict[str, Any] = {
     "pausa_entre_ofertas_segundos": 0,
     "pausa_jitter_segundos": 0,
+    "timeout_puerta_segundos": 60,
     "retries": {
         "max_attempts": 2,
         "base_wait_seconds": 0,

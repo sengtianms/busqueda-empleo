@@ -46,6 +46,10 @@ class RunContext:
         self.contador_descartadas: int = 0
         self.contador_errores: int = 0
         self.bloqueo_adquirido: bool = False
+        # Memoria de puertas caídas de la corrida (D59): nombre -> motivo.
+        # Una puerta que no responde a tiempo se salta en las ofertas
+        # siguientes; la memoria se reinicia en cada corrida.
+        self.puertas_caidas: dict[str, str] = {}
         # Slot de terminación controlada: la decisión de candidatas fija
         # `sin_pendientes` y el nodo de evaluación fija `cupo_agotado`;
         # "Finalizar Proceso" lo consume y registra.

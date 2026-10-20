@@ -91,7 +91,12 @@ evaluacion:
   # la pausa efectiva es aleatoria en [base - jitter, base + jitter]; con jitter 0 queda fija.
   pausa_entre_ofertas_segundos: 1.2
   pausa_jitter_segundos: 0.4
-  # Reintentos por oferta (ficha M3: 2).
+  # Espera máxima por puerta (D59): una puerta que no responde en este tiempo
+  # se descarta y se pasa de inmediato a la siguiente; las puertas caídas no
+  # se reintentan durante la corrida.
+  timeout_puerta_segundos: 60
+  # Intentos por oferta ante RESPUESTA INVÁLIDA en la misma puerta (ficha M3: 2).
+  # Un fallo de puerta no consume intentos: la puerta se descarta (D59).
   retries:
     max_attempts: 2
     base_wait_seconds: 2

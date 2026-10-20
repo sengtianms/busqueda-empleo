@@ -28,6 +28,7 @@ CONFIG_OK: dict[str, Any] = {
     "evaluacion": {
         "pausa_entre_ofertas_segundos": 1.2,
         "pausa_jitter_segundos": 0.4,
+        "timeout_puerta_segundos": 60,
         "retries": {
             "max_attempts": 2,
             "base_wait_seconds": 2,
