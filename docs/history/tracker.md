@@ -181,6 +181,18 @@
 
 ---
 
+## Resistencia de la tanda — multigeografía y chaleco antibloqueo (2026-10-22)
+
+> Post-V1 sobre la rama `busqueda-multigeografia`; las decisiones formales se registran tras la verificación de la tanda programada.
+
+| # | Ajuste | Estado | Notas |
+|---|--------|--------|-------|
+| — | Cimientos de búsqueda multigeografía (matriz y geografía determinista) | ✅ | Matriz de 72 sets de filtros en cuatro barridas geográficas (Colombia, LatAm, Norteamérica, Mundo-remoto). La geografía viaja con código de región determinista: la plataforma dejo de honrar el parámetro de texto de ubicación incluso al aplicar filtros, y quedó comprobado en vivo que el ancla mundo+remoto produce el mismo set que la ancla Colombia (47 ofertas). Lector del total reparado para totales de dos cifras; verificación previa a la tanda corregida. |
+| — | Chaleco antibloqueo del navegador (autopsia del colapso del 2026-10-22; 946 ofertas en 38 páginas pesadas, navegador muerto y tanda muda con la silla tomada) | ✅ | Cinco mecanismos: renovación preventiva del canal cada ~30 páginas pesadas con la misma memoria de sesión; resurección ante muerte reanudando la búsqueda en la página exacta donde murió, sin techo mientras haya avance (cada página lograda perdona); no-rendición (cierre honesto solo por ventana de ingreso manual vencida o entorno roto — muertes consecutivas sin progreso); techo absoluto de tiempo por operación con vigilante que fuerza el árbol del navegador al suelo; silla devuelta en todos los caminos de salida. Contrato de captura ampliado (reanudación por posición exacta y presupuestos de páginas/ofertas por tramo; el camino feliz conserva los objetos de siempre); configuración nueva validada al arranque; nodo de entrada delega el ciclo del canal y la búsqueda se reintenta entera tras una muerte. Prueba de fuego en vivo: matar → señal de muerte → detección (el sondeo destapó y corrigió un fallo silencioso del matador, que iba a no matar nunca). 693 pruebas; ruff/mypy limpios. |
+| — | Verificación de la tanda con el chaleco | ⏳ | Tanda programada sobre la base vaciada (8 tablas en 0 filas, sin respaldo, a petición del usuario): cadena completa con veredicto esperado; después, cierre documental (registro de decisiones, ficha del módulo, estado del contrato operativo). |
+
+---
+
 ## Phase 7. Module 4 — Deep Processing
 
 | # | Task | Source docs | Status | Notes |

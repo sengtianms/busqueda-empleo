@@ -24,6 +24,15 @@ from shared.persistence import generar_id
 from shared.utilidades import TIPOS_ACCESO, ahora
 
 
+def _entero_positivo(valor: Any, defecto: int) -> int:
+    """Normaliza un entero >= 1 de configuración; defecto si no es usable."""
+    try:
+        resultado = int(valor)
+    except (TypeError, ValueError):
+        return defecto
+    return resultado if resultado >= 1 else defecto
+
+
 class RunContext:
     """Carries all the state a single discovery run needs across its nodes."""
 
@@ -33,6 +42,7 @@ class RunContext:
         config_captura: dict[str, Any] | None = None,
         id_corrida: str | None = None,
         permitir_vacio: bool = False,
+        config_descubrimiento: dict[str, Any] | None = None,
     ) -> None:
         if not config_fuentes and not permitir_vacio:
             raise ConfigurationError(
@@ -64,6 +74,18 @@ class RunContext:
         self.estado_captura: EstadoCaptura | None = None
         self.set_corriente: SetFiltros | None = None
         self._ultimo_fuente_id_sets: str | None = None
+        # Resiliencia del navegador (D61): renovación por tramos y límite
+        # honesto de muertes consecutivas sin avance (entorno roto).
+        descubrimiento = config_descubrimiento if config_descubrimiento else {}
+        self.renovar_navegador_tras_paginas: int = _entero_positivo(
+            descubrimiento.get("renovar_navegador_tras_paginas"), 30
+        )
+        self.tope_muertes_sin_avance: int = _entero_positivo(
+            descubrimiento.get("tope_muertes_sin_avance"), 3
+        )
+        self.paginas_desde_renovacion: int = 0
+        self.muertes_sin_avance: int = 0
+        self.navegador_insostenible: bool = False
 
     def _construir_ficha(
         self, conf: dict[str, Any], config_captura: dict[str, Any]
@@ -209,6 +231,9 @@ class RunContext:
         self.estado_captura = None
         self.set_corriente = None
         self._ultimo_fuente_id_sets = None
+        self.paginas_desde_renovacion = 0
+        self.muertes_sin_avance = 0
+        self.navegador_insostenible = False
 
     def marcar_cambio_de_fuente(self, fuente_id: str) -> None:
         """Resets the per-source set iterator when the flow switches sources:

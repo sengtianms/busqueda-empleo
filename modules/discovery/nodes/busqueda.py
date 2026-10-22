@@ -9,6 +9,13 @@ from loguru import logger
 
 from modules.discovery.adapters.linkedin import FlowError
 from modules.discovery.adapters.registry import obtener_adaptador
+from modules.discovery.navegacion import (
+    es_muerte_navegador,
+    latido,
+    reabrir_navegador,
+    renovar_si_toca,
+    techo_por_aplicacion,
+)
 from modules.discovery.run_context import RunContext
 from shared.models import SearchResult
 from shared.persistence import registrar_evento
@@ -23,6 +30,14 @@ class ResultadoBusqueda:
     contexto: RunContext | None = None
     codigo: str = ""
     descripcion: str = ""
+
+
+class _MuerteBusqueda(Exception):
+    """Señal interna: el canal murió durante la búsqueda (resurección D61)."""
+
+    def __init__(self, error: BaseException) -> None:
+        super().__init__(str(error))
+        self.error = error
 
 
 def _resultado_fallo(
@@ -70,11 +85,17 @@ def aplicar_filtros(contexto: RunContext) -> ResultadoBusqueda:
 
     contexto.set_corriente = set_actual
 
-    # Paso 3: Aplicar filtros con reintento condicional
+    # Paso 3: resiliencia del canal (D61) — renovación prevista, tramo con
+    # reintento condicional clásico y resurección ante muerte del navegador.
+    if not renovar_si_toca(contexto):
+        return _resultado_insostenible(contexto)
+
     politicas = contexto.politicas(fuente)
     adapter = obtener_adaptador(fuente.fuente_id)
 
     def _fallo_final(fe: BaseException, intentos: int) -> SearchResult:
+        if es_muerte_navegador(fe):
+            raise _MuerteBusqueda(fe) from fe
         error = cast(FlowError, fe)
         return _resultado_fallo(
             codigo_motivo=error.codigo_motivo,
@@ -84,6 +105,8 @@ def aplicar_filtros(contexto: RunContext) -> ResultadoBusqueda:
         )
 
     def _fallo_interno(exc: Exception, intentos: int) -> SearchResult:
+        if es_muerte_navegador(exc):
+            raise _MuerteBusqueda(exc) from exc
         logger.error(f"ERR-07: Internal error in apply_filters: {exc}")
         return _resultado_fallo(
             codigo_motivo="error_interno_consulta",
@@ -92,15 +115,58 @@ def aplicar_filtros(contexto: RunContext) -> ResultadoBusqueda:
             indice=set_actual.indice,
         )
 
-    res, intentos = ejecutar_con_reintento(
-        lambda: adapter.apply_filters(
-            page=handle, ficha=fuente, set_filtros=set_actual, politicas=politicas
-        ),
-        al_fallo_final=_fallo_final,
-        al_error_interno=_fallo_interno,
-        contexto_log=contexto.id_corrida,
-    )
+    res: SearchResult | None = None
+    intentos = 0
+    while True:
+        supervisor = latido()
+        supervisor.vigilar(
+            "busqueda", techo_por_aplicacion(fuente.timeout_segundos)
+        )
 
+        def _intentar() -> SearchResult:
+            handle_actual = contexto.handle_sesion
+            if handle_actual is None:
+                raise FlowError(
+                    "fuente_inalcanzable",
+                    "Canal sin página activa para aplicar los filtros.",
+                )
+            return adapter.apply_filters(
+                page=handle_actual,
+                ficha=fuente,
+                set_filtros=set_actual,
+                politicas=politicas,
+            )
+
+        try:
+            res, intentos = ejecutar_con_reintento(
+                _intentar,
+                al_fallo_final=_fallo_final,
+                al_error_interno=_fallo_interno,
+                contexto_log=contexto.id_corrida,
+            )
+        except BaseException as exc:
+            supervisor.descansar()
+            if not isinstance(exc, _MuerteBusqueda):
+                raise
+            causa = exc.error
+            muertes = contexto.muertes_sin_avance + 1
+            contexto.muertes_sin_avance = muertes
+            logger.error(
+                f"Navegador muerto en búsqueda | run={contexto.id_corrida} | "
+                f"set={set_actual.indice} | muertes_sin_avance={muertes} | "
+                f"{acotar_evidencia(str(causa), 200)}"
+            )
+            if muertes > contexto.tope_muertes_sin_avance:
+                return _resultado_insostenible(contexto)
+            if not reabrir_navegador(contexto, motivo="colapso"):
+                return _resultado_insostenible(contexto)
+            continue  # reintenta el MISMO set con el canal reconstruido
+        supervisor.descansar()
+        contexto.muertes_sin_avance = 0
+        contexto.paginas_desde_renovacion += 1
+        break
+
+    assert res is not None
     # Paso 4 & 5: Resultado exitoso (intentos reales del flujo)
     contexto.search_result = res.model_copy(
         update={"numero_de_intentos": intentos}
@@ -115,6 +181,20 @@ def aplicar_filtros(contexto: RunContext) -> ResultadoBusqueda:
         _registrar_evento_consulta_exitosa(contexto, res)
 
     return ResultadoBusqueda(estado="ok", contexto=contexto)
+
+
+def _resultado_insostenible(contexto: RunContext) -> ResultadoBusqueda:
+    """ERR-09 honesto: el canal no se puede sostener; la tanda cierra."""
+    logger.error(
+        f"ERR-09: Navegador insostenible, cierre honesto de la tanda | "
+        f"run={contexto.id_corrida}"
+    )
+    return ResultadoBusqueda(
+        estado="error",
+        codigo="ERR-09",
+        descripcion="Navegador insostenible: cierre honesto de la tanda",
+        contexto=contexto,
+    )
 
 
 def _registrar_evento_consulta_exitosa(

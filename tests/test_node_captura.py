@@ -1,4 +1,5 @@
 from collections.abc import Generator
+from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -412,3 +413,222 @@ def test_quedan_sets_fuente_ausente(contexto: RunContext) -> None:
     res = quedan_sets_por_aplicar(contexto)
     assert res.estado == "error"
     assert res.codigo == "ERR-01"
+
+
+# ==== D61: resiliencia del navegador en la captura ======================== #
+
+_MUERTE_NAVEGADOR = Exception("Page.goto: Batch navigation failed: Target crashed")
+
+
+def _run_context_resiliencia(
+    renovar: int = 30,
+    tope_muertes: int = 3,
+) -> RunContext:
+    base = RunContext(
+        config_fuentes=[
+            {
+                "fuente_id": "LI-01",
+                "nombre": "LinkedIn",
+                "ficha_acceso": {
+                    "enlace": "https://www.linkedin.com/jobs",
+                    "tipo_acceso": "publico",
+                    "criterio_exito": "global-nav",
+                    "timeout_segundos": 10,
+                },
+                "sets_de_filtros": [{"indice_set": 0, "filtros": []}],
+            }
+        ],
+        config_captura={
+            "max_paginas": 5,
+            "max_ofertas_por_corrida": 10,
+            "pausa_entre_lotes_segundos": 0,
+            "estrategia_anti_bloqueo": "none",
+        },
+        config_descubrimiento={
+            "renovar_navegador_tras_paginas": renovar,
+            "tope_muertes_sin_avance": tope_muertes,
+        },
+    )
+    base.fuente_corriente = base.fuentes_filtradas[0]
+    return base
+
+
+def _lote(oferta_id: str, indice_set: int = 0) -> CaptureBatch:
+    return CaptureBatch(
+        ofertas=[_oferta(f"https://www.linkedin.com/jobs/view/{oferta_id}")],
+        indice_set=indice_set,
+        paginas_consumidas=1,
+    )
+
+
+def _estado_tramo(
+    desplazamiento: int,
+    hay_mas: bool,
+) -> EstadoCaptura:
+    return EstadoCaptura(
+        estado="ok",
+        paginas_consumidas=1,
+        capturadas_acumuladas_fuente=1,
+        limite_alcanzado=False,
+        desplazamiento_final=desplazamiento,
+        hay_mas_ofertas=hay_mas,
+    )
+
+
+@contextmanager
+def _canal_resiliente(
+    efecto_reabrir: bool = True,
+) -> Generator[MagicMock, None, None]:
+    """Aisla el canal: reabrir simulado y sin esperas de reintento."""
+    with (
+        patch(
+            "modules.discovery.nodes.captura.reabrir_navegador",
+            return_value=efecto_reabrir,
+        ) as mock_reabrir,
+        patch("shared.retry.time.sleep"),
+    ):
+        yield mock_reabrir
+
+
+def _preparar_set(contexto: RunContext) -> None:
+    contexto.handle_sesion = MagicMock()
+    contexto.set_corriente = SetFiltros(fuente_id="LI-01", indice=0, filtros=[])
+
+
+def test_captura_reanuda_tras_muerte_navegador() -> None:
+    """D61: muerte del canal → reconstrucción → reanudación en su paginación.
+
+    La búsqueda camina la página 1 (tramo aprobado) y muere caminando la
+    página 2; al volver del reconstructor, la paginación retoma EXACTA en
+    donde murió (```?start=20```), sin repetir lo ya caminado.
+    """
+    contexto = _run_context_resiliencia()
+    _preparar_set(contexto)
+    lote_a = _lote("A")
+    estado_a = _estado_tramo(desplazamiento=20, hay_mas=True)
+    lote_c = _lote("C")
+    estado_c = _estado_tramo(desplazamiento=40, hay_mas=False)
+    adapter = MagicMock()
+    adapter.capture_batch.side_effect = [
+        (lote_a, estado_a),
+        _MUERTE_NAVEGADOR,
+        (lote_c, estado_c),
+    ]
+
+    with (
+        patch("modules.discovery.nodes.captura.obtener_adaptador", return_value=adapter),
+        _canal_resiliente() as mock_reabrir,
+    ):
+        res = capturar_ofertas(contexto)
+
+    assert res.estado == "ok"
+    assert mock_reabrir.call_count == 1
+    assert adapter.capture_batch.call_count == 3
+    primera, segunda, tercera = adapter.capture_batch.call_args_list
+    assert primera.kwargs["desde_desplazamiento"] == 0
+    assert segunda.kwargs["desde_desplazamiento"] == 20  # página 2 del tramo
+    assert tercera.kwargs["desde_desplazamiento"] == 20  # reanuda EXACTA
+    # Dos tramos aprobados se agregan: la página que murió se recamina.
+    assert contexto.capture_batch is not None
+    assert len(contexto.capture_batch.ofertas) == 2
+    assert contexto.capture_batch.paginas_consumidas == 2
+    assert contexto.muertes_sin_avance == 0  # el progreso perdona
+
+
+def test_captura_muertes_consecutivas_sin_avance_abortan() -> None:
+    """D61: entorno roto (muertes sin NINGUNA página de avance) → cierre honesto."""
+    contexto = _run_context_resiliencia(tope_muertes=1)
+    _preparar_set(contexto)
+    adapter = MagicMock()
+    adapter.capture_batch.side_effect = [_MUERTE_NAVEGADOR, _MUERTE_NAVEGADOR]
+
+    with (
+        patch("modules.discovery.nodes.captura.obtener_adaptador", return_value=adapter),
+        _canal_resiliente() as mock_reabrir,
+    ):
+        res = capturar_ofertas(contexto)
+
+    assert res.estado == "error"
+    assert res.codigo == "ERR-09"
+    assert mock_reabrir.call_count == 1  # primera muerte: reapertura; segunda: fin
+    assert contexto.capture_batch is None
+
+
+def test_captura_reabrir_fallido_cierra_honesto() -> None:
+    """D61: la reconstrucción falla (p. ej. ventana manual vencida) → ERR-09."""
+    contexto = _run_context_resiliencia()
+    _preparar_set(contexto)
+    adapter = MagicMock()
+    adapter.capture_batch.side_effect = [_MUERTE_NAVEGADOR]
+
+    with (
+        patch("modules.discovery.nodes.captura.obtener_adaptador", return_value=adapter),
+        _canal_resiliente(efecto_reabrir=False),
+    ):
+        res = capturar_ofertas(contexto)
+
+    assert res.estado == "error"
+    assert res.codigo == "ERR-09"
+    assert contexto.capture_batch is None
+
+
+def test_captura_renovacion_programada_divide_tramos() -> None:
+    """D61: al alcanzar el umbral de páginas, el canal se renueva en la frontera."""
+    contexto = _run_context_resiliencia(renovar=1)
+    _preparar_set(contexto)
+    lote_a = _lote("A")
+    estado_a = _estado_tramo(desplazamiento=20, hay_mas=True)
+    lote_b = _lote("B")
+    estado_b = _estado_tramo(desplazamiento=40, hay_mas=False)
+    adapter = MagicMock()
+    adapter.capture_batch.side_effect = [(lote_a, estado_a), (lote_b, estado_b)]
+    renovaciones: list[RunContext] = []
+
+    def _renovar(ctx: RunContext) -> bool:
+        ctx.paginas_desde_renovacion = 0
+        renovaciones.append(ctx)
+        return True
+
+    with (
+        patch("modules.discovery.nodes.captura.obtener_adaptador", return_value=adapter),
+        patch("shared.retry.time.sleep"),
+        patch("modules.discovery.nodes.captura.renovar_si_toca", side_effect=_renovar),
+    ):
+        res = capturar_ofertas(contexto)
+
+    assert res.estado == "ok"
+    assert len(renovaciones) == 1
+    primera, segunda = adapter.capture_batch.call_args_list
+    assert primera.kwargs["desde_desplazamiento"] == 0
+    assert segunda.kwargs["desde_desplazamiento"] == 20
+    # Dos tramos se agregan en un lote único con el avance total.
+    assert contexto.capture_batch is not None
+    assert len(contexto.capture_batch.ofertas) == 2
+    assert contexto.capture_batch.paginas_consumidas == 2
+    assert contexto.estado_captura is not None
+    assert contexto.estado_captura.hay_mas_ofertas is False
+
+
+def test_captura_insostenible_guarda_de_frente() -> None:
+    """D61: el canal declarado insostenible no reintentela captura."""
+    contexto = _run_context_resiliencia()
+    contexto.navegador_insostenible = True
+    res = capturar_ofertas(contexto)
+    assert res.estado == "error"
+    assert res.codigo == "ERR-09"
+
+
+def test_captura_muertes_pendientes_frenan_hoy() -> None:
+    """D61: muertes acumuladas sin avance exceden el tope → freno inmediato."""
+    contexto = _run_context_resiliencia()
+    _preparar_set(contexto)
+    contexto.muertes_sin_avance = 4  # tope 3
+    adapter = MagicMock()
+    with (
+        patch("modules.discovery.nodes.captura.obtener_adaptador", return_value=adapter),
+        patch("shared.retry.time.sleep"),
+    ):
+        res = capturar_ofertas(contexto)
+    assert res.estado == "error"
+    assert res.codigo == "ERR-09"
+    assert adapter.capture_batch.call_count == 0

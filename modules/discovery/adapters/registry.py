@@ -47,6 +47,9 @@ class AdaptadorPlataforma(Protocol):
         ficha: FichaFuente,
         set_filtros: SetFiltros,
         politicas: PoliticasCaptura,
+        desde_desplazamiento: int = 0,
+        max_paginas: int | None = None,
+        max_ofertas: int | None = None,
     ) -> tuple[CaptureBatch, EstadoCaptura]: ...
 
     def close_session(self, page: Any) -> None: ...

@@ -1535,3 +1535,305 @@ def test_tarjeta_sdui_real_deel_2026_titulo_con_pipe() -> None:
     assert tarjeta.enlace.endswith("/4455899476")
     assert tarjeta.ubicacion == "Colombia"
     assert tarjeta.modalidad == "remoto"
+
+
+# --- D60 (2026-10-22): geografia por codigo oficial de region ---------- #
+
+
+def test_construir_url_geoid_parametro_oficial() -> None:
+    """El codigo de region viaja como `geoId` en la URL construida."""
+    set_geo = SetFiltros(
+        fuente_id="linkedin",
+        indice=0,
+        filtros=[
+            {"tipo": "keywords", "valor": ["Data Engineer"]},
+            {"tipo": "geoid", "valor": "100876405"},
+        ],
+    )
+    enlace = LinkedInAdapter()._construir_url_busqueda(
+        "https://www.linkedin.com/jobs/search", set_geo
+    )
+    assert enlace == (
+        "https://www.linkedin.com/jobs/search"
+        "?keywords=Data+Engineer&geoId=100876405"
+    )
+
+
+def test_apply_filters_geoid_captura_con_codigo_en_url(
+    ficha_publica: FichaFuente, politicas: PoliticasCaptura
+) -> None:
+    """Set con geoid navega al listado con el codigo y no exige chips."""
+    set_geo = SetFiltros(
+        fuente_id="linkedin",
+        indice=0,
+        filtros=[
+            {"tipo": "keywords", "valor": ["Data Engineer"]},
+            {"tipo": "geoid", "valor": "100876405"},
+        ],
+    )
+    url = (
+        "https://www.linkedin.com/jobs/search-results/"
+        "?keywords=Data+Engineer&geoId=100876405"
+    )
+    html = (
+        "<html><body>"
+        "<p>67 resultados</p>"
+        "<div componentkey='job-card-component-ref-99901'>"
+        "<div componentkey='job-card-component-ref-99901'>"
+        "<span aria-hidden='true'>Oferta</span>"
+        "</div></div>"
+        "</body></html>"
+    )
+    pagina = FakePage({url: html})
+    resultado = LinkedInAdapter().apply_filters(
+        pagina, ficha_publica, set_geo, politicas
+    )
+    assert pagina.gotos == [url]
+    assert resultado.total_declarado == 67
+    assert len(resultado.ofertas_primera_pagina) == 1
+
+
+def test_apply_filters_geoid_formato_invalido_falla_set(
+    ficha_publica: FichaFuente,
+    politicas: PoliticasCaptura,
+) -> None:
+    """Un codigo mal escrito aborta avisando; jamas captura silenciosa."""
+    for valor in ("Colombia", "12345", "100876405x", "12 045"):
+        set_geo = SetFiltros(
+            fuente_id="linkedin",
+            indice=0,
+            filtros=[{"tipo": "geoid", "valor": valor}],
+        )
+        with pytest.raises(FlowError) as exc:
+            LinkedInAdapter().apply_filters(
+                FakePage({}), ficha_publica, set_geo, politicas
+            )
+        assert exc.value.codigo_motivo == "filtros_no_aplicables"
+
+
+def test_apply_filters_geoid_y_texto_ubicacion_no_se_combinan(
+    ficha_publica: FichaFuente,
+    politicas: PoliticasCaptura,
+) -> None:
+    """geoid + texto de ubicacion = error explicito de configuracion."""
+    set_mixto = SetFiltros(
+        fuente_id="linkedin",
+        indice=0,
+        filtros=[
+            {"tipo": "geoid", "valor": "100876405"},
+            {"tipo": "ubicacion", "valor": "Colombia"},
+        ],
+    )
+    with pytest.raises(FlowError) as exc:
+        LinkedInAdapter().apply_filters(
+            FakePage({}), ficha_publica, set_mixto, politicas
+        )
+    assert exc.value.codigo_motivo == "filtros_no_aplicables"
+
+
+def test_apply_filters_geoid_con_texto_ubicacion_vacio_se_permite(
+    ficha_publica: FichaFuente, politicas: PoliticasCaptura
+) -> None:
+    """Un valor vacio de ubicacion se ignora y el set con geoid es valido."""
+    set_geo = SetFiltros(
+        fuente_id="linkedin",
+        indice=0,
+        filtros=[
+            {"tipo": "geoid", "valor": "91000011"},
+            {"tipo": "ubicacion", "valor": ""},
+        ],
+    )
+    url = "https://www.linkedin.com/jobs/search-results/?geoId=91000011"
+    html = "<html><body><p>12 resultados</p></body></html>"
+    pagina = FakePage({url: html})
+    resultado = LinkedInAdapter().apply_filters(
+        pagina, ficha_publica, set_geo, politicas
+    )
+    assert pagina.gotos == [url]
+    assert resultado.total_declarado == 12
+
+
+def test_apply_filters_geoid_con_remoto_y_fecha_componen_url(
+    ficha_publica: FichaFuente, politicas: PoliticasCaptura
+) -> None:
+    """Barrida 4: codigo de region + modalidad remoto + ventana de fecha."""
+    set_mundo = SetFiltros(
+        fuente_id="linkedin",
+        indice=0,
+        filtros=[
+            {"tipo": "keywords", "valor": ["Data Engineer"]},
+            {"tipo": "geoid", "valor": "100876405"},
+            {"tipo": "modalidad", "valor": "remoto"},
+            {"tipo": "fecha_publicacion", "valor": "r86400"},
+        ],
+    )
+    url = (
+        "https://www.linkedin.com/jobs/search-results/"
+        "?keywords=Data+Engineer&geoId=100876405"
+        "&f_SAL=f_SA_id_225001%3A272001&f_TPR=r86400"
+    )
+    html = (
+        "<html><body>" f"{CHIPS_ACTIVOS}" "<p>31 resultados</p>" "</body></html>"
+    )
+    pagina = FakePage({url: html})
+    resultado = LinkedInAdapter().apply_filters(
+        pagina, ficha_publica, set_mundo, politicas
+    )
+    assert pagina.gotos == [url]
+    assert resultado.total_declarado == 31
+
+
+# --- 2026-10-22: nuevo enunciado del total declarado -------------------- #
+
+
+def test_apply_filters_total_mas_de_marco_real(
+    ficha_publica: FichaFuente, politicas: PoliticasCaptura
+) -> None:
+    """Encabezado real 2026: frase completa 'Más de 99 resultados' (nbsp).
+
+    La cifra es una COTA de LinkedIn; la etiqueta original viaja entera en
+    la evidencia de la busqueda.
+    """
+    set_solo_keywords = SetFiltros(
+        fuente_id="linkedin",
+        indice=0,
+        filtros=[{"tipo": "keywords", "valor": ["Data Engineer"]}],
+    )
+    url = "https://www.linkedin.com/jobs/search-results/?keywords=Data+Engineer"
+    pagina = FakePage({url: _leer("lista_linkedin_total_mas_de.html")})
+    resultado = LinkedInAdapter().apply_filters(
+        pagina, ficha_publica, set_solo_keywords, politicas
+    )
+    assert resultado.total_declarado == 99
+    assert resultado.evidencia_acotada == (
+        f"url: {url} | total: 99 (Más de 99 resultados)"
+    )
+
+
+def test_apply_filters_total_forma_exacta_sigue_viva(
+    ficha_publica: FichaFuente, politicas: PoliticasCaptura
+) -> None:
+    """Totales de dos cifras o menos se declaran a secas: 'N resultados'."""
+    set_solo_keywords = SetFiltros(
+        fuente_id="linkedin",
+        indice=0,
+        filtros=[{"tipo": "keywords", "valor": ["Data Engineer"]}],
+    )
+    url = "https://www.linkedin.com/jobs/search-results/?keywords=Data+Engineer"
+    html = (
+        "<html><body>"
+        "<p>9 resultados</p>"
+        "<div componentkey='job-card-component-ref-99901'>"
+        "<div componentkey='job-card-component-ref-99901'>"
+        "<span aria-hidden='true'>Oferta</span>"
+        "</div></div>"
+        "</body></html>"
+    )
+    pagina = FakePage({url: html})
+    resultado = LinkedInAdapter().apply_filters(
+        pagina, ficha_publica, set_solo_keywords, politicas
+    )
+    assert resultado.total_declarado == 9
+    assert resultado.evidencia_acotada == f"url: {url} | total: 9"
+
+
+def test_total_a_entero_sin_separadores() -> None:
+    assert linkedin_mod._total_a_entero("99") == 99
+    assert linkedin_mod._total_a_entero("1.024") == 1024
+    assert linkedin_mod._total_a_entero("7") == 7
+
+
+# ==== D61: reanudación por paginación y tramos de renovación ============== #
+
+_POLITICAS_TRAMOS = PoliticasCaptura(
+    max_paginas=10,
+    max_ofertas_por_corrida=10,
+    pausa_entre_lotes_segundos=0,
+    estrategia_anti_bloqueo="none",
+)
+
+
+def test_capture_batch_reanuda_en_carta_start(
+    ficha_publica: FichaFuente,
+    set_filtros: SetFiltros,
+) -> None:
+    """D61: reanuda la MISMA búsqueda en su paginación ```?start=N``` exacta.
+
+    El reanudador llega por otra página (la URL de resultados no está en el
+    mapa): la paginación se reconstruye determinista desde la búsqueda.
+    """
+    pagina = FakePage(
+        {f"{URL_RESULTADOS}&start=3": _leer("lista_linkedin_sdui_2026_pag2.html")}
+    )
+    lote, estado = LinkedInAdapter().capture_batch(
+        pagina, ficha_publica, set_filtros, _POLITICAS_TRAMOS, desde_desplazamiento=3
+    )
+    assert pagina.gotos == [f"{URL_RESULTADOS}&start=3"]
+    assert len(lote.ofertas) == 2
+    assert estado.desplazamiento_final == 5
+    # La carta del accesorio no tiene botón "Siguiente": fin real de la búsqueda.
+    assert estado.hay_mas_ofertas is False
+
+
+def test_capture_batch_tramo_por_max_paginas(
+    ficha_publica: FichaFuente,
+    set_filtros: SetFiltros,
+) -> None:
+    """D61: tramo cortado por presupuesto de páginas deja el avance exacto."""
+    pagina = FakePage(
+        {
+            URL_RESULTADOS: _leer("lista_linkedin_sdui_2026.html"),
+            f"{URL_RESULTADOS}&start=3": _leer("lista_linkedin_sdui_2026_pag2.html"),
+        }
+    )
+    lote, estado = LinkedInAdapter().capture_batch(
+        pagina, ficha_publica, set_filtros, _POLITICAS_TRAMOS, max_paginas=1
+    )
+    assert len(lote.ofertas) == 3
+    assert lote.paginas_consumidas == 1
+    assert estado.desplazamiento_final == 3
+    assert estado.hay_mas_ofertas is True
+    # El freno de emergencia por políticas no lo decide el tramo: es del nodo.
+    assert estado.limite_alcanzado is False
+
+
+def test_capture_batch_fin_real_reporta_continuacion(
+    ficha_publica: FichaFuente,
+    set_filtros: SetFiltros,
+) -> None:
+    """D61: fin real sin botón anuncia ```hay_mas_ofertas=False``` y avance."""
+    pagina = FakePage(
+        {
+            URL_RESULTADOS: _leer("lista_linkedin_sdui_2026.html"),
+            f"{URL_RESULTADOS}&start=3": _leer("lista_linkedin_sdui_2026_pag2.html"),
+            f"{URL_RESULTADOS}&start=5": "<html><body><div>sin resultados</div></body></html>",
+        }
+    )
+    lote, estado = LinkedInAdapter().capture_batch(
+        pagina, ficha_publica, set_filtros, _POLITICAS_TRAMOS
+    )
+    assert len(lote.ofertas) == 5
+    assert estado.hay_mas_ofertas is False
+    assert estado.desplazamiento_final == 5
+
+
+def test_capture_batch_freno_ofertas_por_tramo(
+    ficha_publica: FichaFuente,
+    set_filtros: SetFiltros,
+) -> None:
+    """D61: ```max_ofertas``` del tramo acota capturas sin marcar límite."""
+    pagina = FakePage(
+        {
+            URL_RESULTADOS: _leer("lista_linkedin_sdui_2026.html"),
+            f"{URL_RESULTADOS}&start=3": _leer("lista_linkedin_sdui_2026_pag2.html"),
+        }
+    )
+    lote, estado = LinkedInAdapter().capture_batch(
+        pagina, ficha_publica, set_filtros, _POLITICAS_TRAMOS, max_ofertas=2
+    )
+    assert len(lote.ofertas) == 2
+    # El desplazamiento camina TODAS las tarjetas de la página (3), incluso
+    # las que el freno del tramo dejó de anexar.
+    assert estado.desplazamiento_final == 3
+    assert estado.hay_mas_ofertas is True
+    assert estado.limite_alcanzado is False

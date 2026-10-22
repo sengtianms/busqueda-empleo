@@ -146,6 +146,22 @@ def _validar_fuente(conf: Any) -> str | None:
     return None
 
 
+def _validar_descubrimiento(config: dict[str, Any]) -> str | None:
+    """VAL-02 sección `descubrimiento` (D61): umbrales enteros >= 1."""
+    seccion = config.get("descubrimiento")
+    if seccion is None:
+        return None
+    if not isinstance(seccion, dict):
+        return "seccion descubrimiento invalida"
+    for clave in ("renovar_navegador_tras_paginas", "tope_muertes_sin_avance"):
+        valor = seccion.get(clave)
+        if valor is None:
+            continue
+        if not isinstance(valor, int) or valor < 1:
+            return f"{clave} debe ser entero >= 1"
+    return None
+
+
 def ejecutar_inicio(config: dict[str, Any] | None = None) -> ResultadoInicio:
     """Run the INICIO node steps in order (section 2 of the sheet)."""
     try:
@@ -200,6 +216,18 @@ def ejecutar_inicio(config: dict[str, Any] | None = None) -> ResultadoInicio:
             id_corrida=id_corrida,
             codigo="ERR-11",
             descripcion=f"duplicate fuente_id(s) {duplicados}",
+        )
+
+    problema_descubrimiento = _validar_descubrimiento(config)
+    if problema_descubrimiento is not None:
+        logger.error(
+            f"ERR-04 | run={id_corrida} | {problema_descubrimiento}"
+        )
+        return ResultadoInicio(
+            estado="error",
+            id_corrida=id_corrida,
+            codigo="ERR-04",
+            descripcion=problema_descubrimiento,
         )
 
     try:
@@ -333,6 +361,7 @@ def ejecutar_inicio(config: dict[str, Any] | None = None) -> ResultadoInicio:
             config_captura=config.get("captura") or {},
             id_corrida=id_corrida,
             permitir_vacio=True,
+            config_descubrimiento=config.get("descubrimiento") or {},
         )
         contexto.bloqueo_adquirido = True
         registrar_corrida(

@@ -9,12 +9,19 @@ set; la deduplicación se hace por `id_externo`.
 
 from dataclasses import dataclass
 from time import monotonic
-from typing import Any, cast
+from typing import Any
 
 from loguru import logger
 
 from modules.discovery.adapters.linkedin import FlowError
 from modules.discovery.adapters.registry import obtener_adaptador
+from modules.discovery.navegacion import (
+    es_muerte_navegador,
+    latido,
+    reabrir_navegador,
+    renovar_si_toca,
+    techo_por_paginas,
+)
 from modules.discovery.run_context import RunContext
 from shared.models import AuditoriaSesion, CaptureBatch, EstadoCaptura, Offer
 from shared.persistence import (
@@ -24,6 +31,20 @@ from shared.persistence import (
 )
 from shared.retry import ejecutar_con_reintento
 from shared.utilidades import FORMATO_TIMESTAMP, acotar_evidencia, ahora
+
+
+class _FalloTramo(Exception):
+    """Señal interna: el tramo de captura falló de forma definitiva.
+
+    Transporta la excepción original para que el bucle de resiliencia
+    distinga muerte de navegador (→ resurección, D61) de fallo de
+    plataforma (→ fallo del set; la tanda sigue con el siguiente).
+    """
+
+    def __init__(self, error: BaseException, intentos: int) -> None:
+        super().__init__(str(error))
+        self.error = error
+        self.intentos = intentos
 
 
 @dataclass
@@ -58,14 +79,24 @@ def _registrar_evento(
 
 
 def capturar_ofertas(contexto: RunContext) -> ResultadoCaptura:
-    """Nodo: Capturar ofertas (v1.0).
+    """Nodo: Capturar ofertas (v1.3, resiliencia D61).
 
-    Invoca al adaptador UNA SOLA VEZ con reintento condicional
-    (máximo 3 intentos totales, solo códigos reintentables como
-    `tiempo_agotado_captura`). En éxito guarda los resultados en el contexto y
-    escribe la auditoría de sesión; en fallo descarta el set completo
-    (las ofertas parciales) y continúa con el siguiente set.
+    Camina la búsqueda por TRAMOS paginados: cada tramo captura a lo sumo
+    el presupuesto de páginas desde la última renovación y el nodo decide
+    después de cada tramo si toca reconstruir el navegador, si la búsqueda
+    terminó o si se alcanzó el freno de emergencia de las políticas.
+
+    Resiliencia (D61): una muerte del navegador durante el tramo fuerza el
+    árbol, reabre el canal con la misma memoria de sesión (ventana manual
+    de 5 minutos si la plataforma la pide) y reanuda el tramo siguiente en
+    la paginación exacta donde murió; las resurecciones no tienen techo
+    (ley de la tanda). Muertes consecutivas sin avance ni reconstrucción
+    posible cierran la tanda honesto (ERR-09 insostenible). El reintento
+    condicional clásico (códigos reintentables) se conserva dentro de cada
+    tramo; un fallo definitivo descarta solo el set, como siempre.
     """
+    if contexto.navegador_insostenible:
+        return _resultado_insostenible(contexto)
     # Paso 1: verificar insumos
     if contexto.handle_sesion is None:
         logger.error(f"ERR-01: handle_sesion ausente en corrida {contexto.id_corrida}")
@@ -88,61 +119,149 @@ def capturar_ofertas(contexto: RunContext) -> ResultadoCaptura:
     # Paso 2: obtener políticas
     politicas = contexto.politicas(fuente)
 
-    # Paso 3: ejecutar captura con reintento condicional
+    # Paso 3: bucle resiliencia D61 — tramos con reanudación por página
     adapter = obtener_adaptador(fuente.fuente_id)
     inicio_captura = monotonic()
+    acumuladas: list[Offer] = []
+    paginas_totales = 0
+    desplazamiento = 0
+    hay_mas = False
+    estado_fallo: EstadoCaptura | None = None
+    tramos = 0
+    lote_unico: CaptureBatch | None = None
+    estado_unico: EstadoCaptura | None = None
 
-    def _fallo_captura(fe: BaseException, intentos: int) -> ResultadoCaptura:
-        error = cast(FlowError, fe)
-        # Paso 6: fallo definitivo (no reintentable o intentos agotados)
-        estado_fallo = EstadoCaptura(estado="fallo", codigo_motivo=error.codigo_motivo)
+    while True:
+        if contexto.navegador_insostenible or (
+            contexto.muertes_sin_avance > contexto.tope_muertes_sin_avance
+        ):
+            return _resultado_insostenible(contexto)
+        if paginas_totales >= politicas.max_paginas:
+            break  # freno de emergencia por set (páginas, políticas)
+        presupuesto_renovacion: int = (
+            contexto.renovar_navegador_tras_paginas
+            - contexto.paginas_desde_renovacion
+        )
+        if presupuesto_renovacion <= 0:
+            if not renovar_si_toca(contexto):
+                return _resultado_insostenible(contexto)
+            presupuesto_renovacion = contexto.renovar_navegador_tras_paginas
+        presupuesto = min(
+            presupuesto_renovacion, politicas.max_paginas - paginas_totales
+        )
+        presupuesto_ofertas = politicas.max_ofertas_por_corrida - len(acumuladas)
+        if presupuesto_ofertas <= 0:
+            break  # freno de emergencia por set (ofertas, políticas)
+
+        supervisor = latido()
+        supervisor.vigilar(
+            "captura", techo_por_paginas(fuente.timeout_segundos, politicas, presupuesto)
+        )
+
+        def _intentar() -> tuple[CaptureBatch, EstadoCaptura]:
+            if contexto.handle_sesion is None:
+                raise FlowError(
+                    "fuente_inalcanzable",
+                    "Canal sin página activa para la captura del tramo.",
+                )
+            return adapter.capture_batch(
+                page=contexto.handle_sesion,
+                ficha=fuente,
+                set_filtros=set_actual,
+                politicas=politicas,
+                desde_desplazamiento=desplazamiento,
+                max_paginas=presupuesto,
+                max_ofertas=presupuesto_ofertas,
+            )
+
+        def _fallo_final(fe: BaseException, intentos: int) -> tuple[CaptureBatch, EstadoCaptura]:
+            raise _FalloTramo(fe, intentos) from fe
+
+        def _error_interno(exc: Exception, intentos: int) -> tuple[CaptureBatch, EstadoCaptura]:
+            raise _FalloTramo(exc, intentos) from exc
+
+        try:
+            res_tramo, _ = ejecutar_con_reintento(
+                _intentar,
+                al_fallo_final=_fallo_final,
+                al_error_interno=_error_interno,
+                contexto_log=contexto.id_corrida,
+            )
+            lote_tramo, estado_tramo = res_tramo
+        except BaseException as exc:
+            supervisor.descansar()
+            if not isinstance(exc, _FalloTramo):
+                raise
+            causa = exc.error
+            if es_muerte_navegador(causa):
+                # Muerte del navegador (D61): resurección sin techo.
+                contexto.muertes_sin_avance += 1
+                logger.error(
+                    f"Navegador muerto en captura | run={contexto.id_corrida} | "
+                    f"set={set_actual.indice} | "
+                    f"muertes_sin_avance={contexto.muertes_sin_avance} | "
+                    f"{acotar_evidencia(str(causa), 200)}"
+                )
+                if contexto.muertes_sin_avance > contexto.tope_muertes_sin_avance:
+                    return _resultado_insostenible(contexto)
+                if not reabrir_navegador(contexto, motivo="colapso"):
+                    return _resultado_insostenible(contexto)
+                continue  # reanuda el MISMO desplazamiento
+            codigo = getattr(causa, "codigo_motivo", None)
+            if isinstance(codigo, str):
+                evidencia = acotar_evidencia(str(causa))
+            else:
+                codigo = "error_interno_captura"
+                evidencia = str(causa)
+            estado_fallo = EstadoCaptura(estado="fallo", codigo_motivo=codigo)
+            _registrar_evento(
+                contexto, tipo="error", codigo=codigo, evidencia=evidencia
+            )
+            break
+        supervisor.descansar()
+
+        # Éxito del tramo: contadores y acumulación.
+        contexto.muertes_sin_avance = 0
+        tramos += 1
+        lote_unico = lote_tramo
+        estado_unico = estado_tramo
+        paginas_totales += estado_tramo.paginas_consumidas
+        desplazamiento = estado_tramo.desplazamiento_final
+        hay_mas = estado_tramo.hay_mas_ofertas
+        acumuladas.extend(lote_tramo.ofertas)
+        contexto.paginas_desde_renovacion += estado_tramo.paginas_consumidas
+        if not hay_mas:
+            break
+
+    if estado_fallo is not None:
+        # Paso 6: fallo definitivo del set (semántica v1.2 sin cambios).
         contexto.capture_batch = None
         contexto.estado_captura = estado_fallo
-        _registrar_evento(
-            contexto,
-            tipo="error",
-            codigo=error.codigo_motivo,
-            evidencia=acotar_evidencia(error.mensaje),
-        )
         return ResultadoCaptura(estado="ok", contexto=contexto)
 
-    def _fallo_interno(exc: Exception, intentos: int) -> ResultadoCaptura:
-        if intentos == 0:
-            return ResultadoCaptura(
-                estado="error",
-                codigo="ERR-09",
-                descripcion="Sin intentos configurados",
-            )
-        logger.error(f"ERR-07: Error interno en captura: {exc}")
-        estado_falla = EstadoCaptura(
-            estado="fallo", codigo_motivo="error_interno_captura"
+    # Paso 4: éxito de captura. Un solo tramo conserva los objetos tal cual
+    # (compatibilidad v1.2); varios tramos se agregan en un lote único.
+    assert lote_unico is not None and estado_unico is not None
+    if tramos == 1:
+        lote = lote_unico
+        estado = estado_unico
+    else:
+        lote = CaptureBatch(
+            ofertas=acumuladas,
+            id_corrida=lote_unico.id_corrida,
+            fuente_id=fuente.fuente_id,
+            id_sesion=lote_unico.id_sesion,
+            indice_set=set_actual.indice,
+            paginas_consumidas=paginas_totales,
         )
-        contexto.capture_batch = None
-        contexto.estado_captura = estado_falla
-        _registrar_evento(
-            contexto,
-            tipo="error",
-            codigo="error_interno_captura",
-            evidencia=str(exc),
+        estado = EstadoCaptura(
+            estado="ok",
+            paginas_consumidas=paginas_totales,
+            capturadas_acumuladas_fuente=len(acumuladas),
+            limite_alcanzado=len(acumuladas) >= politicas.max_ofertas_por_corrida,
+            desplazamiento_final=desplazamiento,
+            hay_mas_ofertas=hay_mas,
         )
-        return ResultadoCaptura(estado="ok", contexto=contexto)
-
-    res, _ = ejecutar_con_reintento(
-        lambda: adapter.capture_batch(
-            page=contexto.handle_sesion,
-            ficha=fuente,
-            set_filtros=set_actual,
-            politicas=politicas,
-        ),
-        al_fallo_final=_fallo_captura,
-        al_error_interno=_fallo_interno,
-        contexto_log=contexto.id_corrida,
-    )
-    if isinstance(res, ResultadoCaptura):
-        return res
-    lote, estado = res
-
-    # Paso 4: éxito de captura
     contexto.capture_batch = lote
     contexto.estado_captura = estado
     _registrar_evento(
@@ -150,8 +269,8 @@ def capturar_ofertas(contexto: RunContext) -> ResultadoCaptura:
         tipo="suceso",
         codigo="captura_completada",
         evidencia=(
-            f"páginas={estado.paginas_consumidas} | "
-            f"ofertas={len(lote.ofertas)} | "
+            f"páginas={paginas_totales} | "
+            f"ofertas={len(acumuladas)} | "
             f"duracion_s={int(monotonic() - inicio_captura)}"
         ),
     )
@@ -160,6 +279,20 @@ def capturar_ofertas(contexto: RunContext) -> ResultadoCaptura:
     _escribir_auditoria_sesion(contexto, lote)
 
     return ResultadoCaptura(estado="ok", contexto=contexto)
+
+
+def _resultado_insostenible(contexto: RunContext) -> ResultadoCaptura:
+    """ERR-09 honesto: el canal no se puede sostener; la tanda cierra."""
+    logger.error(
+        f"ERR-09: Navegador insostenible, cierre honesto de la tanda | "
+        f"run={contexto.id_corrida}"
+    )
+    return ResultadoCaptura(
+        estado="error",
+        codigo="ERR-09",
+        descripcion="Navegador insostenible: cierre honesto de la tanda",
+        contexto=contexto,
+    )
 
 
 def _escribir_auditoria_sesion(contexto: RunContext, lote: CaptureBatch) -> None:

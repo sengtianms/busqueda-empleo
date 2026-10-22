@@ -281,3 +281,68 @@ def test_se_encontraron_ofertas_missing(mock_context: RunContext) -> None:
     res = se_encontraron_ofertas(mock_context)
     assert res.estado == "error"
     assert res.codigo == "ERR-01"
+
+
+# ==== D61: resiliencia del canal en la búsqueda =========================== #
+
+_MUERTE_NAVEGADOR = Exception("Page.goto: Search navigation failed: Target closed")
+
+
+def test_busqueda_reanuda_tras_muerte_navegador(mock_context: RunContext) -> None:
+    """D61: muerte del canal → reconstrucción → reintento del MISMO set."""
+    with _adaptador_con_apply_filters(
+        side_effect=[_MUERTE_NAVEGADOR, _resultado_ok(con_ofertas=True)]
+    ) as child:
+        with (
+            patch("shared.retry.time.sleep"),
+            patch(
+                "modules.discovery.nodes.busqueda.reabrir_navegador",
+                return_value=True,
+            ) as reabrir,
+        ):
+            res = aplicar_filtros(mock_context)
+
+    assert res.estado == "ok"
+    assert reabrir.call_count == 1
+    assert child.call_count == 2
+    assert mock_context.search_result is not None
+    assert mock_context.search_result.estado == "exito"
+    assert mock_context.muertes_sin_avance == 0
+    assert mock_context.paginas_desde_renovacion == 1
+
+
+def test_busqueda_reabrir_fallido_cierra_honesto(mock_context: RunContext) -> None:
+    """D61: reconstrucción imposible → ERR-09 y la tanda cierra honesto."""
+    with _adaptador_con_apply_filters(
+        side_effect=[_MUERTE_NAVEGADOR]
+    ) as child:
+        with patch(
+            "modules.discovery.nodes.busqueda.reabrir_navegador",
+            return_value=False,
+        ):
+            res = aplicar_filtros(mock_context)
+
+    assert res.estado == "error"
+    assert res.codigo == "ERR-09"
+    assert child.call_count == 1
+    assert mock_context.search_result is None
+
+
+def test_busqueda_muertes_consecutivas_sin_avance(mock_context: RunContext) -> None:
+    """D61: entorno roto (muertes sin avance superan el tope) → cierre honesto."""
+    with _adaptador_con_apply_filters(
+        side_effect=[_MUERTE_NAVEGADOR, _MUERTE_NAVEGADOR]
+    ) as child:
+        with (
+            patch("shared.retry.time.sleep"),
+            patch(
+                "modules.discovery.nodes.busqueda.reabrir_navegador",
+                return_value=True,
+            ),
+        ):
+            mock_context.tope_muertes_sin_avance = 1
+            res = aplicar_filtros(mock_context)
+
+    assert res.estado == "error"
+    assert res.codigo == "ERR-09"
+    assert child.call_count == 2

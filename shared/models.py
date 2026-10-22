@@ -202,6 +202,10 @@ class EstadoCaptura(BaseModel):
     paginas_consumidas: int = 0
     capturadas_acumuladas_fuente: int = 0
     limite_alcanzado: bool = False
+    # Resiliencia del navegador (D61): posición de reanudación del set y
+    # si la búsqueda sigue viva tras el último tramo capturado.
+    desplazamiento_final: int = 0
+    hay_mas_ofertas: bool = False
 
 
 class ProcessedOffer(BaseModel):

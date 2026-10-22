@@ -84,7 +84,19 @@ _SEL_MOSTRAR_RESULTADOS = (
     "button:text-is('Mostrar resultados'), a:text-is('Mostrar resultados')"
 )
 
-_RE_TOTAL_DECLARADO = re.compile(r"^(\d+) resultados$")
+# D28 (2026-08-17): el total declarado se lee de texto visible del DOM.
+# (2026-10-22, verificado con sondas reales sobre la UI actual) el encabezado
+# del listado pinta la frase completa en un solo <p>: "N resultados" cuando
+# el total no supera 99, y "Más de 99 resultados" (cota, no cifra exacta)
+# cuando lo supera; el separador entre cifra y palabra es nbsp (\xa0).
+# La etiqueta original se conserva en la evidencia de la busqueda.
+_RE_TOTAL_DECLARADO = re.compile(r"^(?:Más de )?(\d[\d.,]*)\s+resultados$")
+
+# D60 (2026-10-22): la geografia de una busqueda se fija con el codigo
+# oficial de region de LinkedIn (`geoId`), no con texto. Codigos ya
+# verificados con sondas reales: Colombia 100876405, America Latina
+# 91000011, America del Norte 91000022. Formato: 6-12 digitos.
+_RE_GEOID = re.compile(r"^\d{6,12}$")
 
 _SEL_SIGUIENTE = (
     "button[aria-label='Next']",
@@ -326,6 +338,13 @@ class LinkedInAdapter:
         best-effort UI click fallback is attempted and verified again. If the
         filters still are not applied, the set fails with
         ``filtros_no_aplicables`` instead of capturing non-conforming offers.
+
+        (2026-10-22) LinkedIn ya no honra ``location=<texto>``: el parametro
+        permanece en la URL pero el resultado sigue al estado de ubicacion
+        de la sesion con que se llega. La geografia determinista de una
+        busqueda se fija con el filtro ``geoid`` (codigo oficial de region,
+        D60, verificado con sondas reales); un set con ``geoid`` propio
+        queda inmune al estado heredado de la sesion.
         """
         enlace = self._construir_url_resultados(ficha.enlace, set_filtros)
         try:
@@ -362,6 +381,9 @@ class LinkedInAdapter:
         ficha: FichaFuente,
         set_filtros: SetFiltros,
         politicas: PoliticasCaptura,
+        desde_desplazamiento: int = 0,
+        max_paginas: int | None = None,
+        max_ofertas: int | None = None,
     ) -> tuple[CaptureBatch, EstadoCaptura]:
         """Captura por listado sin entrar al detalle de cada oferta (v1.2, D11).
 
@@ -374,19 +396,37 @@ class LinkedInAdapter:
         ``max_ofertas_por_corrida``. Las ofertas se registran con la
         descripción vacía (estado 'descubierta'); el enriquecimiento con la
         descripción es una tarea posterior de Preparación.
+
+        (D61, 2026-10-22) ``desde_desplazamiento`` reanuda la misma búsqueda
+        en la carta ``?start=N`` tras renovar (o perder) el navegador, y
+        ``max_paginas``/``max_ofertas`` acotan el TRAMO (las políticas
+        completas siguen mandando el límite por set en el nodo): el
+        navegador se renueva por etapas y no muere de memoria (autopsia
+        2026-10-22). El estado devuelto reporta ``desplazamiento_final``
+        (posición exacta del tramo siguiente) y ``hay_mas_ofertas`` (si la
+        búsqueda aún tiene páginas por caminar).
         """
         ofertas_capturadas: list[Offer] = []
         paginas_consumidas = 0
+        tope_paginas = (
+            politicas.max_paginas if max_paginas is None else max(1, max_paginas)
+        )
+        tope_ofertas = (
+            politicas.max_ofertas_por_corrida
+            if max_ofertas is None
+            else max(0, max_ofertas)
+        )
         url_resultados = (
             page.url
             if "jobs/search-results" in page.url
             else self._construir_url_resultados(ficha.enlace, set_filtros)
         )
-        desplazamiento = 0
+        desplazamiento = desde_desplazamiento
+        hay_mas = False
         enlaces_vistos: set[str] = set()
         while (
-            paginas_consumidas < politicas.max_paginas
-            and len(ofertas_capturadas) < politicas.max_ofertas_por_corrida
+            paginas_consumidas < tope_paginas
+            and len(ofertas_capturadas) < tope_ofertas
         ):
             if desplazamiento == 0 and "jobs/search-results" in page.url:
                 pass
@@ -405,9 +445,7 @@ class LinkedInAdapter:
                         "fuente_inalcanzable", f"Batch navigation failed: {exc}"
                     ) from exc
             timeout_espera = (
-                ficha.timeout_segundos
-                if paginas_consumidas == 0
-                else min(
+                ficha.timeout_segundos if paginas_consumidas == 0 else min(
                     ficha.timeout_segundos,
                     politicas.tope_espera_paginas_sucesivas_segundos,
                 )
@@ -418,7 +456,7 @@ class LinkedInAdapter:
             tarjetas = _tarjetas_resultado(BeautifulSoup(html, "lxml"), ficha.enlace)
             if not tarjetas:
                 break
-            restantes = politicas.max_ofertas_por_corrida - len(ofertas_capturadas)
+            restantes = tope_ofertas - len(ofertas_capturadas)
             for tarjeta in tarjetas[:restantes]:
                 enlace = _url_absoluta(tarjeta.enlace, ficha.enlace)
                 if enlace in enlaces_vistos:
@@ -443,11 +481,12 @@ class LinkedInAdapter:
                 )
             paginas_consumidas += 1
             desplazamiento += len(tarjetas)
-            if not self._hay_pagina_siguiente(html):
+            hay_mas = self._hay_pagina_siguiente(html)
+            if not hay_mas:
                 break
             if (
-                paginas_consumidas < politicas.max_paginas
-                and len(ofertas_capturadas) < politicas.max_ofertas_por_corrida
+                paginas_consumidas < tope_paginas
+                and len(ofertas_capturadas) < tope_ofertas
             ):
                 self._pausa_entre_lotes(politicas)
         capturas_acumuladas = len(ofertas_capturadas)
@@ -455,7 +494,12 @@ class LinkedInAdapter:
             estado="ok",
             paginas_consumidas=paginas_consumidas,
             capturadas_acumuladas_fuente=capturas_acumuladas,
-            limite_alcanzado=capturas_acumuladas >= politicas.max_ofertas_por_corrida,
+            limite_alcanzado=(
+                max_ofertas is None
+                and capturas_acumuladas >= politicas.max_ofertas_por_corrida
+            ),
+            desplazamiento_final=desplazamiento,
+            hay_mas_ofertas=hay_mas,
         )
         lote = CaptureBatch(
             ofertas=ofertas_capturadas,
@@ -479,9 +523,10 @@ class LinkedInAdapter:
         """Chips que deben estar activos en el DOM para el set de filtros.
 
         Solo los filtros verificables en la UI nueva: modalidad (remoto) y
-        ventana de fecha (bucket canonico). ``keywords``/``location`` no
+        ventana de fecha (bucket canonico). ``keywords``/``geoid`` no
         tienen chip verificable (LinkedIn conserva la ubicacion en estado,
-        no en la URL).
+        no en la URL); ``location`` es un parametro muerto desde
+        2026-10-22.
         """
         esperados: list[str] = []
         for filtro in set_filtros.filtros:
@@ -692,15 +737,20 @@ class LinkedInAdapter:
                 )
             )
         total: int | None = None
+        etiqueta_total = ""
         for nodo in _nodos_texto_visibles(soup):
-            coincidencia = _RE_TOTAL_DECLARADO.match(nodo.strip())
+            normalizado = nodo.strip().replace("\xa0", " ")
+            coincidencia = _RE_TOTAL_DECLARADO.match(normalizado)
             if coincidencia:
-                total = int(coincidencia.group(1))
+                total = _total_a_entero(coincidencia.group(1))
+                etiqueta_total = normalizado
                 break
         hay_mas = self._hay_pagina_siguiente(html)
         evidencia = f"url: {enlace}"
         if total is not None:
             evidencia += f" | total: {total}"
+            if etiqueta_total != f"{total} resultados":
+                evidencia += f" ({etiqueta_total})"
         return SearchResult(
             estado="exito",
             ofertas_primera_pagina=ofertas,
@@ -728,9 +778,29 @@ class LinkedInAdapter:
 
     def _construir_url_busqueda(self, base: str, set_filtros: SetFiltros) -> str:
         parametros: dict[str, str] = {}
+        tiene_geoid = False
+        tiene_ubicacion_texto = False
         for filtro in set_filtros.filtros:
             tipo = str(filtro.get("tipo") or "")
             valor = filtro.get("valor")
+            if tipo == "geoid":
+                # D60 (2026-10-22): geografia por codigo oficial de region;
+                # LinkedIn ignora el texto de ubicacion y `geoId` queda en
+                # la URL aplicandose de forma determinista (verificado con
+                # sondas reales sobre la sesion del sistema).
+                if not valor:
+                    continue
+                codigo = str(valor).strip()
+                if not _RE_GEOID.fullmatch(codigo):
+                    raise FlowError(
+                        "filtros_no_aplicables",
+                        f"Filter 'geoid' value '{valor}' no es un codigo "
+                        f"de region valido (se esperan 6-12 digitos, "
+                        f"p.ej. Colombia 100876405).",
+                    )
+                parametros["geoId"] = codigo
+                tiene_geoid = True
+                continue
             if tipo == "modalidad":
                 if not valor:
                     continue
@@ -772,6 +842,15 @@ class LinkedInAdapter:
                 parametros[parametro] = ", ".join(str(v) for v in valor)
             else:
                 parametros[parametro] = str(valor)
+            if tipo == "ubicacion":
+                tiene_ubicacion_texto = True
+        if tiene_geoid and tiene_ubicacion_texto:
+            raise FlowError(
+                "filtros_no_aplicables",
+                "El set combina 'geoid' con texto de ubicacion: escoja solo "
+                "uno. El texto ('location') dejo de honrarse (2026-10-22) "
+                "y el codigo oficial lo sustituye (D60).",
+            )
         if not parametros:
             return base
         separador = "&" if "?" in base else "?"
@@ -786,7 +865,9 @@ class LinkedInAdapter:
         (search -> redirect -> search-results) observada al paginar (D11).
         (D27) La UI nueva elimina location/f_WT de la URL final pero honra
         los parametros al aplicarlos (estado de busqueda conservado); por eso
-        siguen enviandose en la URL construida.
+        siguen enviandose en la URL construida. (2026-10-22) ``location=``
+        dejo de honrarse incluso al aplicar; la geografia determinista
+        viaja solo con ``geoId`` (D60).
         """
         base_resultados = base.replace(
             "https://www.linkedin.com/jobs/search",
@@ -801,6 +882,11 @@ class LinkedInAdapter:
         return urlunparse(partes._replace(query=urlencode(qs, doseq=True)))
 
 
+
+
+def _total_a_entero(crudo: str) -> int:
+    """Convierte la cifra del enunciado a entero (sin separadores de miles)."""
+    return int(re.sub(r"[.,\s]", "", crudo))
 
 
 def _nodos_texto_visibles(soup: BeautifulSoup) -> list[str]:

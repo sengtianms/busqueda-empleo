@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, cast
 
 from loguru import logger
@@ -7,16 +6,17 @@ from playwright.sync_api import sync_playwright
 
 from modules.discovery.adapters.linkedin import FlowError
 from modules.discovery.adapters.registry import AdaptadorPlataforma, obtener_adaptador
+from modules.discovery.navegacion import (
+    abrir_canal_instancia,
+    resolver_headless,
+    resolver_perfil,
+)
 from modules.discovery.run_context import RunContext
 from shared.config import load
 from shared.models import EntryResult, FichaFuente
 from shared.persistence import generar_id, registrar_evento
 from shared.retry import ejecutar_con_reintento
-from shared.utilidades import (
-    acotar_evidencia,
-    ruta_perfil_navegador,
-    ventana_navegador,
-)
+from shared.utilidades import acotar_evidencia
 
 
 @dataclass
@@ -64,50 +64,25 @@ def ejecutar_ingreso(contexto: RunContext) -> ResultadoIngreso:
     return _ejecutar_ingreso_loop(contexto, adapter, ficha, credenciales)
 
 def _resolver_headless() -> bool:
-    """Resuelve el modo headless: BROWSER_HEADLESS en .env gana sobre config.yaml."""
-    cfg = load()
-    env_raw = cfg.get("_env", {})
-    env: dict[str, Any] = env_raw if isinstance(env_raw, dict) else {}
-    override = env.get("BROWSER_HEADLESS")
-    if isinstance(override, str):
-        return override.strip().lower() != "false"
-    cfg_browser = cfg.get("browser", {})
-    if not isinstance(cfg_browser, dict):
-        return True
-    return cfg_browser.get("headless", True) is not False
+    """Modo headless del canal (lógica en navegación; usa SU carga)."""
+    return resolver_headless(load())
 
 
 def _resolver_perfil() -> str:
-    """Carpeta de sesión persistente (`browser.profile_path`); "" = sin memoria."""
-    cfg = load()
-    return ruta_perfil_navegador(cfg.get("browser", {}))
+    """Carpeta de sesión persistente (delegado en navegación, D61)."""
+    return resolver_perfil()
 
 
 def _abrir_pagina(
     playwright_instance: Any, headless: bool
 ) -> tuple[Any, Any]:
-    """Abre la ventana normal del Módulo 1 con contenido que acompaña.
+    """Crea la ventana del canal sobre una instancia Playwright viva (D61).
 
-    Con `profile_path` usa contexto persistente (memoria de sesión);
-    sin él, modo efímero actual. Ante cualquier fallo del persistente,
-    vuelve al efímero sin abortar.
+    Delegado en `navegacion.abrir_canal_instancia`; `headless` se entrega
+    explícito para respetar la resolución del propio nodo (parcheable).
     """
-    ancho, alto = ventana_navegador(load().get("browser", {}))
-    argumentos = [f"--window-size={ancho},{alto}"]
-    perfil = _resolver_perfil()
-    if perfil:
-        try:
-            Path(perfil).mkdir(parents=True, exist_ok=True)
-            contexto = playwright_instance.chromium.launch_persistent_context(
-                perfil, headless=headless, args=argumentos, no_viewport=True
-            )
-            return contexto, contexto.new_page()
-        except Exception as exc:
-            logger.warning(f"Perfil persistente no usable ({exc}); uso modo efímero")
-    browser = playwright_instance.chromium.launch(
-        headless=headless, args=argumentos
-    )
-    return browser, browser.new_page(no_viewport=True)
+    canal, pagina = abrir_canal_instancia(playwright_instance, headless)
+    return canal, pagina
 
 
 def _ejecutar_ingreso_loop(

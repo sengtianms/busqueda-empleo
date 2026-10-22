@@ -141,7 +141,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--db", help="ruta alternativa a la base de datos")
     argumentos = parser.parse_args(argv)
     if argumentos.db:
-        change_path(argumentos.db)
+        change_path(Path(argumentos.db))
     try:
         todo_ok, lineas = ejecutar_preflight(usar_ia=argumentos.ia)
     finally:

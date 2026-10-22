@@ -113,6 +113,9 @@ class AdaptadorFalso:
         ficha: Any,
         set_filtros: Any,
         politicas: Any,
+        desde_desplazamiento: int = 0,
+        max_paginas: int | None = None,
+        max_ofertas: int | None = None,
     ) -> tuple[CaptureBatch, EstadoCaptura]:
         self.capturas += 1
         lote = CaptureBatch(
