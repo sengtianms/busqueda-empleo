@@ -183,7 +183,7 @@
 
 ## Resistencia de la tanda — multigeografía y chaleco antibloqueo (2026-10-22)
 
-> Post-V1 sobre la rama `busqueda-multigeografia`; las decisiones formales se registran tras la verificación de la tanda programada.
+> Post-V1 sobre la rama `ajuste-final-v1` (trabajo de la sesión consolidado por fusión rápida y rama de obra eliminada a petición del usuario); las decisiones formales se registran tras la verificación de la tanda programada.
 
 | # | Ajuste | Estado | Notas |
 |---|--------|--------|-------|

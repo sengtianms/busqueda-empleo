@@ -39,7 +39,7 @@ Unless noted, decisions from previous sessions remain in effect.
 | 12 | 08/08/2026 | `ses_01c089ce2ffe9MvQT4F1pC0MJN` | Sub-fase 4.2 deep audit + post-audit fixes (credentials mapping, playwright lifecycle) |
 
 ## Session 43 — 22/10/2026
-`ses_f4af1b961ffe5t8xNspW5U761x` · `busqueda-multigeografia`
+`ses_f4af1b961ffe5t8xNspW5U761x` · `ajuste-final-v1`
 
 **Topics**
 - Crash autopsy context at the session's start: a Saturday-afternoon automatic batch collapsed when one search set ballooned to 946 offers across 38 heavy pages (process killed itself mid-run; the launcher stayed alive but mute with the batch seat held); the stage was reset on the user's instruction — scheduled service stopped, only the automation's browser processes removed, the database wiped to zero rows with no backup, official id counters restarted
@@ -58,10 +58,10 @@ Unless noted, decisions from previous sessions remain in effect.
 - Decisions from previous sessions remain in effect
 
 **Status**
-- Resilience vest ✅ built and battery-verified (ruff 0 · mypy 0 · pytest 693) · multi-geo groundwork ✅ built, riding this commit · live verification ⏳ pending on the next scheduled tanda (17:51 clock slot, full chain on the wiped database with a verdict expected)
+- Resilience vest ✅ built and battery-verified (ruff 0 · mypy 0 · pytest 693) · multi-geo groundwork ✅ built, riding this save · live verification ⏳ pending on the next scheduled tanda (17:51 clock slot, full chain on the wiped database with a verdict expected)
 - Documentary closure ⬜ pending after that verification: decision registrations, module sheet as-built, operating-contract status refresh
-- Session history + all session changes committed in this /save (single commit + push)
-- Branch: `busqueda-multigeografia` · no merge (merging awaits explicit user authorization)
+- Session history + all session changes committed in this save; on the user's request right after, the session work was consolidated by fast-forward merge into `ajuste-final-v1` and the work branch removed locally and remotely (battery re-verified on the destination branch); the consolidation rides a small follow-up docs commit
+- Branch: `ajuste-final-v1` · no merge to `main` (merging awaits explicit user authorization)
 
 ## Session 42 — 20/10/2026
 `ses_f4af1b961ffe5t8xNspW5U761x` · `ajuste-final-v1`
