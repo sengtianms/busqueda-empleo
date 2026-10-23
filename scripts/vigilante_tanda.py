@@ -168,12 +168,16 @@ def _avisar(cuerpo: str, clave: str, marcador: Path, instante: datetime) -> None
             pass  # el marcador es best-effort; avisar nunca altera datos
 
 
-def _cerrar_fantasma(id_corrida: str, causa: str) -> bool:
+def _cerrar_fantasma(id_corrida: str, causa: str, autor: str = "guardian") -> bool:
     """Cierra una corrida fantasma con la forma oficial; nunca aborta.
 
     Devuelve True solo si la fila quedó cerrada: si la actualización falla
     NO se escribe evento y NO se suelta su silla (la pasada siguiente lo
     repasa con el orden honesto: fila primero, luego evento y liberación).
+
+    `autor` nombra en la evidencia quién ordenó el cierre: el vigía por
+    defecto ("guardian"); los mandos del operador (detener/limpiar) pasan
+    "orden_operador" para que la traza diga quién la cerró.
     """
     try:
         actualizar_corrida(
@@ -191,7 +195,7 @@ def _cerrar_fantasma(id_corrida: str, causa: str) -> bool:
             "id_corrida": id_corrida,
             "tipo": "error",
             "codigo": MOTIVO_FANTASMA,
-            "evidencia": f"proceso=desaparecido | cierre=guardian ({causa})",
+            "evidencia": f"proceso=desaparecido | cierre={autor} ({causa})",
             "marca_temporal": datetime.now().strftime(FORMATO_TIMESTAMP),
         },
         contexto_log=id_corrida,
@@ -199,7 +203,9 @@ def _cerrar_fantasma(id_corrida: str, causa: str) -> bool:
     return True
 
 
-def _cerrar_fantasmas(captura: dict[str, Any], causa: str) -> list[str]:
+def _cerrar_fantasmas(
+    captura: dict[str, Any], causa: str, autor: str = "guardian"
+) -> list[str]:
     """Cierra las corridas ya seleccionadas con prueba de muerte.
 
     Solo cuenta las que quedaron cerradas de verdad: una fila no cerrada
@@ -208,7 +214,7 @@ def _cerrar_fantasmas(captura: dict[str, Any], causa: str) -> list[str]:
     cerradas: list[str] = []
     for fila in captura["abiertas"]:
         id_corrida = _texto(fila, "id_corrida")
-        if not _cerrar_fantasma(id_corrida, causa):
+        if not _cerrar_fantasma(id_corrida, causa, autor=autor):
             continue  # fila viva para efectos prácticas: toque nada más
         try:
             liberar_bloqueo(id_corrida)

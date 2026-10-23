@@ -205,6 +205,18 @@
 
 ---
 
+## Mandos del ciclo automático (2026-10-22)
+
+> Cuatro órdenes del operador (decisión D64, libro v1.43) directamente de la sesión en vivo: la tanda de las 16:36 (intento de verificación pendiente) fue parada a mano a los dos minutos y no había una vía de primera clase para pausar el ciclo, parar la tanda en marcha ni garantizar «nada corriendo». Motor único (`scripts/control_tandas.py`) + cuatro comandos de una línea, idempotentes, con aviso de escritorio y bitácora; cierres con la maquinaria del vigía y autoría veraz en la evidencia (`cierre=orden_operador`). Lección del humo real anotada en la decisión: el mando jamás corta su cadena de antepasados; y el despeje de una unidad `failed` exige `stop` + `reset-failed`.
+
+| # | Mando | Estado | Notas |
+|---|------|--------|-------|
+| — | `pausar_tandas.sh` / `reanudar_tandas.sh` | ✅ | Pausa: el reloj del programador se apaga (nada se dispara, ni tras reinicio) y la tanda en curso termina con normalidad; verificada EN VIVO: el disparo de las 19:36 quedó cancelado con aviso y bitácora. Reanudar re-arma el reloj, informa el próximo disparo y repara el sistema de tandas (instalador oficial) si el vigía quedó suelto. La reanudación queda reservada a la mano del operador para el momento de la verificación en caliente. |
+| — | `detener_tanda.sh` | ✅ | Corta la tanda en marcha (programada por vía ordenada del programador; manual junto con su navegador, de señal suave a forzosa con gracia ajustable) y la cierra AL INSTANTE con la forma oficial (abortada · proceso desaparecido · orden del operador), usando los mismos anclajes del tablero (tanda + módulo en curso; sobrantes intocables). Verificado EN VIVO: 3 procesos señuelo cortados, tanda programada cerrada al instante, unidad `failed` despejada de verdad. |
+| — | `limpiar_tandas.sh` | ✅ | Barrido a cero: corta todo residuo en marcha, cierra TODA corrida abierta, suelta la silla que quede (incluso dueños desconocidos, por orden explícita del operador) y verifica el estado final («todo en cero»); nunca desactiva el reloj (solo informa si sigue armado) y nunca borra datos. Verificado EN VIVO sobre copia: todo cerrado, silla a cero, base real intacta (0 filas antes y después). 14 pruebas (incluida la garantía «nunca corta la mano»); ruff/mypy limpios; 744 pruebas de batería. |
+
+---
+
 ## Phase 7. Module 4 — Deep Processing
 
 | # | Task | Source docs | Status | Notes |

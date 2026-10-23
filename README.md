@@ -22,7 +22,7 @@ All official documentation is located in `docs/`:
 
 ## Status
 
-Version 1 is complete (decisions D54–D56, 2026-10-19): Phases 0–6 — Module 1 (Opportunity Discovery), Module 2 (Offer Preparation), Module 3 (Initial Evaluation) and the transversal orchestrator — run the full loop end-to-end, both manually and automatically: a system timer fires a complete run 10 minutes after the computer powers on and repeats it every 3 hours while the machine is on (decision D54); first scheduled run: discovery → preparation (47 prepared + 1 duplicate) → evaluation → 7 approved / 39 justified discards, 0 chain errors. Phases 7–8 (deep processing, results management) are deferred to future versions (D55). Post-V1 hardening closed 2026-10-22 (decisions D60–D63): the search matrix runs a single Colombia sweep, live progress is visible from any terminal (`scripts/estado_corrida.py`), manual runs narrate themselves, and a minute-level watchdog alerts on stalled batches and closes dead runs. 730 tests; the post-reset scheduled-tanda verification is pending (tracker).
+Version 1 is complete (decisions D54–D56, 2026-10-19): Phases 0–6 — Module 1 (Opportunity Discovery), Module 2 (Offer Preparation), Module 3 (Initial Evaluation) and the transversal orchestrator — run the full loop end-to-end, both manually and automatically: a system timer fires a complete run 10 minutes after the computer powers on and repeats it every 3 hours while the machine is on (decision D54); first scheduled run: discovery → preparation (47 prepared + 1 duplicate) → evaluation → 7 approved / 39 justified discards, 0 chain errors. Phases 7–8 (deep processing, results management) are deferred to future versions (D55). Post-V1 hardening closed 2026-10-22 (decisions D60–D64): the search matrix runs a single Colombia sweep, live progress is visible from any terminal (`scripts/estado_corrida.py`), manual runs narrate themselves, a minute-level watchdog alerts on stalled batches and closes dead runs (D60–D63), and four operator commands manage the cycle by hand — pause, resume, stop-now and zero-wipe (D64). 744 tests; the post-reset scheduled-tanda verification is pending (tracker).
 
 ## Running the pipeline
 
@@ -70,6 +70,28 @@ Notes:
 - Each tanda reuses the persistent LinkedIn session; if the account challenges (verification/new login), the tanda ends gracefully and the next manual run re-enables everything from the visible window.
 - A minute-level watchdog (decisions D63): if the batch freezes without signals with a fresh chair it alerts desktop-side once per offense — "examínela" — without touching anything; runs whose processes provably died (own silence past the threshold, expired chair) are closed as `abortada: proceso desaparecido` with the official termination evidence; if the batch unit itself dies without its own verdict notification, an `OnFailure` desktop alert fires (deduplicated against the batch's own verdict in the journal). All of it is installed/removed together with the scheduler above.
 - While a batch runs, any terminal can watch it live: `.venv/bin/python scripts/estado_corrida.py` (read-only).
+- Four one-line commands manage the scheduled cycle by hand (decision D64), all idempotent, each with a desktop confirmation and a journal line:
+
+```bash
+# Pause upcoming automatic batches: the clock turns off (nothing fires, not even
+# after a reboot) until resumed; a batch already running finishes normally
+bash scripts/pausar_tandas.sh
+
+# Resume the automatic cadence: re-arms the clock, reports the next firing,
+# and repairs the watchdog system if anything went loose
+bash scripts/reanudar_tandas.sh
+
+# Stop the batch running right now (scheduled or manual) and close it at once
+# as: aborted · vanished process · operator order
+bash scripts/detener_tanda.sh
+
+# Zero-out sweep: kills any leftover (batch processes incl. its browser), closes
+# every open run, releases any chair, and verifies "nothing running"; it never
+# disables the clock (that is pausar) and never deletes historical data
+bash scripts/limpiar_tandas.sh
+```
+
+Notes for the commands: `detener` only touches the live batch it finds (leftover rows from older batches belong to the watchdog or to `limpiar`); `--db` lets any copy be operated for rehearsal; repeated invocations are always safe (they never double-act).
 
 ## LinkedIn session (persistent login)
 
