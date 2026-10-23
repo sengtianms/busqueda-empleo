@@ -200,3 +200,36 @@ def leer_ultima_corrida_cerrada(
         return dict(fila) if fila is not None else None
     finally:
         conn.close()
+
+
+CODIGOS_NARRACION: tuple[str, ...] = (
+    "tic_modulo_iniciado",
+    "tic_set_iniciado",
+    "tic_captura_pagina",
+)
+"""Lote 2: códigos de narración en vivo.
+
+Events purely informative (progress tick); they do not alter flow metrics:
+`Finalizar` subtracts them from `total_sucesos` via `contar_narracion`.
+"""
+
+
+def contar_narracion(id_corrida: str) -> int:
+    """Counts the run's narration events (Lote 2); excluded from metrics.
+
+    Defensive: only `tipo='suceso'` counts — a narration code reused as an
+    error would otherwise be subtracted twice (once via `total_errores`,
+    once here).
+    """
+    conn = _connection()
+    try:
+        marcadores = ", ".join("?" for _ in CODIGOS_NARRACION)
+        fila = conn.execute(
+            f"SELECT COUNT(*) FROM eventos "
+            f"WHERE id_corrida = ? AND tipo = 'suceso' "
+            f"AND codigo IN ({marcadores})",
+            (id_corrida, *CODIGOS_NARRACION),
+        ).fetchone()
+        return int(fila[0]) if fila is not None else 0
+    finally:
+        conn.close()

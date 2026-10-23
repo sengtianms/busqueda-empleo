@@ -24,6 +24,9 @@ from ._conexion import (
 from ._conexion import (
     reset_path as reset_path,
 )
+from ._consultas import (
+    CODIGOS_NARRACION as CODIGOS_NARRACION,
+)
 from ._consultas import (  # noqa: F401
     buscar_por_id as buscar_por_id,
 )
@@ -35,6 +38,9 @@ from ._consultas import (
 )
 from ._consultas import (
     contar_filas as contar_filas,
+)
+from ._consultas import (
+    contar_narracion as contar_narracion,
 )
 from ._consultas import (
     leer_candidatas_descubiertas as leer_candidatas_descubiertas,

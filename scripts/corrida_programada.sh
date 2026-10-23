@@ -21,6 +21,11 @@ fi
 # $XDG_RUNTIME_DIR/bus, so popups land whenever the user is logged in.
 export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bus"
 
+# Narration: this batch IS the scheduled one; without this mark the run
+# would print its friendly narration lines to its journal like a manual
+# run (Lote 2). Manual runs don't set it → they narrate in their terminal.
+export TANDA_PROGRAMADA="1"
+
 if ! SALIDA_PREVIA=$("$PY" scripts/preflight.py --ia 2>&1); then
   "$PY" scripts/notificar_veredicto.py --fallo "$SALIDA_PREVIA" || true
   exit 1

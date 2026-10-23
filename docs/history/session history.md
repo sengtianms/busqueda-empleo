@@ -5,6 +5,7 @@ Unless noted, decisions from previous sessions remain in effect.
 ## Sessions index
 | № | Date | Session ID | Summary |
 |---|---|---|---|
+| 44 | 22/10/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Time-real batch visibility shipped in three reviewer-approved lotes and closed documentally in the same session (decisions D60–D63 in log v1.42): read-only live board from any terminal, manual-run narration voice with trace ticks excluded from closure metrics, minute-level silent-death watchdog with user-authorized ghost-run closures plus an OnFailure desktop fallback; a failed live smoke forced a per-row death-proof redesign protecting the running batch's own rows; matrix cut to a single Colombia sweep; README command corruption repaired; 730 tests; live scheduled-tanda verification still pending |
 | 43 | 22/10/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Browser anti-stall resilience built on the crash autopsy of a 1,000-offer batch (renewal every ~30 heavy pages with the same session memory, unbounded resurrection resuming the search at the exact page where death struck, honest stop only for a broken environment or an expired manual-entry window, per-operation time ceiling with a watchdog that forces the browser process tree down, chair always returned on every exit path); a live probe caught and fixed a silent no-kill defect in the enforcer; multi-geo groundwork rides along — deterministic region navigation after the platform killed the plain location parameter (world anchor verified live), 72-set source matrix, totals reader repair; live verification awaits the next scheduled tanda on the wiped database (693 tests) |
 | 42 | 20/10/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Evaluation prompt v6 registered officially (user text verbatim, reorganized for model legibility); production database purged at user request and a fresh full run through the official scheduled path verified end-to-end on the clean database (64 discovered → 64 prepared + 5 duplicates → 1 approved / 58 justified discards, 0 chain errors) with the desktop verdict popup delivered; the save's single commit also carries the parallel door-rotation hardening built against the morning hang (652 tests) |
 | 41 | 19/10/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Version 1 closed officially: scope cut to Modules 1–3 + orchestrator + scheduled automation (OS-level timer with post-boot drag run and 3-hour cadence, wrapper with preflight gate, installer tooling, versioned units), first live automatic run verified end-to-end; evaluation v5 strict behavior confirmed by the user and calibration audit closed with no findings; verdict notifications added afterward — desktop popups driven by the official trace with skip-vs-error distinction, live-verified against the morning chain (643 tests) |
@@ -37,6 +38,32 @@ Unless noted, decisions from previous sessions remain in effect.
 | 14 | 09/08/2026 | `ses_01bcc78adffemcqFEiZxT52Eli` | Sub-fase 4.4: capture/registration nodes implemented, audited, and post-audit fixes applied (FK-free schema, name columns, upsert tests) |
 | 13 | 08/08/2026 | `ses_01be77680ffeuyoKct4Qrfx1GG` | Repo sync to `fase-4`; new `/save` section with general git commit and push guidance |
 | 12 | 08/08/2026 | `ses_01c089ce2ffe9MvQT4F1pC0MJN` | Sub-fase 4.2 deep audit + post-audit fixes (credentials mapping, playwright lifecycle) |
+
+## Session 44 — 22/10/2026
+`ses_f4af1b961ffe5t8xNspW5U761x` · `ajuste-final-v1`
+
+**Topics**
+- Live batch board closure: tanda anchoring hardened, batch launched inside a 900-second identification window kept separate from the frozen threshold, missing/uninitialized database renders a plain-language panel creating nothing, both evidence-separator styles accepted, per-module remaining-time estimated from the run's own pace; 17 tests, reviewer verdict green
+- Manual runs narrate themselves in their terminal (module announcement, search-set launch, capture page progress) through a small inviolable speaker; automatic scheduled batches stay silent because the wrapper marks the process chain; the board consumes brand-new trace ticks to name the module and track set/page progress
+- Narration ticks recorded in the official trace but explicitly subtracted from every closure metric, keeping verdicts and totals byte-identical to tick-free runs; verified once by reviewers across all three closure formulas
+- User explicitly authorized closing dead leftover runs and a desktop alert on batch death; a watcher asking once per minute reviews lack of life: catching a stalled batch only alerts (nothing touched); runs whose own silence proves death are closed with the official closure form and a desktop notice of what was closed
+- Failed smoke taught the closure rule: a proof measured per run (each run's own signals) replaced the global measure, and the live batch's own rows gained protection through the board's anchors — stale seat closes the whole chain, inherited seats freed in passing, unknown seat owners untouched
+- First Lote-3 review caught a leaked contract: a failed row update used to release that run's seat and announce it as closed; fixed to order row-first-chair-later with honesty enforced and covered by a dedicated test
+- If the scheduler's batch unit dies unable to report (kill/OOM), a fallback desktop alert fires with journal-based dedup so it never repeats the wrapper's own verdict; installer manages the two extra watcher pieces together with the scheduler
+- Documentary closure executed in-session by user order while the live verification remains pending: formal decision records D60–D63 (decision log v1.42), README status/scheduled/running blocks (including repairing a corrupt run-command line), operating contract status refresh, search-matrix cut to a single Colombia sweep aligned in the platform adapter comment; docs review green after two minor text corrections
+
+**Decisions**
+- D60: search matrix reduced to a single Colombia sweep (geography by official region code only; other region anchors + remote modality removed; two-digit totals repair already validated live)
+- D61: read-only live board contract (anchoring, safe missing-database behavior, own-pace estimates)
+- D62: manual narration voice + three trace ticks recorded as successes yet subtracted from metrics (zero-tick semantics identical to before)
+- D63: minute-level watchdog, user-authorized ghost-run closures with per-row ownership proof, once-per-offense desktop alerts, and OnFailure fallback with journal dedup
+- Decisions from previous sessions remain in effect
+
+**Status**
+- Three visibility lotes ✅ closed (board · narration/ticks · watcher) with reviewer CONFORME ×3 and documentary closure ✅ (docs review green after fixes)
+- Ruff 0 · mypy 0 (strict, 104 files) · pytest 730 passing
+- Live scheduled-tanda verification ⏳ pending on the wiped database (validates the whole feature hot; tracker row) — after it, nothing left open for this task
+- Branch: `ajuste-final-v1` · session work uncommitted until this save · no merge to `main`
 
 ## Session 43 — 22/10/2026
 `ses_f4af1b961ffe5t8xNspW5U761x` · `ajuste-final-v1`

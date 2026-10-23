@@ -20,6 +20,7 @@ from shared.persistence import (
     actualizar_corrida,
     contar_distintos,
     contar_filas,
+    contar_narracion,
     escribir_evento_seguro,
     liberar_bloqueo,
 )
@@ -73,8 +74,12 @@ def consultar_metricas(contexto: RunContext | None) -> dict[str, int]:
         total_errores = contar_filas(
             "eventos", {"id_corrida": id_corrida, "tipo": "error"}
         )
+        # Lote 2: los tics de narración no son sucesos del flujo; se restan
+        # para que `total_sucesos` conserve su semántica D30 exacta.
         total_sucesos = (
-            contar_filas("eventos", {"id_corrida": id_corrida}) - total_errores
+            contar_filas("eventos", {"id_corrida": id_corrida})
+            - total_errores
+            - contar_narracion(id_corrida)
         )
         fuentes_procesadas = contar_distintos(
             "eventos", "fuente_id", {"id_corrida": id_corrida}

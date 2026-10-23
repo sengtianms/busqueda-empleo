@@ -1,5 +1,6 @@
 [Unit]
 Description=Job search scheduled run (discovery > preparation > initial evaluation), decision D54
+OnFailure=busqueda-empleo-aviso-fallo.service
 
 [Service]
 Type=oneshot

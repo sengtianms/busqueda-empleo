@@ -580,6 +580,55 @@ Format: `D<n>` — module/business decisions; `C<n>` — prompt/design alignment
   7. No schema, prompt, model or door-count changes; the fix is fail-fast detection plus ordered rotation.
 - **Impact:** Ficha M3 updated (base, conventions, INICIO validation, RN-06/RN-07/VAL-03/ERR-02, notes, pending doors); MVP Execution Plan row 6.2 aligned; tracker 6.6; 652 tests. Live effect: a silent door costs at most one wait per run, the run continues on any remaining door, and an all-doors outage ends quickly with the pending offers untouched and an honest closure motive.
 
+### D60. Search matrix reduced to a single Colombia sweep; geography travels only by official geoid (2026-10-22)
+
+- **Date:** 2026-10-22
+- **Status:** In effect
+- **Context:** The multi-geography build had produced a 4-sweep matrix (Colombia 100876405, Latin America 91000011, North America 91000022, plus a world-remote anchor) × 18 thematic sets. Live probes on the current platform showed the `location` text parameter is no longer honored (even when applying filters), and the world+remote anchor produced the same result set as the Colombia anchor (47 offers) — the extra sweeps added wall time without new results.
+- **Decision:**
+  1. `descubrimiento.sets_de_filtros` keeps a single sweep: Colombia (geography via the official region code `100876405`) × 18 thematic sets = 18 searches per batch (indices 0–17).
+  2. The Latin America / North America / world-remote geoids are removed from the matrix together with the remote-modality filter they carried; their codes stay documented in the adapter only as historical format reference (6–12 digits).
+  3. Geography never travels as text: the platform stopped honoring `location` even with filters applied; every set carries only the geoid anchor (config comment records the as-built; the adapter comment is aligned).
+  4. The declared-total reader was repaired for two-digit totals ("N resultados" vs "Más de 99 resultados" phrasing, nbsp separator) — verified with real probes on the current UI (tracker row: cimientos multigeografía + recorte, same day).
+- **Impact:** Batch wall time drops back to ~5 minutes; zero schema/model changes; verification against the scheduled tanda on the wiped DB remains pending (tracker ⏳ row).
+
+### D61. Read-only live batch board, `scripts/estado_corrida.py` (2026-10-22)
+
+- **Date:** 2026-10-22
+- **Status:** In effect
+- **Context:** During a scheduled or manual batch there was no way to see progress from another terminal while it happened, and a dead process left open rows silently ("ghostly" state invisible without reading the DB by hand).
+- **Decision:**
+  1. New strictly READ-ONLY console board `scripts/estado_corrida.py` (supports `--db` for copies; never writes, never creates files): shows the batch's life state (viva / congelada / sin dueño / huérfanas de tandas pasadas), current module, per-set search progress, per-module remaining-time estimate computed from the run's own pace, and offers captured.
+  2. Batch anchoring mirrors the concurrency guarantee: the module row holding the silla is the module in course; the tanda row is the open row with orchestrator summary events or, failing that, the newest open row started within `ventana_tanda` (900 s — deliberately independent of the 600 s frozen threshold so hour-old leftovers are excluded from the anchor).
+  3. A missing or uninitialized DB renders a legible panel ("La base de datos no está lista") without crashing or creating anything; evidence parsers accept both `=` and `:` separator styles; module labels come from config (no heavy orchestrator import).
+- **Impact:** 17 new tests (`tests/test_estado_corrida.py`) incl. defensive missing-DB and simulated-batch boards; Lote-2 ticks integrate into the same board; reviewer CONFORME.
+
+### D62. Live narration for manual runs + trace ticks excluded from closure metrics (2026-10-22)
+
+- **Date:** 2026-10-22
+- **Status:** In effect
+- **Context:** The board gave live visibility to observers, but manual runs still ran mute in their own terminal; and board identification of the current module did not exist before the module's first business event.
+- **Decision:**
+  1. New voice module `shared/narrador.py` (never raises, never touches data): manual runs narrate to stdout — `▶ Módulo <n> — <etiqueta>` on module INICIO, `▶ Búsqueda de filtros #N: lanzando…` on set start, `· captura: página K — M ofertas acumuladas` per successful capture stretch. Scheduled runs stay silent: the wrapper exports `TANDA_PROGRAMADA=1` (single process chain) and the narrator prints only when that mark is absent.
+  2. New trace ticks — `tic_modulo_iniciado` (each module's successful INICIO return; concurrencia/early-error paths stay silent), `tic_set_iniciado` (M1 `aplicar_filtros` after set selection), `tic_captura_pagina` (per successful capture stretch with the absolute page count) — are written as `tipo='suceso'` through the bounded emitter.
+  3. Metrics faithfulness rule: all three Finalizar formulas subtract narration via `contar_narracion(id_corrida)` (SQL scoped to the run AND `tipo='suceso'`, narracion-only codes list), keeping `total_sucesos = eventos − errores − narración` with D30/D36 semantics exactly; with zero ticks the subtraction is 0 and closure numbers are identical to pre-tick runs. Reviewers verified the subtraction happens exactly once per formula and tick emissions only on success paths.
+  4. The board consumes the ticks: it names the module in course before any business event and shows "set en marcha"/"captura en marcha" lines; ticks naturally refresh the heartbeat.
+- **Impact:** 10 narrator/metrics tests + 2 adapted search-node tests; board tests extended; 720 tests at lote close; reviewer CONFORME.
+
+### D63. Silent-death watchdog, user-authorized ghost-run closure, OnFailure desktop alert (2026-10-22)
+
+- **Date:** 2026-10-22
+- **Status:** In effect
+- **Context:** A silently dead process (power loss, kill, hang) left `en_ejecucion` rows open forever and made no sound; system's own INICIO lock-relevation (ERR-07 horizon) frees the chair but not the dead run's row. The user explicitly authorized the watchdog to WRITE closures on foreign (dead) runs and to run the minute-level desktop alert.
+- **Decision:**
+  1. New one-pass watchdog `scripts/vigilante_tanda.py` (wrapper `scripts/ejecutar_vigia.sh` exports `DBUS_SESSION_BUS_ADDRESS`) installed by a minute-level systemd timer (`busqueda-empleo-vigilante.service` + `.timer`, added to the installer). Batch classification reuses the board's anchors (`_separar_abiertas`).
+  2. Ghost-closure proof per row: (a) chair expired beyond `concurrencia.umbral_obsolescencia_minutos` (same ERR-07 horizon) → the whole chain is dead and all open rows close; (b) chair fresh → the tanda row and the chair-holder module row are UNTOUCHABLE; only leftover rows from older tandas whose own silence exceeds the frozen threshold (600 s) close; (c) chair free → any open row whose own silence exceeds the threshold closes (an in-flight-looking row in its startup window stays safe).
+  3. Closure uses the official Finalizar shape — validated `actualizar_corrida` (`abortada`, `fecha_fin`, motivo `proceso_desaparecido`) + official termination event through `escribir_evento_seguro` (`tipo='error'`) — then releases ONLY that run's chair (by-id release). A failed row update leaves event and chair untouched and is retried next pass (no false "closed" announcements). Ghost metrics stay as-is; the sentinel never touches Finalizar formulas, so D30/D36 semantics are preserved (their own id_corrida scope keeps closure events out of other runs' counts).
+  4. Desktop alert: once per offense (marker `logs/vigilante_tanda.json`, same-offense suppressed, growth re-alerts); a frozen tanda with a fresh chair warned but never closed.
+  5. Core unit gains `OnFailure=busqueda-empleo-aviso-fallo.service`: a wrapper-cannot-notify death (kill/OOM) pops a desktop fallback; a journal-based dedup (recent `AVISO [` line from the batch unit) prevents double popups with the wrapper's own D57 verdicts.
+  6. No config/schema/deps changes; `--umbral-congelada 0` rejected at CLI. Operator-editable knobs remain thresholds only.
+- **Impact:** 10 new tests (`tests/test_vigilante.py`) incl. the reviewer-found failed-update contract; reviewer CONFORME after resolving the MAJOR minimal-release fix; live smokes on DB copies (ghost closed + tanda warned, repeated passes silent); 730 tests; minute-timer behavior verified by `systemd-analyze verify` only until the pending scheduled-tanda check.
+
 ## Prompt/design alignment decisions
 
 ### C2. Detailed Evaluation entity uses Spanish attribute names
@@ -643,6 +692,7 @@ Source: DOC-APPENDIX 9A — archived 2026-08-11; content consolidated here uncha
 
 | Version | Date | Change |
 |---|---|---|
+| 1.42 | 2026-10-22 | Added D60–D63 (time-real batch visibility, three approved lotes: search matrix reduced to a single Colombia sweep with geography by geoid only [application stops honoring the location text; LatAm/North-America/world-remote anchors + remote-modality filter removed; two-digit totals repaired]; read-only live board `scripts/estado_corrida.py` [chair-owner/newest-module anchoring, ventana_tanda fallback, missing-DB legible panel]; manual narration voice + trace ticks excluded from closure metrics via an explicit `contar_narracion` subtraction in all three Finalizar nodes; minute-level silent-death watchdog with user-authorized ghost-run closure [strict per-row ownership proof, official closure shape, failed-update contract], plus `OnFailure` desktop fallback with journal dedup; no config/schema changes; 730 tests; scheduled-tanda live verification pending). |
 | 1.41 | 2026-10-20 | Added D59 (evaluation door policy after the hung scheduled run: `analyze(reintentar=False)` removes the internal 3×120 s cloud retry from evaluation; new validated `evaluacion.timeout_puerta_segundos` [60 s] bounds each door; all four doors available with immediate rotation on the first failure and run-scoped `RunContext.puertas_caidas` memory; invalid answers keep 2 attempts on the same door; all-doors-down stops calls and leaves the rest pending with an honest Finalizar motive; door-down is a `puerta_descartada` log line, not an event, to preserve closure metrics; tracker 6.6; 652 tests). |
 | 1.40 | 2026-10-19 | Added D58 (evaluation prompt v6: user-authored text accepted verbatim and structured into titled sections/lists for the local model; new PERFIL DEL CANDIDATO section with Busca/No busca lists; golden rule tightened against generic business and aspirational summary phrases; V1 application rules expanded with a wider artifact catalog; V2 as a real-seniority proof; V3 explicit requirements-only FAIL; six calibration examples; output contract, validator and doors unchanged; followed by user-authorized all-tables purge without backup and a fresh full run as the v6 acceptance test). |
 | 1.39 | 2026-10-19 | Added D57 (batch verdict notifications: wrapper integrates `scripts/notificar_veredicto.py` — desktop popup + journal line for success/failure/skip verdicts read from the official trace; scheduled batch identified by its `corrida_programada` event to avoid the same-second module-row misidentification observed live on COR-0009; preflight "corrida activa" counted as benign skip; `DBUS_SESSION_BUS_ADDRESS` exported in the wrapper so popups land whenever the user is logged in; best-effort delivery never alters run results; no config/schema/dep changes; 12 new tests; 643 tests). |

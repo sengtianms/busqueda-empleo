@@ -24,6 +24,7 @@ from modules.discovery.navegacion import (
 )
 from modules.discovery.run_context import RunContext
 from shared.models import AuditoriaSesion, CaptureBatch, EstadoCaptura, Offer
+from shared.narrador import narrar_captura
 from shared.persistence import (
     escribir_fila,
     registrar_evento,
@@ -230,6 +231,20 @@ def capturar_ofertas(contexto: RunContext) -> ResultadoCaptura:
         hay_mas = estado_tramo.hay_mas_ofertas
         acumuladas.extend(lote_tramo.ofertas)
         contexto.paginas_desde_renovacion += estado_tramo.paginas_consumidas
+
+        # Lote 2: tic de narración de la captura (consola manual + tablero;
+        # cuenta el avance en páginas absolutas del set).
+        _registrar_evento(
+            contexto,
+            tipo="suceso",
+            codigo="tic_captura_pagina",
+            evidencia=(
+                f"set={set_actual.indice};pagina={paginas_totales};"
+                f"acumuladas={len(acumuladas)}"
+            ),
+        )
+        narrar_captura(paginas_totales, len(acumuladas))
+
         if not hay_mas:
             break
 

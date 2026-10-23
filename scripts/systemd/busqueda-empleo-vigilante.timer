@@ -1,0 +1,10 @@
+[Unit]
+Description=Tanda sentinel timer: one pass every minute (Lote 3)
+
+[Timer]
+OnCalendar=*:*:00
+AccuracySec=15s
+Unit=busqueda-empleo-vigilante.service
+
+[Install]
+WantedBy=timers.target

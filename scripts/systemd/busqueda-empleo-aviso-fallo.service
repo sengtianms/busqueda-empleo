@@ -1,0 +1,7 @@
+[Unit]
+Description=Desktop alert when the scheduled unit dies without its own verdict (Lote 3)
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/Proyectos/Automatización búsqueda de empleo
+ExecStart=/bin/bash "scripts/aviso_fallo_sistema.sh"

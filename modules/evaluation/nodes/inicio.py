@@ -36,6 +36,7 @@ from loguru import logger
 from modules.evaluation.run_context import RunContext
 from shared.config import load
 from shared.evaluacion import validar_evaluacion
+from shared.narrador import narrar_modulo
 from shared.persistence import (
     adquirir_bloqueo,
     consultar_bloqueo,
@@ -88,6 +89,16 @@ def _es_obsoleto(marca_temporal: datetime, umbral_minutos: int) -> bool:
         return False
     antiguedad = (datetime.now() - marca_temporal).total_seconds() / 60
     return antiguedad >= umbral_minutos
+
+
+def _tic_modulo_iniciado(id_corrida: str) -> None:
+    """Lote 2: tic de arranque del módulo (excluido de métricas por narración)."""
+    registrar_evento(
+        id_corrida=id_corrida,
+        tipo="suceso",
+        codigo="tic_modulo_iniciado",
+        evidencia="modulo=evaluacion",
+    )
 
 
 def ejecutar_inicio(config: dict[str, Any] | None = None) -> ResultadoInicio:
@@ -371,6 +382,8 @@ def ejecutar_inicio(config: dict[str, Any] | None = None) -> ResultadoInicio:
             descripcion="incomplete context before handover (VAL-05)",
         )
 
+    _tic_modulo_iniciado(id_corrida)
+    narrar_modulo("evaluacion")
     return ResultadoInicio(estado="ok", id_corrida=id_corrida, contexto=contexto)
 
 

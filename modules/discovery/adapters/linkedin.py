@@ -93,9 +93,14 @@ _SEL_MOSTRAR_RESULTADOS = (
 _RE_TOTAL_DECLARADO = re.compile(r"^(?:Más de )?(\d[\d.,]*)\s+resultados$")
 
 # D60 (2026-10-22): la geografia de una busqueda se fija con el codigo
-# oficial de region de LinkedIn (`geoId`), no con texto. Codigos ya
-# verificados con sondas reales: Colombia 100876405, America Latina
-# 91000011, America del Norte 91000022. Formato: 6-12 digitos.
+# oficial de region de LinkedIn (`geoId`), no con texto. La matriz vigente
+# usa un unico ancla: Colombia 100876405 (verificado con sondas reales,
+# 18 grupos tematicos). America Latina 91000011 y America del Norte
+# 91000022 quedaron fuera de la matriz el mismo dia (salio tambien su
+# filtro de modalidad remoto): se conservan aqui solo como referencia
+# historica de formato (6-12 digitos). Ademas la plataforma dejo de
+# honrar el parametro de texto `location`; el ancla mundo+remoto produce
+# el mismo set que la ancla Colombia (verificado en vivo: 47 ofertas).
 _RE_GEOID = re.compile(r"^\d{6,12}$")
 
 _SEL_SIGUIENTE = (

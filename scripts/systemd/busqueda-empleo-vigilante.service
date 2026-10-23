@@ -1,0 +1,7 @@
+[Unit]
+Description=Tanda sentinel: detects frozen batches and closes ghost runs (Lote 3)
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/Proyectos/Automatización búsqueda de empleo
+ExecStart=/bin/bash "%h/Proyectos/Automatización búsqueda de empleo/scripts/ejecutar_vigia.sh"

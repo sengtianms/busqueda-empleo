@@ -33,6 +33,7 @@ from loguru import logger
 
 from modules.preparation.run_context import RunContext
 from shared.config import load
+from shared.narrador import narrar_modulo
 from shared.persistence import (
     adquirir_bloqueo,
     consultar_bloqueo,
@@ -140,6 +141,11 @@ def _registrar_evento(id_corrida: str, tipo: str, codigo: str, evidencia: str) -
     registrar_evento(
         id_corrida=id_corrida, tipo=tipo, codigo=codigo, evidencia=evidencia
     )
+
+
+def _tic_modulo_iniciado(id_corrida: str) -> None:
+    """Lote 2: tic de arranque del módulo (excluido de métricas por narración)."""
+    _registrar_evento(id_corrida, "suceso", "tic_modulo_iniciado", "modulo=preparacion")
 
 
 def ejecutar_inicio(config: dict[str, Any] | None = None) -> ResultadoInicio:
@@ -391,6 +397,8 @@ def ejecutar_inicio(config: dict[str, Any] | None = None) -> ResultadoInicio:
             descripcion="incomplete context before handover (VAL-05)",
         )
 
+    _tic_modulo_iniciado(id_corrida)
+    narrar_modulo("preparacion")
     return ResultadoInicio(estado="ok", id_corrida=id_corrida, contexto=contexto)
 
 

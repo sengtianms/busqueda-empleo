@@ -98,7 +98,12 @@ def test_aplicar_filtros_success_with_results(mock_context: RunContext) -> None:
 def test_aplicar_filtros_exito_con_ofertas_escribe_consulta_exitosa(
     mock_context: RunContext, _mock_evento_busqueda: MagicMock
 ) -> None:
-    """D30: éxito con ofertas deja el evento `consulta_exitosa` (contrato ficha)."""
+    """D30: éxito con ofertas deja el evento `consulta_exitosa` (contrato ficha).
+
+    Con Lote 2 la búsqueda también escribe su tic de narración; aquí se
+    exige `consulta_exitosa` exactamente una vez y que el resto sean solo
+    tics.
+    """
     with _adaptador_con_apply_filters() as mock_apply:
         mock_apply.return_value = SearchResult(
             estado="exito",
@@ -110,23 +115,32 @@ def test_aplicar_filtros_exito_con_ofertas_escribe_consulta_exitosa(
         )
         aplicar_filtros(mock_context)
 
-    _mock_evento_busqueda.assert_called_once()
-    args = _mock_evento_busqueda.call_args.kwargs
-    assert args["codigo"] == "consulta_exitosa"
+    codigos = [c.kwargs["codigo"] for c in _mock_evento_busqueda.call_args_list]
+    assert codigos.count("consulta_exitosa") == 1
+    assert all(codigo in ("tic_set_iniciado", "consulta_exitosa") for codigo in codigos)
+    consulta = next(
+        c for c in _mock_evento_busqueda.call_args_list if c.kwargs["codigo"] == "consulta_exitosa"
+    )
+    args = consulta.kwargs
     assert args["tipo"] == "suceso"
     assert args["indice_set"] == 0
     assert "set=0" in args["evidencia"]
     assert "total=10" in args["evidencia"]
 
 
-def test_aplicar_filtros_exito_sin_ofertas_no_escribe_evento(
+def test_aplicar_filtros_exito_sin_ofertas_solo_tic_de_narracion(
     mock_context: RunContext, _mock_evento_busqueda: MagicMock
 ) -> None:
-    """D30: éxito sin ofertas no emite `consulta_exitosa` (lo tipifica el registro)."""
+    """D30: éxito sin ofertas no emite `consulta_exitosa` (lo tipifica el registro).
+
+    Con Lote 2 la única escritura del nodo es el tic de narración del set
+    en marcha; no hay evento de resultado.
+    """
     with _adaptador_con_apply_filters(return_value=_resultado_ok(indice=0)):
         aplicar_filtros(mock_context)
 
-    _mock_evento_busqueda.assert_not_called()
+    codigos = {c.kwargs["codigo"] for c in _mock_evento_busqueda.call_args_list}
+    assert codigos == {"tic_set_iniciado"}
 
 
 def test_aplicar_filtros_success_no_results(mock_context: RunContext) -> None:

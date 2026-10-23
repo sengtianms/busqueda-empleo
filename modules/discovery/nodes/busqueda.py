@@ -18,9 +18,21 @@ from modules.discovery.navegacion import (
 )
 from modules.discovery.run_context import RunContext
 from shared.models import SearchResult
+from shared.narrador import narrar_set
 from shared.persistence import registrar_evento
 from shared.retry import ejecutar_con_reintento
 from shared.utilidades import acotar_evidencia
+
+
+def _tic_set_iniciado(contexto: RunContext, indice: int) -> None:
+    """Lote 2: tic de narración del set en marcha (excluido de métricas)."""
+    registrar_evento(
+        id_corrida=contexto.id_corrida,
+        tipo="suceso",
+        codigo="tic_set_iniciado",
+        evidencia=f"set={indice}",
+        indice_set=indice,
+    )
 
 
 @dataclass
@@ -84,6 +96,10 @@ def aplicar_filtros(contexto: RunContext) -> ResultadoBusqueda:
         return ResultadoBusqueda(estado="error", codigo="ERR-01", descripcion="Set ausente")
 
     contexto.set_corriente = set_actual
+
+    # Lote 2: tic de narración del set en marcha (consola manual + tablero).
+    _tic_set_iniciado(contexto, set_actual.indice)
+    narrar_set(set_actual.indice)
 
     # Paso 3: resiliencia del canal (D61) — renovación prevista, tramo con
     # reintento condicional clásico y resurección ante muerte del navegador.
