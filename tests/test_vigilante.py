@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -247,6 +248,75 @@ def test_silla_de_dueno_desconocido_no_se_toca(
 
     assert "Sin corridas abiertas" in mensaje
     assert consultar_bloqueo() is not None  # id anónimo: el vigía no se mete
+
+
+def test_pasada_solo_lee_eventos_de_corridas_abiertas(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for i in range(30):
+        _corrida(f"COR-H{i:02d}", "2026-10-22 10:00:00")
+        _evento(f"COR-H{i:02d}", "ingreso_exitoso", "2026-10-22 10:05:00")
+        _cerrar(f"COR-H{i:02d}", "2026-10-22 10:10:00")
+
+    _corrida("COR-VIVA", "2026-10-22 20:50:00")
+    _silla("COR-VIVA", "2026-10-22 20:50:05")
+    _evento("COR-VIVA", "tic_modulo_iniciado", "2026-10-22 20:59:30")
+
+    from shared.persistence import leer_eventos_de_corridas as real_eventos
+
+    consultados: list[list[str]] = []
+    real = real_eventos
+
+    def espia(ids: list[str]) -> list[dict[str, Any]]:
+        consultados.append(list(ids))
+        return real(ids)
+
+    monkeypatch.setattr(vigia, "leer_eventos_de_corridas", espia)
+    tablas: list[str] = []
+
+    def espia_tabla(tabla: str, filtros: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+        tablas.append(tabla)
+        raise AssertionError(f"lectura completa inesperada de {tabla}")
+
+    monkeypatch.setattr(vigia, "leer_tabla", espia_tabla, raising=False)
+    mensaje = _pasada(monkeypatch, tmp_path / "m.json", _AvisosGrabadora())
+
+    assert "viva" in mensaje
+    assert consultados == [["COR-VIVA"]]
+    assert tablas == []
+
+
+def test_pasada_sin_abiertas_no_consulta_sin_ids(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from shared.persistence import leer_eventos_de_corridas as real_eventos
+
+    consultados: list[list[str]] = []
+    real = real_eventos
+
+    def espia(ids: list[str]) -> list[dict[str, Any]]:
+        consultados.append(list(ids))
+        return real(ids)
+
+    monkeypatch.setattr(vigia, "leer_eventos_de_corridas", espia)
+    mensaje = _pasada(monkeypatch, tmp_path / "m.json", _AvisosGrabadora())
+
+    assert "Sin corridas abiertas" in mensaje
+    assert consultados == [[]]
+
+
+def test_pasada_con_base_ausente_no_crea_archivo(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from shared.persistence import change_path
+
+    ruta = tmp_path / "no_existe.db"
+    change_path(ruta)
+
+    mensaje = _pasada(monkeypatch, tmp_path / "m.json", _AvisosGrabadora())
+
+    assert "Base de datos no disponible" in mensaje
+    assert not ruta.exists()
 
 
 def test_aviso_una_vez_por_ofensa_y_vuelve_al_crecer(

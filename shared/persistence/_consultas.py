@@ -1,5 +1,6 @@
 """Internal: read-only query helpers."""
 
+from collections.abc import Iterable
 from typing import Any
 
 from ._conexion import _connection, _deserialize
@@ -27,6 +28,75 @@ def leer_tabla(
             cursor = conn.execute(sql, dict(filtros))
         else:
             cursor = conn.execute(f"SELECT * FROM {tabla}")
+        results: list[dict[str, Any]] = []
+        for f in cursor.fetchall():
+            r = _deserialize(f)
+            if r is not None:
+                results.append(r)
+        return results
+    finally:
+        conn.close()
+
+
+
+def leer_corridas_abiertas() -> list[dict[str, Any]]:
+    """Corridas sin cierre (`fecha_fin` ausente, vacia o 'N/A', D31).
+
+    Lectura acotada para los visores de operacion: el guardian solo actua
+    sobre filas abiertas, asi que no necesita recorrer la historia. Mismo
+    predicado que `_abiertas` en `scripts/estado_corrida.py`: si cambia uno,
+    cambiar el otro.
+    """
+    conn = _connection()
+    try:
+        cursor = conn.execute(
+            "SELECT * FROM corridas "
+            "WHERE COALESCE(fecha_fin, '') IN ('', 'N/A') "
+            "ORDER BY fecha_inicio ASC"
+        )
+        results: list[dict[str, Any]] = []
+        for f in cursor.fetchall():
+            r = _deserialize(f)
+            if r is not None:
+                results.append(r)
+        return results
+    finally:
+        conn.close()
+
+
+
+def leer_corrida(id_corrida: str) -> dict[str, Any] | None:
+    """Una corrida por su id (lectura puntual, sin recorrer la tabla).
+
+    `buscar_por_id` asume una columna `id`; `corridas` usa `id_corrida`, de
+    ahi esta lectura propia.
+    """
+    conn = _connection()
+    try:
+        cursor = conn.execute(
+            "SELECT * FROM corridas WHERE id_corrida = ?", (id_corrida,)
+        )
+        return _deserialize(cursor.fetchone())
+    finally:
+        conn.close()
+
+
+
+def leer_eventos_de_corridas(ids_corrida: Iterable[str]) -> list[dict[str, Any]]:
+    """Eventos de las corridas indicadas, en una sola consulta acotada.
+
+    Sin ids no consulta (devuelve vacio). Conserva el orden natural de la
+    tabla; los llamadores ordenan por marca temporal cuando lo necesitan.
+    """
+    ids = list(dict.fromkeys(str(i) for i in ids_corrida if str(i)))
+    if not ids:
+        return []
+    marcadores = ", ".join("?" for _ in ids)
+    conn = _connection()
+    try:
+        cursor = conn.execute(
+            f"SELECT * FROM eventos WHERE id_corrida IN ({marcadores})", ids
+        )
         results: list[dict[str, Any]] = []
         for f in cursor.fetchall():
             r = _deserialize(f)
@@ -231,5 +301,49 @@ def contar_narracion(id_corrida: str) -> int:
             (id_corrida, *CODIGOS_NARRACION),
         ).fetchone()
         return int(fila[0]) if fila is not None else 0
+    finally:
+        conn.close()
+
+
+
+def resumen_ofertas_por_estado() -> dict[str, int]:
+    """Conteo de ofertas por estado (una fila por estado, sin listar ofertas)."""
+    conn = _connection()
+    try:
+        cursor = conn.execute(
+            "SELECT estado, COUNT(*) FROM ofertas_descubiertas GROUP BY estado"
+        )
+        return {
+            str(fila[0]) if fila[0] is not None else "": int(fila[1])
+            for fila in cursor.fetchall()
+        }
+    finally:
+        conn.close()
+
+
+
+def ids_de_corrida_con_codigos(codigos: Iterable[str]) -> set[str]:
+    """Ids de corrida con al menos uno de esos codigos de evento.
+
+    Usa el indice por corrida (EXISTS por fila de `corridas`): el costo
+    depende del numero de corridas y de sus eventos, no de recorrer la
+    tabla de eventos completa. Sin codigos devuelve vacio.
+    """
+    limpios = tuple(dict.fromkeys(str(c) for c in codigos if str(c)))
+    if not limpios:
+        return set()
+    marcadores = ", ".join("?" for _ in limpios)
+    conn = _connection()
+    try:
+        cursor = conn.execute(
+            "SELECT c.id_corrida FROM corridas c "
+            "WHERE EXISTS ("
+            "SELECT 1 FROM eventos e "
+            "WHERE e.id_corrida = c.id_corrida "
+            f"AND e.codigo IN ({marcadores})"
+            ")",
+            limpios,
+        )
+        return {str(fila[0]) for fila in cursor.fetchall()}
     finally:
         conn.close()

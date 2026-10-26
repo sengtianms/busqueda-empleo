@@ -26,7 +26,9 @@ from modules.discovery.run_context import RunContext
 from shared.models import AuditoriaSesion, CaptureBatch, EstadoCaptura, Offer
 from shared.narrador import narrar_captura
 from shared.persistence import (
+    actualizar_fila,
     escribir_fila,
+    leer_tabla,
     registrar_evento,
     upsert_lote_ofertas,
 )
@@ -311,7 +313,7 @@ def _resultado_insostenible(contexto: RunContext) -> ResultadoCaptura:
 
 
 def _escribir_auditoria_sesion(contexto: RunContext, lote: CaptureBatch) -> None:
-    """Escribe la auditoría en la tabla `sesiones`; reintenta una vez."""
+    """Escribe una auditoría por (id_sesion, indice_set); reintenta una vez."""
     id_sesion = contexto.id_sesion or ""
     total_declarado = (
         contexto.search_result.total_declarado
@@ -319,8 +321,9 @@ def _escribir_auditoria_sesion(contexto: RunContext, lote: CaptureBatch) -> None
         else None
     )
     indice_set = lote.indice_set
+    # El id de la fila lo genera el escritor: usar el id de la sesión hacía
+    # que el segundo set chocara con la clave primaria (UNIQUE, D67).
     datos = {
-        "id": id_sesion,
         "id_sesion": id_sesion,
         "id_corrida": contexto.id_corrida,
         "fuente_id": (
@@ -338,7 +341,22 @@ def _escribir_auditoria_sesion(contexto: RunContext, lote: CaptureBatch) -> None
     for intento in range(1, intentos + 1):
         try:
             AuditoriaSesion.model_validate(datos)
-            escribir_fila("sesiones", datos)
+            filtros: dict[str, Any] = {
+                "id_sesion": id_sesion,
+                "fuente_id": datos["fuente_id"],
+            }
+            if indice_set is not None:
+                filtros["indice_set"] = indice_set
+            existentes = leer_tabla("sesiones", filtros)
+            if indice_set is None:
+                existentes = [
+                    fila for fila in existentes if fila["indice_set"] is None
+                ]
+            if existentes:
+                if not actualizar_fila("sesiones", existentes[0]["id"], datos):
+                    raise RuntimeError("La fila de auditoría ya no existe")
+            else:
+                escribir_fila("sesiones", datos)
             return
         except Exception as exc:
             logger.error(

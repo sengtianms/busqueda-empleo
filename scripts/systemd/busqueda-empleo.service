@@ -3,7 +3,13 @@ Description=Job search scheduled run (discovery > preparation > initial evaluati
 OnFailure=busqueda-empleo-aviso-fallo.service
 
 [Service]
-Type=oneshot
+# Type=exec (D65): con Type=oneshot la unidad figura 'activating' durante toda
+# la tanda y una parada ordenada del operador la marca como fallida (SIGTERM),
+# disparando el aviso de emergencia OnFailure sin que haya muerte real. Con
+# exec queda 'active' mientras corre y una parada ordenada termina 'inactive'.
+Type=exec
 WorkingDirectory=%h/Proyectos/Automatización búsqueda de empleo
 ExecStart=/bin/bash "%h/Proyectos/Automatización búsqueda de empleo/scripts/corrida_programada.sh"
-TimeoutStartSec=2700
+# Mismo tope de 45 min que el antiguo TimeoutStartSec (con exec el arranque es
+# inmediato y ese tope ya no aplica): una corrida colgada muere igual.
+RuntimeMaxSec=2700

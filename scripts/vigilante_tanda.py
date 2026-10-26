@@ -40,8 +40,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.estado_corrida import (
     _VENTANA_TANDA_DEFECTO,
-    _abiertas,
     _agrupar_por_corrida,
+    _base_pendiente,
     _ordenar_eventos,
     _parsear,
     _separar_abiertas,
@@ -52,7 +52,9 @@ from shared.persistence import (
     actualizar_corrida,
     consultar_bloqueo,
     escribir_evento_seguro,
-    leer_tabla,
+    leer_corrida,
+    leer_corridas_abiertas,
+    leer_eventos_de_corridas,
     liberar_bloqueo,
     umbral_obsolescencia_minutos,
 )
@@ -64,19 +66,34 @@ _MARCADOR_DEFECTO = Path("logs") / "vigilante_tanda.json"
 
 
 def _captura() -> dict[str, Any] | None:
-    """Lectura de la traza; None si la base no está lista (nada que hacer)."""
+    """Lectura acotada de la traza; None si la base no está lista.
+
+    Solo lo que una pasada necesita: las corridas abiertas, la silla y, si
+    el dueño de la silla ya cerró su fila (silla heredada), esa única fila.
+    Los eventos se leen solo de las corridas abiertas: la historia cerrada
+    no interviene, salvo la fila del dueño de una silla heredada (para
+    liberarla).
+    """
+    if _base_pendiente() is not None:
+        return None
     try:
-        corridas = leer_tabla("corridas")
-        eventos = _ordenar_eventos(leer_tabla("eventos"))
         silla = consultar_bloqueo()
+        abiertas = leer_corridas_abiertas()
+        id_silla = _texto(silla, "id_corrida") if silla else ""
+        ids_abiertas = [_texto(f, "id_corrida") for f in abiertas]
+        corridas = list(abiertas)
+        if id_silla and id_silla not in set(ids_abiertas):
+            dueno = leer_corrida(id_silla)
+            if dueno is not None:
+                corridas.append(dueno)
+        eventos = _ordenar_eventos(leer_eventos_de_corridas(ids_abiertas))
     except Exception:
         return None
-    id_silla = _texto(silla, "id_corrida") if silla else ""
     return {
         "corridas": corridas,
         "eventos": eventos,
         "grupos": _agrupar_por_corrida(eventos),
-        "abiertas": _abiertas(corridas),
+        "abiertas": abiertas,
         "silla": silla,
         "id_silla": id_silla,
     }

@@ -1726,6 +1726,138 @@ def test_leer_candidatas_descubiertas_excluye_otros_estados(
     assert [f["id"] for f in filas] == ["OFE-A"]
 
 
+def test_leer_corridas_abiertas_ignora_cerradas(temp_db_file: Path) -> None:
+    import sqlite3
+
+    from shared.persistence import (
+        actualizar_corrida,
+        leer_corridas_abiertas,
+        registrar_corrida,
+    )
+
+    for id_corrida, inicio in (
+        ("COR-AB1", "2026-10-24 10:00:00"),
+        ("COR-AB2", "2026-10-24 10:05:00"),
+        ("COR-CE1", "2026-10-24 09:00:00"),
+        ("COR-NU1", "2026-10-24 10:10:00"),
+        ("COR-NA1", "2026-10-24 10:15:00"),
+    ):
+        registrar_corrida(
+            {"id_corrida": id_corrida, "fecha_inicio": inicio, "estado": "en_ejecucion"}
+        )
+    actualizar_corrida(
+        "COR-CE1",
+        {"estado": "completada", "fecha_fin": "2026-10-24 09:30:00"},
+    )
+    # Las otras dos ramas del predicado (D31) no se pueden escribir con la API
+    # validada: se fijan con SQL directo sobre la base temporal.
+    con = sqlite3.connect(str(temp_db_file))
+    con.execute("UPDATE corridas SET fecha_fin = NULL WHERE id_corrida = 'COR-NU1'")
+    con.execute("UPDATE corridas SET fecha_fin = 'N/A' WHERE id_corrida = 'COR-NA1'")
+    con.commit()
+    con.close()
+
+    abiertas = leer_corridas_abiertas()
+
+    assert [c["id_corrida"] for c in abiertas] == [
+        "COR-AB1",
+        "COR-AB2",
+        "COR-NU1",
+        "COR-NA1",
+    ]
+
+
+def test_leer_corrida_puntual(temp_db_file: Path) -> None:
+    from shared.persistence import leer_corrida, registrar_corrida
+
+    registrar_corrida(
+        {
+            "id_corrida": "COR-P1",
+            "fecha_inicio": "2026-10-24 10:00:00",
+            "estado": "en_ejecucion",
+        }
+    )
+
+    fila = leer_corrida("COR-P1")
+    assert fila is not None and fila["estado"] == "en_ejecucion"
+    assert leer_corrida("COR-NO-EXISTE") is None
+
+
+def test_leer_eventos_de_corridas_acota_por_ids(temp_db_file: Path) -> None:
+    from shared.persistence import escribir_evento, leer_eventos_de_corridas
+
+    for id_corrida in ("COR-E1", "COR-E2"):
+        escribir_evento(
+            {
+                "id_corrida": id_corrida,
+                "tipo": "suceso",
+                "codigo": "ingreso_exitoso",
+                "evidencia": "sesion=LK-1",
+                "marca_temporal": "2026-10-24 10:00:00",
+            }
+        )
+
+    solo_e1 = leer_eventos_de_corridas(["COR-E1"])
+    assert [e["id_corrida"] for e in solo_e1] == ["COR-E1"]
+    assert leer_eventos_de_corridas([]) == []
+    assert len(leer_eventos_de_corridas(["COR-E1", "COR-E1"])) == 1
+
+
+def test_resumen_ofertas_por_estado(temp_db_file: Path) -> None:
+    from shared.persistence import escribir_fila, resumen_ofertas_por_estado
+
+    for numero, estado in enumerate(("descubierta", "descubierta", "preparada"), 1):
+        escribir_fila(
+            "ofertas_descubiertas",
+            {
+                "id": f"OFE-{numero:04d}",
+                "enlace": f"https://example.test/{numero}",
+                "estado": estado,
+                "id_externo": f"ext-{numero}",
+            },
+        )
+
+    assert resumen_ofertas_por_estado() == {"descubierta": 2, "preparada": 1}
+
+
+def test_ids_de_corrida_con_codigos(temp_db_file: Path) -> None:
+    from shared.persistence import (
+        escribir_evento,
+        ids_de_corrida_con_codigos,
+        registrar_corrida,
+    )
+
+    for id_corrida in ("COR-S1", "COR-S2"):
+        registrar_corrida(
+            {
+                "id_corrida": id_corrida,
+                "fecha_inicio": "2026-10-24 10:00:00",
+                "estado": "en_ejecucion",
+            }
+        )
+    escribir_evento(
+        {
+            "id_corrida": "COR-S1",
+            "tipo": "suceso",
+            "codigo": "tic_modulo_iniciado",
+            "evidencia": "modulo=descubrimiento",
+            "marca_temporal": "2026-10-24 10:00:00",
+        }
+    )
+    escribir_evento(
+        {
+            "id_corrida": "COR-S2",
+            "tipo": "suceso",
+            "codigo": "modulo_ejecutado",
+            "evidencia": "modulo=descubrimiento",
+            "marca_temporal": "2026-10-24 10:00:00",
+        }
+    )
+
+    assert ids_de_corrida_con_codigos(["tic_modulo_iniciado"]) == {"COR-S1"}
+    assert ids_de_corrida_con_codigos([]) == set()
+
+
 def test_inicializar_si_ausente_d42(temp_db_file: Path) -> None:
     from shared.persistence import inicializar_si_ausente
 

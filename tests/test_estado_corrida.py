@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -73,32 +74,44 @@ def _oferta(id_oferta: str, estado: str, id_corrida: str) -> None:
 
 
 def _tanda_con_figurado() -> None:
-    """Tanda + módulo descubrimiento abiertos con 5 de 18 sets terminados."""
+    """Tanda + módulo descubrimiento con 5 de 18 sets COMPLETADOS.
+
+    Forma real de la traza (verificada en la tanda COR-0002 del 2026-10-23):
+    la búsqueda carga en segundos y la captura del set es el grueso del
+    tiempo; cada set deja su marca de captura y de registro.
+    """
     _corrida("COR-9000", "2026-10-22 17:51:03")
     _corrida("COR-9001", "2026-10-22 17:51:10")
     _silla("COR-9001", "2026-10-22 17:51:10")
     _evento("COR-9001", "ingreso_exitoso", "sesion=LK-1", "2026-10-22 17:52:00")
-    marcas_sets = ("17:52:30", "17:54:00", "17:54:30", "17:55:00", "17:55:30")
-    for seteado, marca in enumerate(marcas_sets):
+    arranques = ("17:52:20", "17:53:18", "17:54:16", "17:55:14", "17:56:12")
+    cierres = ("17:52:58", "17:53:56", "17:54:54", "17:55:52", "17:56:50")
+    paginas = (3, 4, 5, 6, 12)
+    ofertas = (40, 51, 47, 58, 61)
+    duraciones = (30, 32, 34, 36, 38)
+    for seteado, (arranque, cierre) in enumerate(zip(arranques, cierres)):
         _evento(
             "COR-9001",
             "consulta_exitosa",
             f"set={seteado} | total={40 + seteado}",
-            f"2026-10-22 {marca}",
+            f"2026-10-22 {arranque}",
             indice_set=seteado,
         )
-    _evento(
-        "COR-9001",
-        "captura_completada",
-        "páginas=12 | ofertas=61 | duracion_s=214",
-        "2026-10-22 17:55:40",
-    )
-    _evento(
-        "COR-9001",
-        "ofertas_registradas",
-        "ofertas registradas: 61 | total: 61",
-        "2026-10-22 17:55:45",
-    )
+        _evento(
+            "COR-9001",
+            "captura_completada",
+            f"páginas={paginas[seteado]} | ofertas={ofertas[seteado]}"
+            f" | duracion_s={duraciones[seteado]}",
+            f"2026-10-22 {cierre}",
+            indice_set=seteado,
+        )
+        _evento(
+            "COR-9001",
+            "ofertas_registradas",
+            f"ofertas registradas: {ofertas[seteado]} | total: {ofertas[seteado]}",
+            f"2026-10-22 {cierre}",
+            indice_set=seteado,
+        )
 
 
 def test_analizador_de_evidencia_acepta_ambos_separadores() -> None:
@@ -146,11 +159,181 @@ def test_tanda_en_marcha_con_modulo_descubrimiento() -> None:
     assert "Módulo en curso: descubrimiento · COR-9001 (desde 17:51)" in unica
     assert "búsquedas de filtros terminadas: 5 de 18" in unica
     assert "última búsqueda: set 4 (total declarado: 44)" in unica
-    assert "12 páginas | 61 ofertas | duración 214s" in unica
+    assert "12 páginas | 61 ofertas | duración 38s" in unica
     assert "61 registradas de 61" in unica
     assert "Última señal de vida" in unica
-    # 5 sets en 4m 20s -> 52s/set; quedan 13 sets -> ~11m 16s.
-    assert "quedan ~11m 16s (ritmo de esta corrida: 52s por unidad)" in unica
+    # Ventana de 5m 50s (5m 40s de sets + 10 s hasta la consulta) -> 1m 10s/set;
+    # quedan 13 sets -> ~15m 10s.
+    assert "quedan ~15m 10s (ritmo de esta corrida: 1m 10s por unidad)" in unica
+
+
+def test_sin_estimacion_mientras_no_haya_set_completado() -> None:
+    """Primer set en captura: no hay ritmo medible y antes se inventaba uno.
+
+    La tanda real del 2026-10-23 anunciaba ~2 minutos cuando la busqueda
+    tardaba ~19: el ritmo se media con la carga de la busqueda, no con la
+    captura. Sin un set completo la respuesta honesta es no estimar.
+    """
+    _corrida("COR-9200", "2026-10-22 17:51:03")
+    _corrida("COR-9201", "2026-10-22 17:51:10")
+    _silla("COR-9201", "2026-10-22 17:51:10")
+    _evento("COR-9201", "ingreso_exitoso", "sesion=LK-2", "2026-10-22 17:52:00")
+    _evento(
+        "COR-9201",
+        "consulta_exitosa",
+        "set=0 | total=99",
+        "2026-10-22 17:52:05",
+        indice_set=0,
+    )
+    _evento(
+        "COR-9201",
+        "tic_captura_pagina",
+        "set=0;pagina=3;acumuladas=100",
+        "2026-10-22 17:52:45",
+        indice_set=0,
+    )
+    lineas = componer_estado(referencia=REF, sets_total=18)
+    unica = " ".join(lineas)
+    assert "captura en marcha: página 3" in unica
+    assert "quedan ~" not in unica
+
+
+def test_ultima_tanda_no_se_confunde_con_el_ultimo_tramo() -> None:
+    """Caso real del 2026-10-23: la tanda y la evaluacion cerraron en el mismo
+    segundo y el tablero nombraba la etapa como si fuera la tanda."""
+    _corrida("COR-7000", "2026-10-22 16:32:37")
+    _cerrar(
+        "COR-7000",
+        {
+            "estado": "completada",
+            "fecha_fin": "2026-10-22 17:10:28",
+            "motivo_terminacion": "corrida_completada",
+            "total_errores": 0,
+        },
+    )
+    _evento(
+        "COR-7000",
+        "corrida_programada",
+        "descubrimiento=completada;preparacion=completada;evaluacion=completada",
+        "2026-10-22 17:10:28",
+    )
+    _corrida("COR-7008", "2026-10-22 17:00:26")
+    _cerrar(
+        "COR-7008",
+        {
+            "estado": "completada",
+            "fecha_fin": "2026-10-22 17:10:28",
+            "motivo_terminacion": "corrida_completada",
+            "total_aprobadas": 68,
+        },
+    )
+    _evento("COR-7008", "tic_modulo_iniciado", "modulo=evaluacion", "2026-10-22 17:00:27")
+    unica = " ".join(componer_estado(referencia=REF))
+    assert "última tanda: COR-7000" in unica
+    assert "último tramo: COR-7008 (evaluacion)" in unica
+
+
+def test_ultima_tanda_cortada_sin_resumen_se_reconoce_por_identidad() -> None:
+    """Una tanda cortada a la fuerza no alcanza a emitir su resumen; aun asi
+    es la tanda: lo que distingue un tramo es tener senales de modulo."""
+    _corrida("COR-7100", "2026-10-22 17:02:37")
+    _cerrar(
+        "COR-7100",
+        {
+            "estado": "abortada",
+            "fecha_fin": "2026-10-22 17:10:28",
+            "motivo_terminacion": "proceso_desaparecido",
+            "total_errores": 0,
+        },
+    )
+    _evento(
+        "COR-7100",
+        "proceso_desaparecido",
+        "proceso=desaparecido | cierre=orden_operador",
+        "2026-10-22 17:10:28",
+        tipo="error",
+    )
+    _corrida("COR-7101", "2026-10-22 17:02:49")
+    _cerrar(
+        "COR-7101",
+        {
+            "estado": "abortada",
+            "fecha_fin": "2026-10-22 17:10:28",
+            "motivo_terminacion": "proceso_desaparecido",
+            "total_errores": 0,
+        },
+    )
+    _evento("COR-7101", "tic_modulo_iniciado", "modulo=descubrimiento", "2026-10-22 17:02:50")
+    _evento(
+        "COR-7101",
+        "proceso_desaparecido",
+        "proceso=desaparecido | cierre=orden_operador",
+        "2026-10-22 17:10:28",
+        tipo="error",
+    )
+    unica = " ".join(componer_estado(referencia=REF))
+    assert "última tanda: COR-7100" in unica
+    assert "último tramo: COR-7101 (descubrimiento)" in unica
+
+
+def test_etapa_abortada_en_inicio_no_desplaza_a_la_tanda() -> None:
+    """Una etapa que aborta en INICIO no deja senales de modulo; a igual cierre
+    la tanda es la fila de id menor (se registra antes de lanzar cada etapa)."""
+    _corrida("COR-7400", "2026-10-22 17:02:49")
+    _cerrar(
+        "COR-7400",
+        {
+            "estado": "abortada",
+            "fecha_fin": "2026-10-22 17:10:28",
+            "motivo_terminacion": "proceso_desaparecido",
+            "total_errores": 0,
+        },
+    )
+    _evento(
+        "COR-7400",
+        "proceso_desaparecido",
+        "proceso=desaparecido | cierre=orden_operador",
+        "2026-10-22 17:10:28",
+        tipo="error",
+    )
+    _corrida("COR-7401", "2026-10-22 17:02:50")
+    _cerrar(
+        "COR-7401",
+        {
+            "estado": "abortada",
+            "fecha_fin": "2026-10-22 17:10:28",
+            "motivo_terminacion": "proceso_desaparecido",
+            "total_errores": 0,
+        },
+    )
+    _evento(
+        "COR-7401",
+        "proceso_desaparecido",
+        "proceso=desaparecido | cierre=orden_operador",
+        "2026-10-22 17:10:28",
+        tipo="error",
+    )
+    unica = " ".join(componer_estado(referencia=REF))
+    assert "última tanda: COR-7400" in unica
+    assert "último tramo: COR-7401 (módulo sin identificar)" in unica
+
+
+def test_sin_tanda_cerrada_informa_la_ultima_corrida() -> None:
+    """Sin ninguna tanda cerrada, el bloque informa una corrida, no una tanda."""
+    _corrida("COR-7300", "2026-10-22 16:00:00")
+    _cerrar(
+        "COR-7300",
+        {
+            "estado": "completada",
+            "fecha_fin": "2026-10-22 17:10:28",
+            "motivo_terminacion": "corrida_completada",
+            "total_errores": 0,
+        },
+    )
+    _evento("COR-7300", "tic_modulo_iniciado", "modulo=preparacion", "2026-10-22 16:00:01")
+    unica = " ".join(componer_estado(referencia=REF))
+    assert "última corrida: COR-7300" in unica
+    assert "última tanda" not in unica
 
 
 def test_tanda_en_modulo_preparacion() -> None:
@@ -381,6 +564,114 @@ def test_refugio_de_configuracion(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(visor, "load", rota)
     assert visor._nombres_config() == ["descubrimiento", "preparacion", "evaluacion"]
     assert visor._total_sets_config() is None
+
+
+def test_tablero_no_carga_la_tabla_de_ofertas(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import scripts.estado_corrida as tablero
+
+    _corrida("COR-9700", "2026-10-22 17:51:03")
+    _corrida("COR-9701", "2026-10-22 17:51:10")
+    _silla("COR-9701", "2026-10-22 17:51:10")
+    _evento("COR-9701", "ingreso_exitoso", "sesion=LK-1", "2026-10-22 17:52:00")
+
+    from shared.persistence import leer_tabla as real_leer_tabla
+
+    consultadas: list[str] = []
+    real = real_leer_tabla
+
+    def espia(tabla: str, filtros: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+        consultadas.append(tabla)
+        return real(tabla, filtros)
+
+    monkeypatch.setattr(tablero, "leer_tabla", espia)
+    lineas = componer_estado(referencia=REF, sets_total=18)
+
+    assert consultadas == ["corridas"]
+    assert "Módulo en curso: descubrimiento · COR-9701" in " ".join(lineas)
+
+
+def test_tablero_lee_solo_eventos_vivos_y_ultima_cerrada(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import scripts.estado_corrida as tablero
+
+    for i in range(25):
+        _corrida(f"COR-980{i:02d}", "2026-10-22 08:00:00")
+        _evento(f"COR-980{i:02d}", "ingreso_exitoso", "sesion=LK-1", "2026-10-22 08:05:00")
+        _cerrar(
+            f"COR-980{i:02d}",
+            {
+                "estado": "completada",
+                "fecha_fin": "2026-10-22 08:10:00",
+                "motivo_terminacion": "corrida_completada",
+            },
+        )
+    _corrida("COR-9900", "2026-10-22 17:51:03")
+    _corrida("COR-9901", "2026-10-22 17:51:10")
+    _silla("COR-9901", "2026-10-22 17:51:10")
+    _evento("COR-9901", "tic_modulo_iniciado", "modulo=descubrimiento", "2026-10-22 17:52:00")
+
+    from shared.persistence import leer_eventos_de_corridas as real_eventos
+
+    consultados: list[list[str]] = []
+    real = real_eventos
+
+    def espia(ids: list[str]) -> list[dict[str, Any]]:
+        consultados.append(list(ids))
+        return real(ids)
+
+    monkeypatch.setattr(tablero, "leer_eventos_de_corridas", espia)
+    lineas = componer_estado(referencia=REF, sets_total=18)
+
+    assert "Tanda: en marcha" in " ".join(lineas)
+    assert len(consultados) == 1
+    assert sorted(consultados[0]) == ["COR-98024", "COR-9900", "COR-9901"]
+
+
+def test_tablero_etiqueta_la_ultima_tanda_entre_mucho_historial() -> None:
+    for i in range(30):
+        _corrida(f"COR-991{i:02d}", f"2026-10-22 08:{i:02d}:00")
+        _evento(
+            f"COR-991{i:02d}",
+            "modulo_ejecutado",
+            "modulo=descubrimiento;estado=completada",
+            f"2026-10-22 08:{i:02d}:30",
+        )
+        _cerrar(
+            f"COR-991{i:02d}",
+            {
+                "estado": "completada",
+                "fecha_fin": f"2026-10-22 08:{i:02d}:40",
+                "motivo_terminacion": "corrida_completada",
+            },
+        )
+    _corrida("COR-9950", "2026-10-22 17:51:03")
+    _evento("COR-9950", "corrida_programada", "modulos=3", "2026-10-22 17:57:00")
+    _cerrar(
+        "COR-9950",
+        {
+            "estado": "completada",
+            "fecha_fin": "2026-10-22 17:57:00",
+            "motivo_terminacion": "corrida_completada",
+        },
+    )
+    _corrida("COR-9951", "2026-10-22 17:51:10")
+    _evento("COR-9951", "ingreso_exitoso", "sesion=LK-1", "2026-10-22 17:56:50")
+    _cerrar(
+        "COR-9951",
+        {
+            "estado": "completada",
+            "fecha_fin": "2026-10-22 17:57:00",
+            "motivo_terminacion": "corrida_completada",
+        },
+    )
+
+    unica = " ".join(componer_estado(referencia=REF))
+
+    assert "última tanda: COR-9950" in unica
+    assert "último tramo: COR-9951 (descubrimiento)" in unica
 
 
 def test_modulo_ciego_de_lote_con_nombre_previsto() -> None:

@@ -43,16 +43,31 @@ from ._consultas import (
     contar_narracion as contar_narracion,
 )
 from ._consultas import (
+    ids_de_corrida_con_codigos as ids_de_corrida_con_codigos,
+)
+from ._consultas import (
     leer_candidatas_descubiertas as leer_candidatas_descubiertas,
 )
 from ._consultas import (
     leer_candidatas_preparadas as leer_candidatas_preparadas,
 )
 from ._consultas import (
+    leer_corrida as leer_corrida,
+)
+from ._consultas import (
+    leer_corridas_abiertas as leer_corridas_abiertas,
+)
+from ._consultas import (
+    leer_eventos_de_corridas as leer_eventos_de_corridas,
+)
+from ._consultas import (
     leer_tabla as leer_tabla,
 )
 from ._consultas import (
     leer_ultima_corrida_cerrada as leer_ultima_corrida_cerrada,
+)
+from ._consultas import (
+    resumen_ofertas_por_estado as resumen_ofertas_por_estado,
 )
 from ._escrituras import (  # noqa: F401
     _generar_id_en as _generar_id_en,

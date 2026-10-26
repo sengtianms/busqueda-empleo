@@ -45,6 +45,18 @@ _PATRONES_PROCESOS = ("modules.orchestrator", "corrida_programada.sh")
 _PATRON_NAVEGADOR = "ms-playwright"
 _GRACIA_SEGUNDOS = 3.0
 
+# Estados en los que una unidad cuenta como viva. La unidad de tanda corre
+# como Type=exec (D65) y figura 'active' durante toda la corrida; 'activating'
+# y 'reloading' se toleran por robustez (arranque o recarga). Mirar solo
+# 'active' dejaba la parada ordenada sin ejecutarse nunca con el antiguo
+# Type=oneshot, que permanecía 'activating' (fallo observado el 2026-10-23).
+_ESTADOS_VIVOS = frozenset({"active", "activating", "reloading"})
+# La parada ordenada pasa por 'deactivating' antes de llegar a su estado final.
+_ESTADOS_PARANDO = frozenset({"deactivating"})
+_ESTADOS_NO_TERMINADOS = _ESTADOS_VIVOS | _ESTADOS_PARANDO
+_ESPERA_PARADA_SEGUNDOS = 10.0
+_PASO_ESPERA_SEGUNDOS = 0.25
+
 
 def _ctl(*argumentos: str) -> subprocess.CompletedProcess[str]:
     """Ejecuta una orden del programador del sistema; nunca interrumpe."""
@@ -74,7 +86,24 @@ def _habilitado(unidad: str) -> bool:
 
 
 def _en_marcha(unidad: str) -> bool:
-    return _estado_unidad(unidad, "is-active") == "active"
+    """Viva = en marcha, arrancando o recargando (ver `_ESTADOS_VIVOS`)."""
+    return _estado_unidad(unidad, "is-active") in _ESTADOS_VIVOS
+
+
+def _esperar_parada(unidad: str, tope: float = _ESPERA_PARADA_SEGUNDOS) -> bool:
+    """Espera acotada a que la unidad deje de estar viva; False si no cedió.
+
+    La parada ordenada del programador es la vía principal: el navegador y sus
+    hijos mueren con la jaula de la unidad. Un navegador remolón no puede
+    colgar el mando: si no cede en el tope, el barrido forzoso completa la
+    orden (la unidad sigue su curso en segundo plano).
+    """
+    limite = time.monotonic() + tope
+    while _estado_unidad(unidad, "is-active") in _ESTADOS_NO_TERMINADOS:
+        if time.monotonic() >= limite:
+            return False
+        _pausa(_PASO_ESPERA_SEGUNDOS)
+    return True
 
 
 def _instalar_salud() -> str:
@@ -247,10 +276,16 @@ def detener(*, gracia: float = _GRACIA_SEGUNDOS) -> str:
     mensajes: list[str] = []
     actuo = False
     estado_servicio = _estado_unidad(_UNIT_TANDA, "is-active")
-    if estado_servicio == "active":
+    if estado_servicio in _ESTADOS_VIVOS:
         _ctl("stop", _UNIT_TANDA)
         actuo = True
-        mensajes.append("Tanda programada detenida por el programador.")
+        if _esperar_parada(_UNIT_TANDA):
+            mensajes.append("Tanda programada detenida por el programador.")
+        else:
+            mensajes.append(
+                "La tanda programada no cedió a la parada ordenada: "
+                "se completa con el barrido forzoso."
+            )
     elif estado_servicio == "failed":
         _ctl("stop", _UNIT_TANDA)
         _ctl("reset-failed", _UNIT_TANDA)
@@ -321,6 +356,7 @@ def limpiar(*, gracia: float = _GRACIA_SEGUNDOS) -> str:
     actuo = False
     if _en_marcha(_UNIT_TANDA):
         _ctl("stop", _UNIT_TANDA)
+        _esperar_parada(_UNIT_TANDA)
         actuo = True
         mensajes.append("Tanda programada detenida por el programador.")
     elif _estado_unidad(_UNIT_TANDA, "is-active") == "failed":

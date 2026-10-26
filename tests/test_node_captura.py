@@ -6,12 +6,14 @@ import pytest
 
 from modules.discovery.adapters.linkedin import FlowError
 from modules.discovery.nodes.captura import (
+    _escribir_auditoria_sesion,
     capturar_ofertas,
     quedan_sets_por_aplicar,
     registrar_ofertas,
 )
 from modules.discovery.run_context import RunContext
 from shared.models import CaptureBatch, EstadoCaptura, Offer, SetFiltros
+from shared.persistence import leer_tabla
 
 
 def _run_context(sets: int = 1) -> RunContext:
@@ -198,10 +200,62 @@ def test_captura_auditoria_sesion_escrita(
     mock_write_row.assert_called_once()
     args = mock_write_row.call_args.args
     assert args[0] == "sesiones"
-    assert args[1]["id"] == "SES-1"
+    assert "id" not in args[1]
     assert args[1]["id_sesion"] == "SES-1"
     assert args[1]["conteo"] == 1
     assert args[1]["estado"] == "completa"
+
+
+def test_auditoria_sesion_una_fila_por_set(contexto: RunContext) -> None:
+    contexto.id_sesion = "SES-1"
+
+    for indice in (0, 1):
+        _escribir_auditoria_sesion(
+            contexto,
+            CaptureBatch(
+                ofertas=[_oferta()],
+                id_corrida=contexto.id_corrida,
+                fuente_id="LI-01",
+                id_sesion="SES-1",
+                indice_set=indice,
+            ),
+        )
+
+    filas = leer_tabla("sesiones", {"id_sesion": "SES-1"})
+
+    assert len(filas) == 2
+    assert sorted(fila["indice_set"] for fila in filas) == [0, 1]
+    assert {fila["id_sesion"] for fila in filas} == {"SES-1"}
+    assert len({fila["id"] for fila in filas}) == 2
+    assert all(fila["id"].startswith("SES-") for fila in filas)
+    assert all(fila["id"] != "SES-1" for fila in filas)
+
+
+def test_auditoria_sesion_reentrada_no_duplica(contexto: RunContext) -> None:
+    contexto.id_sesion = "SES-1"
+    lote_1 = CaptureBatch(
+        ofertas=[_oferta()],
+        id_corrida=contexto.id_corrida,
+        fuente_id="LI-01",
+        id_sesion="SES-1",
+        indice_set=0,
+    )
+    lote_2 = CaptureBatch(
+        ofertas=[_oferta(), _oferta()],
+        id_corrida=contexto.id_corrida,
+        fuente_id="LI-01",
+        id_sesion="SES-1",
+        indice_set=0,
+    )
+
+    _escribir_auditoria_sesion(contexto, lote_1)
+    _escribir_auditoria_sesion(contexto, lote_2)
+
+    filas = leer_tabla("sesiones", {"id_sesion": "SES-1"})
+
+    assert len(filas) == 1
+    assert filas[0]["indice_set"] == 0
+    assert filas[0]["conteo"] == 2
 
 
 def test_captura_auditoria_falla_no_aborta(

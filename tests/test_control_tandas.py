@@ -33,6 +33,10 @@ class _SistemaGrabadora:
 
     def __call__(self, *argumentos: str) -> subprocess.CompletedProcess[str]:
         self.ordenes.append(argumentos)
+        if argumentos[0] == "stop" and len(argumentos) > 1:
+            # Comportamiento real del programador: tras una parada la unidad
+            # deja de estar viva (y no queda marcada como fallida).
+            self.estados[f"is-active {argumentos[1]}"] = "inactive"
         texto = self.estados.get(" ".join(argumentos), "")
         if argumentos[0] == "list-timers":
             cuerpo = (
@@ -221,6 +225,39 @@ def test_detener_corta_el_servicio_programado(monkeypatch: pytest.MonkeyPatch) -
     assert "Tanda programada detenida por el programador." in salida
     assert "nada que cerrar" in salida
     assert avisos.cuerpos
+
+
+def test_detener_para_la_tanda_que_esta_arrancando(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Una unidad en 'arrancando' tambien se para por la via ordenada.
+
+    El caso real que lo destapo (2026-10-23) fue el antiguo Type=oneshot, que
+    figura 'activating' durante TODA la tanda: mirando solo 'active', la
+    parada ordenada nunca se ejecutaba y el mando caia al corte por nombre,
+    dejando la unidad 'failed' y el aviso critico falso de unidad muerta.
+    El tipo se corrigio a Type=exec (D65); esta prueba mantiene la tolerancia.
+    """
+    sistema = _SistemaGrabadora({f"is-active {_UNIT_TANDA}": "activating"})
+    avisos, cortes = _instalar(monkeypatch, sistema)
+    _procesos_inertes(monkeypatch)
+    salida = control.detener(gracia=0.1)
+    assert sistema.contiene("stop", _UNIT_TANDA)
+    assert "Tanda programada detenida por el programador." in salida
+    assert "barrido forzoso" not in salida
+    assert "manual" not in salida
+    assert cortes.registros == []
+    assert not sistema.contiene("reset-failed", _UNIT_TANDA)
+    assert sistema.estados[f"is-active {_UNIT_TANDA}"] == "inactive"
+    assert avisos.cuerpos
+
+
+def test_esperar_parada_no_cuelga_si_la_unidad_no_cede(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Una unidad que no termina ('deactivating' eterno) agota el tope y el
+    mando completa la orden con el barrido forzoso."""
+    sistema = _SistemaGrabadora({f"is-active {_UNIT_TANDA}": "deactivating"})
+    _instalar(monkeypatch, sistema)
+    assert control._esperar_parada(_UNIT_TANDA, tope=0.0) is False
 
 
 def test_detener_corta_procesos_manuales_con_fuerza_si_resisten(

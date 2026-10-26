@@ -7,7 +7,7 @@ Uso:
 Sin `--seguir` imprime una foto del instante; con `--seguir` el tablero se
 refresca cada pocos segundos (sirve para una tanda automatica desde otra
 terminal o para una manual desde una segunda). Nunca escribe: solo lee la
-traza oficial (corridas, eventos, silla y ofertas).
+traza oficial (corridas, eventos, silla y conteos de ofertas).
 
 Muestra: tanda en curso y su modulo; en que parte va el modulo (sets de
 busqueda del descubrimiento con su captura y registro, universos de
@@ -22,7 +22,7 @@ from __future__ import annotations
 import argparse
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -33,12 +33,19 @@ from shared.persistence import (
     _db_path,
     change_path,
     consultar_bloqueo,
+    ids_de_corrida_con_codigos,
+    leer_eventos_de_corridas,
     leer_tabla,
     reset_path,
+    resumen_ofertas_por_estado,
 )
 from shared.utilidades import FORMATO_TIMESTAMP, numero_secuencial_id
 
 CODIGOS_TANDA = frozenset({"modulo_ejecutado", "modulo_fallido", "corrida_programada"})
+
+# Un set de busqueda esta completo cuando dejo su captura o su registro; la
+# union de ambos codigos, por indice de set, es la unidad de ritmo.
+_CODIGOS_SET_COMPLETO = ("captura_completada", "ofertas_registradas")
 
 # Codigos propios de cada modulo: nombran una corrida abierta de un modulo
 # cuando su fila todavia no fue anunciada por el resumen de la tanda.
@@ -66,12 +73,19 @@ FAMILIAS_CODIGOS: dict[str, frozenset[str]] = {
     ),
 }
 
+# Señales que identifican una corrida de módulo para la regla de identidad
+# tanda/tramo: el tic de arranque más los códigos propios de cada familia.
+CODIGOS_MODULO = frozenset({"tic_modulo_iniciado"}).union(*FAMILIAS_CODIGOS.values())
+
 MODULOS_UNIVERSO = frozenset({"preparacion", "evaluacion"})
 
 _TOPE_ERRORES = 8
 _TOPE_EVIDENCIA = 180
 _UMBRAL_CONGELADA_DEFECTO = 600
 _VENTANA_TANDA_DEFECTO = 900
+# La estimacion avanza con el reloj, pero una corrida sin senales no la hace
+# crecer sin limite: la ventana se detiene en el umbral de congelacion.
+_TOPE_VENTANA_SEGUNDOS = _UMBRAL_CONGELADA_DEFECTO
 
 
 def _analizar_evidencia(texto: str) -> dict[str, str]:
@@ -297,14 +311,16 @@ def _ultimo_evento(eventos: list[dict[str, Any]], codigo: str) -> dict[str, Any]
     return candidatos[-1] if candidatos else None
 
 
-def _conteo_estados(ofertas: list[dict[str, Any]], estado: str) -> int:
-    return sum(1 for o in ofertas if str(o.get("estado")) == estado)
+def _conteo_estados(conteos: dict[str, int], estado: str) -> int:
+    """Cantidad de ofertas en un estado (resumen pedido a la base)."""
+    return int(conteos.get(estado, 0))
 
 
 def _bloque_descubrimiento(
     fila: dict[str, Any] | None,
     eventos: list[dict[str, Any]],
     sets_total: int | None,
+    instante: datetime | None = None,
 ) -> list[str]:
     """Progreso del modulo de descubrimiento a partir de sus eventos."""
     lineas: list[str] = []
@@ -356,9 +372,23 @@ def _bloque_descubrimiento(
     renovaciones = sum(1 for e in eventos if str(e.get("codigo")) == "navegador_renovado")
     if renovaciones:
         lineas.append(f"   · renovaciones preventivas del canal: {renovaciones}")
-    resto_de_sets = (sets_total - hechos) if sets_total and sets_total > hechos else 0
+    # El ritmo se mide con sets COMPLETADOS (con captura o registro hechos), no
+    # con busquedas cargadas: la captura es el grueso del tiempo y la busqueda
+    # en curso aun no termino. Sin ningun set completo no hay estimacion honesta.
+    completados = {
+        str(e.get("indice_set"))
+        for e in eventos
+        if str(e.get("codigo")) in _CODIGOS_SET_COMPLETO
+        and str(e.get("indice_set", "")).isdigit()
+    }
+    resto_de_sets = (sets_total - len(completados)) if sets_total else 0
     linea_estimacion = _estimacion_linea(
-        fila, eventos, resto_de_sets, ("consulta_exitosa",), "indice_set"
+        fila,
+        eventos,
+        resto_de_sets,
+        _CODIGOS_SET_COMPLETO,
+        "indice_set",
+        instante,
     )
     if linea_estimacion:
         lineas.append(linea_estimacion)
@@ -371,8 +401,17 @@ def _estimacion_linea(
     restantes: int,
     codigos_unidad: tuple[str, ...],
     clave_unidad: str = "id_oferta",
+    instante: datetime | None = None,
 ) -> str | None:
-    """Estimacion con el ritmo real de esta misma corrida (unidades hechas)."""
+    """Estimacion con el ritmo real de esta misma corrida (unidades hechas).
+
+    La ventana de medicion termina en el instante de la consulta (no en la
+    ultima marca escrita): si una unidad tarda 80 s, su captura cuenta. La
+    ventana nunca retrocede por detras de la ultima marca, para que un reloj
+    de referencia anterior a la traza (pruebas) no produzca cifras absurdas,
+    y se detiene en el umbral de congelacion: una corrida parada no hace
+    crecer la estimacion.
+    """
     if fila is None or restantes <= 0:
         return None
     inicio = _parsear(_texto(fila, "fecha_inicio"))
@@ -380,16 +419,22 @@ def _estimacion_linea(
         return None
     unidades = [e for e in eventos if str(e.get("codigo")) in codigos_unidad]
     ids = {
-        str(e.get(clave_unidad))
+        str(e[clave_unidad])
         for e in unidades
-        if str(e.get(clave_unidad)) not in ("", "N/A")
+        if e.get(clave_unidad) is not None
+        and str(e.get(clave_unidad)).strip() not in ("", "N/A")
     }
     if not ids:
         return None
     ultima = _parsear(_texto(unidades[-1], "marca_temporal"))
     if ultima is None or ultima < inicio:
         return None
-    ritmo = (ultima - inicio).total_seconds() / len(ids)
+    fin = ultima
+    if instante is not None and instante > ultima:
+        # La ventana avanza con el reloj, pero se detiene en el umbral de
+        # congelacion: una corrida parada no hace crecer la estimacion.
+        fin = min(instante, ultima + timedelta(seconds=_TOPE_VENTANA_SEGUNDOS))
+    ritmo = (fin - inicio).total_seconds() / len(ids)
     return (
         f"   · quedan ~{_duracion_compacta(restantes * ritmo)}"
         f" (ritmo de esta corrida: {_duracion_compacta(ritmo)} por unidad)"
@@ -400,34 +445,41 @@ def _bloque_universo(
     nombre: str,
     fila: dict[str, Any] | None,
     eventos: list[dict[str, Any]],
-    ofertas: list[dict[str, Any]],
+    conteos: dict[str, int],
+    instante: datetime | None = None,
 ) -> list[str]:
     """Progreso por universos de candidatas de preparacion o evaluacion."""
     if nombre == "preparacion":
         preparadas = len(_distintos(eventos, ("oferta_preparada",)))
         duplicadas = len(_distintos(eventos, ("oferta_duplicada",)))
         caidas = len(_distintos(eventos, ("preparacion_fallida",)))
-        en_cola = _conteo_estados(ofertas, "descubierta")
+        en_cola = _conteo_estados(conteos, "descubierta")
         unidades = f"   · preparadas {preparadas} · duplicadas {duplicadas}"
         if caidas:
             unidades += f" · con reintento pendiente {caidas}"
         unidades += f" · en cola: {en_cola}"
         lineas = [unidades]
-        estimacion = _estimacion_linea(fila, eventos, en_cola, ("oferta_preparada",))
+        estimacion = _estimacion_linea(
+            fila, eventos, en_cola, ("oferta_preparada",), instante=instante
+        )
         if estimacion:
             lineas.append(estimacion)
         return lineas
     aprobadas = len(_distintos(eventos, ("oferta_aprobada",)))
     descartadas = len(_distintos(eventos, ("oferta_descartada",)))
     caidas = len(_distintos(eventos, ("evaluacion_fallida",)))
-    en_cola = _conteo_estados(ofertas, "preparada")
+    en_cola = _conteo_estados(conteos, "preparada")
     unidades = f"   · aprobadas {aprobadas} · descartadas {descartadas}"
     if caidas:
         unidades += f" · con reintento pendiente {caidas}"
     unidades += f" · en cola: {en_cola}"
     lineas = [unidades]
     estimacion = _estimacion_linea(
-        fila, eventos, en_cola, ("oferta_aprobada", "oferta_descartada")
+        fila,
+        eventos,
+        en_cola,
+        ("oferta_aprobada", "oferta_descartada"),
+        instante=instante,
     )
     if estimacion:
         lineas.append(estimacion)
@@ -468,31 +520,75 @@ def _errores(
     return ordenados[:tope]
 
 
-def _traza_final(
-    corridas: list[dict[str, Any]], grupos: dict[str, list[dict[str, Any]]]
-) -> list[str]:
-    """Bloque sin tanda: veredicto de la ultima cerrada."""
+def _linea_cierre(etiqueta: str, fila: dict[str, Any]) -> str:
+    """Linea de veredicto de una corrida cerrada (tanda o tramo)."""
+    return (
+        f"  {etiqueta}: {_texto(fila, 'id_corrida')}"
+        f" · cerró '{_texto(fila, 'estado')}'"
+        f" ({_texto(fila, 'motivo_terminacion') or 'sin motivo'})"
+        f" a las {_texto(fila, 'fecha_fin')[11:16]}"
+        f" · errores: {fila.get('total_errores', 0)}"
+    )
+
+
+def _orden_cierre(fila: dict[str, Any]) -> tuple[str, int]:
+    """Orden de cierre: marca temporal y, en empate, numero oficial (D53)."""
+    return (
+        _texto(fila, "fecha_fin"),
+        numero_secuencial_id(str(fila.get("id_corrida"))),
+    )
+
+
+def _ultima_cerrada(corridas: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """La corrida cerrada mas reciente; None si no hay ninguna."""
     cerradas = [c for c in corridas if _texto(c, "fecha_fin") not in ("", "N/A")]
-    if not cerradas:
+    return max(cerradas, key=_orden_cierre) if cerradas else None
+
+
+def _traza_final(
+    corridas: list[dict[str, Any]],
+    grupos: dict[str, list[dict[str, Any]]],
+    tramos: set[str],
+    ultima_cerrada: dict[str, Any] | None,
+) -> list[str]:
+    """Bloque sin tanda: veredicto de la ultima tanda cerrada y su ultimo tramo.
+
+    Regla de identidad: una corrida cerrada CON senales de modulo es un tramo;
+    sin ellas es la tanda (lleve o no su resumen del orquestador, porque una
+    tanda cortada a la fuerza se queda sin el), y a igual cierre gana el id
+    menor (la tanda se registra antes que sus modulos). `tramos` llega de la
+    consulta acotada de senales (mismo catalogo que `_nombre_por_familia`), de
+    modo que el tablero no necesita cargar el historial de eventos cerrado.
+    `ultima_cerrada` ya viene calculada por el llamador (`_ultima_cerrada`).
+    """
+    cerradas = [c for c in corridas if _texto(c, "fecha_fin") not in ("", "N/A")]
+    if not cerradas or ultima_cerrada is None:
         return ["Sin tanda en curso y sin corridas previas registradas."]
-    cerrada = max(
-        cerradas,
-        key=lambda c: (_texto(c, "fecha_fin"), numero_secuencial_id(str(c["id_corrida"]))),
-    )
-    es_tanda = (
-        _es_tanda(cerrada, grupos) or _texto(cerrada, "motivo_terminacion") == "corrida_completada"
-    )
-    etiqueta = "última tanda" if es_tanda else "última corrida"
-    return [
-        "Sin tanda en curso.",
-        (
-            f"  {etiqueta}: {_texto(cerrada, 'id_corrida')}"
-            f" · cerró '{_texto(cerrada, 'estado')}'"
-            f" ({_texto(cerrada, 'motivo_terminacion') or 'sin motivo'})"
-            f" a las {_texto(cerrada, 'fecha_fin')[11:16]}"
-            f" · errores: {cerrada.get('total_errores', 0)}"
-        ),
-    ]
+
+    def _orden_tanda(fila: dict[str, Any]) -> tuple[str, int]:
+        # A igual marca de cierre gana el id MENOR: la tanda registra su fila
+        # antes de lanzar cada modulo, asi que una etapa que aborto en INICIO
+        # (sin senales de modulo) no puede desplazarla.
+        return (
+            _texto(fila, "fecha_fin"),
+            -numero_secuencial_id(str(fila.get("id_corrida"))),
+        )
+
+    def _es_tramo(fila: dict[str, Any]) -> bool:
+        return _texto(fila, "id_corrida") in tramos
+
+    tandas = [c for c in cerradas if not _es_tramo(c)]
+    if not tandas:
+        return ["Sin tanda en curso.", _linea_cierre("última corrida", ultima_cerrada)]
+    tanda = max(tandas, key=_orden_tanda)
+    lineas = ["Sin tanda en curso.", _linea_cierre("última tanda", tanda)]
+    if _texto(tanda, "id_corrida") != _texto(ultima_cerrada, "id_corrida"):
+        nombre = _nombre_por_familia(grupos.get(_texto(ultima_cerrada, "id_corrida"), []))
+        lineas.append(
+            f"  último tramo: {_texto(ultima_cerrada, 'id_corrida')}"
+            f" ({nombre or 'módulo sin identificar'})"
+        )
+    return lineas
 
 
 def _base_pendiente() -> str | None:
@@ -527,13 +623,16 @@ def componer_estado(
         return bordes + [f"⚠ La base de datos no está lista ({retraso}); no hay nada que mirar."]
     try:
         corridas = leer_tabla("corridas")
-        eventos = _ordenar_eventos(leer_tabla("eventos"))
+        abiertas = _abiertas(corridas)
+        ultima_cerrada = _ultima_cerrada(corridas)
+        ids_eventos = [_texto(c, "id_corrida") for c in abiertas]
+        if ultima_cerrada is not None:
+            ids_eventos.append(_texto(ultima_cerrada, "id_corrida"))
+        eventos = _ordenar_eventos(leer_eventos_de_corridas(ids_eventos))
         grupos = _agrupar_por_corrida(eventos)
-        ofertas = leer_tabla("ofertas_descubiertas")
         silla = consultar_bloqueo()
     except Exception as exc:  # base vacía o sin tablas: panel legible, nunca crash
         return bordes + [f"⚠ La base de datos no está lista: {exc}"]
-    abiertas = _abiertas(corridas)
 
     id_silla = _texto(silla, "id_corrida") if silla else ""
     tanda, filas_modulo, ignoradas = _separar_abiertas(
@@ -548,7 +647,11 @@ def componer_estado(
                 for c in ciegas
             )
             return bordes + [f"Corrida(s) arrancando (todavía sin señales): {detalladas}"]
-        return bordes + _traza_final(corridas, grupos)
+        try:
+            tramos = ids_de_corrida_con_codigos(CODIGOS_MODULO)
+        except Exception as exc:  # base sin tablas: panel legible, nunca crash
+            return bordes + [f"⚠ La base de datos no está lista: {exc}"]
+        return bordes + _traza_final(corridas, grupos, tramos, ultima_cerrada)
 
     ids_vivos: list[str] = []
     if tanda is not None:
@@ -588,10 +691,18 @@ def componer_estado(
 
     if nombre_modulo == "descubrimiento":
         bordes.append("Progreso del módulo:")
-        bordes.extend(_bloque_descubrimiento(fila_modulo, eventos_modulo, sets_total))
+        bordes.extend(
+            _bloque_descubrimiento(fila_modulo, eventos_modulo, sets_total, instante=instante)
+        )
     elif nombre_modulo in MODULOS_UNIVERSO:
+        try:
+            conteos = resumen_ofertas_por_estado()
+        except Exception as exc:  # base sin tablas: panel legible, nunca crash
+            return bordes + [f"⚠ La base de datos no está lista: {exc}"]
         bordes.append("Progreso del módulo:")
-        bordes.extend(_bloque_universo(nombre_modulo, fila_modulo, eventos_modulo, ofertas))
+        bordes.extend(
+            _bloque_universo(nombre_modulo, fila_modulo, eventos_modulo, conteos, instante=instante)
+        )
 
     marca_latido = _texto(latidos[-1], "marca_temporal") if latidos else ""
     ultima = _parsear(marca_latido)
