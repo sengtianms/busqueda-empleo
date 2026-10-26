@@ -5,6 +5,7 @@ Unless noted, decisions from previous sessions remain in effect.
 ## Sessions index
 | № | Date | Session ID | Summary |
 |---|---|---|---|
+| 47 | 26/10/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Watchdog cadence relaxed to one pass every 2 minutes (decision D68): the sentinel's wake-up calendar was the only change, validated with the scheduler's own analyzer before touching anything (the seconds-field variant would have meant a pass every 2 seconds and was rejected); a frozen-calendar guard test now protects the cadence; every threshold, rule, closure and alert untouched; the live deployment deliberately copied only the sentinel unit so the operator-paused batch clock stayed parked (transition passes under the old cadence observed, then even-minute firing only); both reviewers ran with minors resolved; 765 tests; remaining backlog awaits approval |
 | 46 | 26/10/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | First live-day corrections shipped and live-verified (decision D65): the scheduler unit now stops for real without a false emergency alert, the board's remaining time counts completed search sets only, and a same-second stage closure still names the batch by an identity rule; the ordered stop was confirmed on a real batch within a second (COR-0026/27); watchdog and board reads slimmed with identical output and ~100x faster reads (D66); session audit fixed to one row per search set with idempotent repeats, ending the repeated warning and the silent data loss (D67); 764 tests; remaining backlog awaiting approval |
 | 45 | 22/10/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Four operator commands for the batch lifecycle shipped and live-verified (decision D64 in log v1.43): pause turns the scheduler clock off surviving reboots while a running batch finishes normally (exercised for real — the imminent firing was cancelled by operator choice), resume re-arms the clock with a next-firing report and watchdog repair, stop cuts the running batch and closes it instantly with truthful operator authorship on the official closure, and a zero-wipe closes everything and releases chairs while never disabling the clock nor deleting data; two real-world lessons baked in: commands never cut their own ancestor chain, and a failed unit needs stop plus a failure-mark reset; 744 tests; cycle left paused by operator choice — hot verification awaits resume |
 | 44 | 22/10/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Time-real batch visibility shipped in three reviewer-approved lotes and closed documentally in the same session (decisions D60–D63 in log v1.42): read-only live board from any terminal, manual-run narration voice with trace ticks excluded from closure metrics, minute-level silent-death watchdog with user-authorized ghost-run closures plus an OnFailure desktop fallback; a failed live smoke forced a per-row death-proof redesign protecting the running batch's own rows; matrix cut to a single Colombia sweep; README command corruption repaired; 730 tests; live scheduled-tanda verification still pending |
@@ -40,6 +41,29 @@ Unless noted, decisions from previous sessions remain in effect.
 | 14 | 09/08/2026 | `ses_01bcc78adffemcqFEiZxT52Eli` | Sub-fase 4.4: capture/registration nodes implemented, audited, and post-audit fixes applied (FK-free schema, name columns, upsert tests) |
 | 13 | 08/08/2026 | `ses_01be77680ffeuyoKct4Qrfx1GG` | Repo sync to `fase-4`; new `/save` section with general git commit and push guidance |
 | 12 | 08/08/2026 | `ses_01c089ce2ffe9MvQT4F1pC0MJN` | Sub-fase 4.2 deep audit + post-audit fixes (credentials mapping, playwright lifecycle) |
+
+## Session 47 — 26/10/2026
+`ses_f4af1b961ffe5t8xNspW5U761x` · `ajuste-final-v1`
+
+**Topics**
+- Point 3 of the post-V1 improvement backlog implemented: the silent-death sentinel is no longer woken every minute — it now wakes every 2 minutes (even minutes, second 0), proportionate to its 10-min frozen-tanda alert and zombie-closure thresholds and to the 120-min chair horizon
+- The calendar expression was validated before touching anything: the scheduler analyzer normalizes the chosen form to even minutes at second 0, and the naive variant placing the repeat on the seconds field (one pass every 2 seconds) was caught and rejected
+- A guard test now freezes the cadence in the timer definition: it rejects the old every-minute specification explicitly, requires the every-2-minutes wording and fails legibly if the calendar line disappears
+- Only the wake-up frequency changed — thresholds, detection rules, ghost closures, desktop alerts, the batch clock and the emergency alert kept intact; the installer's descriptive comments and the sentinel script's own header were aligned to the new cadence (comment-only)
+- Live deployment with respect for the operator's pause: because the full installer would have re-armed the batch clock (still parked by operator order), only the sentinel unit was copied into the user scheduler directory and reloaded; the scheduler itself reported the new normalized spec with next firing at 13:04
+- Live evidence in the journal: two transitional passes still under the old cadence (13:02 and 13:03), then only even-minute firing (last 13:04:12, next 13:06:00), every pass healthy («Sin corridas abiertas: nada que vigilar»); the batch clock remains parked until the operator resumes it
+- Documentary closure: formal decision registered (decision log v1.47) with the supersession note on the replaced minute-level detail, tracker section for the point with the live confirmation, operating contract and README refreshed with the new test count (765)
+- Both reviewers ran this time with only minor observations — the sentinel script header and one current-tense README line still said "every minute" (both fixed), plus two test hardenings applied; one placement suggestion was left as-is because the chosen test file already owns the scheduler constants
+
+**Decisions**
+- D68: cadence-only supersession of D63's minute-level detail — sentinel timer `OnCalendar` `*:*:00` → `*:0/2` (one pass every 2 minutes), `AccuracySec=15s` kept, every watchdog rule, threshold, closure and alert unchanged; live deployment copied only the sentinel unit with a scheduler reload so the operator-paused batch clock was not re-armed (the full installer was intentionally not used; resume stays in the operator's hands)
+- Decisions from previous sessions remain in effect
+
+**Status**
+- Backlog point 3 ✅ complete with live verification; Ruff 0 · mypy 0 (strict, 106 files) · pytest 765 passing (1 new frozen-calendar test)
+- Backlog ⬜ pending user approval: yield-driven search-set pruning, board core/render split, run-lock process id for exact stops, module naming-contract decision
+- Batch clock remains paused by operator choice (the documented resume command brings it back); sentinel live at the 2-minute cadence
+- Branch: `ajuste-final-v1` · session work committed by this save · no merge to `main`
 
 ## Session 46 — 26/10/2026
 `ses_f4af1b961ffe5t8xNspW5U761x` · `ajuste-final-v1`

@@ -1,7 +1,7 @@
 """Sentinela de la tanda (Lote 3): vigila la vida y cierra corridas fantasma.
 
-Se ejecuta cada minuto desde el programador del sistema (una pasada por
-activación). Con la traza oficial hace tres cosas, en este orden:
+Se ejecuta cada 2 minutos desde el programador del sistema (una pasada por
+activación, decisión D68). Con la traza oficial hace tres cosas, en este orden:
 
 1. **Cierre de fantasmas con prueba de muerte** (autorizado por el usuario,
    2026-10-22). Clasifica las filas abiertas con los mismos anclajes del

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Install (or remove) the user-level systemd units of the scheduled pipeline
 # (decisions D54 + Lote 3): the hourly/bi-daily run timer plus the sentinel
-# timer (one watchdog pass per minute) and the OnFailure desktop alert. No
+# timer (one watchdog pass every 2 minutes, Punto 3/D68) and the OnFailure
+# desktop alert. No
 # fixed wall-clock schedule for runs: first run 10 min after boot, repeats
 # every 3 h counted from each run, stops when the machine powers off.
 #
@@ -17,7 +18,7 @@ SERVICIO="busqueda-empleo.service"
 TEMPORIZADOR="busqueda-empleo.timer"
 UNIDADES=("$SERVICIO" "$TEMPORIZADOR")
 
-# Lote 3: sentinel watchdog (every minute) + OnFailure desktop alert.
+# Lote 3: sentinel watchdog (every 2 minutes, Punto 3/D68) + OnFailure alert.
 UNIDADES+=(
   "busqueda-empleo-vigilante.service"
   "busqueda-empleo-vigilante.timer"

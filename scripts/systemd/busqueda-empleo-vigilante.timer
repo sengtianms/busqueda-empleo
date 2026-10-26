@@ -1,8 +1,8 @@
 [Unit]
-Description=Tanda sentinel timer: one pass every minute (Lote 3)
+Description=Tanda sentinel timer: one pass every 2 minutes (Punto 3, D68)
 
 [Timer]
-OnCalendar=*:*:00
+OnCalendar=*:0/2
 AccuracySec=15s
 Unit=busqueda-empleo-vigilante.service
 

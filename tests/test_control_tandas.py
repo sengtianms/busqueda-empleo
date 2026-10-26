@@ -3,6 +3,7 @@
 import os
 import signal
 import subprocess
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -390,6 +391,32 @@ def test_limpiar_barrido_completo(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "Todo en cero" in salida
     assert "reloj sigue armado" in salida
     assert "COR-T" in salida and "COR-ANTIGUA" in salida
+
+
+def test_vigia_dispara_cada_dos_minutos() -> None:
+    """Cuadratura del calendario del vigía (Punto 3/D68, observación 3.3).
+
+    Los umbrales del vigía son de 10 min (aviso de tanda congelada y cierre
+    de zombis); una pasada cada 2 min cubre esa ventana con 5 revisiones,
+    sin el gasto de revisar cada minuto. Congelado en el archivo del
+    temporizador para que nadie lo revierta sin querer.
+    """
+    ruta = (
+        Path(__file__).resolve().parents[1]
+        / "scripts"
+        / "systemd"
+        / "busqueda-empleo-vigilante.timer"
+    )
+    contenido = ruta.read_text(encoding="utf-8")
+    assert "OnCalendar=" in contenido, "el temporizador perdió su calendario"
+    calendario = next(
+        linea.split("=", 1)[1].strip()
+        for linea in contenido.splitlines()
+        if linea.startswith("OnCalendar=")
+    )
+    assert calendario == "*:0/2"
+    assert "every 2 minutes" in contenido
+    assert "OnCalendar=*:*:00" not in contenido
 
 
 def test_limpiar_suelta_silla_desconocida(monkeypatch: pytest.MonkeyPatch) -> None:

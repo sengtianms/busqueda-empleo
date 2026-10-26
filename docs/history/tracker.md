@@ -253,6 +253,18 @@
 
 ---
 
+## Cadencia del vigía cada 2 minutos (2026-10-26)
+
+> Punto 3 del plan de mejoras posterior a V1 (decisión D68, libro v1.47; observación 3.3: vigilar cada minuto para umbrales de 10 min era desproporcionado). Solo cambia la frecuencia del centinela: pasa de revisar cada minuto a revisar cada 2 minutos (minutos pares, a segundo 00). Las reglas de detección, cierre y aviso, los umbrales (tanda congelada y cierre de zombis a 10 min; silla vencida a 120 min) y los avisos de escritorio quedan intactos; el reloj de tandas y el aviso de emergencia no se tocan. El reloj de tandas sigue EN PAUSA (decisión del operador en D64): la reinstalación completa no se usó a propósito, porque habría re-armado el reloj.
+
+| # | Cambio | Estado | Notas |
+|---|--------|--------|-------|
+| — | Temporizador del centinela a cada 2 minutos | ✅ | `OnCalendar=*:*:00` → `*:0/2`, validado con `systemd-analyze calendar` (se normaliza a `*-*-* *:00/2:00`); descripción de la unidad actualizada; comentarios del instalador alineados. Peor caso de detección: hasta ~2 min tras el umbral (antes ~1 min); revisiones por hora 60 → 30. Revertir es una línea. |
+| — | Prueba de cuadratura | ✅ | 1 prueba nueva congela el calendario de 2 minutos en el archivo del temporizador para evitar un retroceso accidental. 765 pruebas; ruff/mypy limpios. |
+| — | Puesta en vigor en vivo (2026-10-26) | ✅ | Solo la unidad del centinela copiada al programador + recarga del programador (sin tocar el reloj en pausa). El propio programador reportó la norma `*-*-* *:00/2:00` con próximo disparo 13:04:00; en la transición el centinela pasó todavía con la cadencia previa (13:02 y 13:03) y desde 13:04:12 solo disparos en minuto par (último 13:04:12; siguiente 13:06:00), con pasadas sanas («Sin corridas abiertas: nada que vigilar»). Reanudar el reloj sigue reservado a `reanudar_tandas.sh`. |
+
+---
+
 ## Phase 7. Module 4 — Deep Processing
 
 | # | Task | Source docs | Status | Notes |
