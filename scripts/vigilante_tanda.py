@@ -38,14 +38,16 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from scripts.estado_corrida import (
-    _VENTANA_TANDA_DEFECTO,
+from scripts.modelo_tanda import (
     _agrupar_por_corrida,
     _base_pendiente,
     _ordenar_eventos,
     _parsear,
     _separar_abiertas,
+    _silencio_de,
     _texto,
+    umbral_congelada_segundos,
+    ventana_tanda_segundos,
 )
 from scripts.notificar_veredicto import enviar_aviso
 from shared.persistence import (
@@ -61,7 +63,6 @@ from shared.persistence import (
 from shared.utilidades import FORMATO_TIMESTAMP
 
 MOTIVO_FANTASMA = "proceso_desaparecido"
-_UMBRAL_CONGELADA_DEFECTO = 600
 _MARCADOR_DEFECTO = Path("logs") / "vigilante_tanda.json"
 
 
@@ -132,33 +133,13 @@ def _soltar_sillas_heredadas(captura: dict[str, Any]) -> str | None:
     return id_silla
 
 
-def _silencio_de(
-    fila: dict[str, Any], eventos: list[dict[str, Any]], instante: datetime
-) -> float:
-    """Segundos de silencio PROPIOS de una corrida (sus eventos o su origen).
-
-    Base: el último evento de esa corrida; si no emitió nada, su fecha de
-    inicio. Nunca negativa (una marca en el futuro se ve como 0 segundos).
-    """
-    id_corrida = _texto(fila, "id_corrida")
-    base: datetime | None = None
-    for evento in eventos:
-        if _texto(evento, "id_corrida") == id_corrida:
-            marca = _parsear(_texto(evento, "marca_temporal"))
-            if marca is not None and (base is None or marca > base):
-                base = marca
-    if base is None:
-        base = _parsear(_texto(fila, "fecha_inicio"))
-    if base is None:
-        return float("inf")
-    return max((instante - base).total_seconds(), 0.0)
-
-
 def _clave_ofensa(
-    id_tanda: str, silencio: float, umbral: int = _UMBRAL_CONGELADA_DEFECTO
+    id_tanda: str, silencio: float, umbral: int | None = None
 ) -> str:
     """Una notificación por (tanda, tramo de silencio); crecer vuelve a avisar."""
-    tramos = int(silencio) // umbral
+    tramos = int(silencio) // (
+        umbral if umbral is not None else umbral_congelada_segundos()
+    )
     return f"{id_tanda}|detenida|{tramos}"
 
 
@@ -266,7 +247,7 @@ def _cierre_con_prueba(
         captura["abiertas"],
         captura["grupos"],
         _texto(silla, "id_corrida"),
-        _VENTANA_TANDA_DEFECTO,
+        ventana_tanda_segundos(),
     )
     intocables = {_texto(silla, "id_corrida")}
     intocables |= {_texto(m, "id_corrida") for m in filas_modulo}
@@ -283,13 +264,20 @@ def _cierre_con_prueba(
 
 def pasada(
     *,
-    umbral_congelada: int = _UMBRAL_CONGELADA_DEFECTO,
+    umbral_congelada: int | None = None,
     horizonte_minutos: int | None = None,
     marcador: Path = _MARCADOR_DEFECTO,
     referencia: datetime | None = None,
 ) -> str:
-    """Una pasada del vigía; devuelve un resumen legible de lo que hizo."""
+    """Una pasada del vigía; devuelve un resumen legible de lo que hizo.
+
+    Sin umbral explícito se usa el de la configuración oficial (sección
+    `visibilidad:` del núcleo de la traza, `scripts/modelo_tanda.py`).
+    """
     instante = referencia or datetime.now()
+    umbral = (
+        umbral_congelada if umbral_congelada is not None else umbral_congelada_segundos()
+    )
     horizonte = (
         horizonte_minutos if horizonte_minutos is not None
         else umbral_obsolescencia_minutos()
@@ -306,9 +294,7 @@ def pasada(
         return "; ".join(notas) if notas else "Sin corridas abiertas: nada que vigilar."
 
     id_tanda = _texto(_ordenamiento_rapido(captura)[0], "id_corrida")
-    cerrar, causa = _cierre_con_prueba(
-        captura, instante, umbral_congelada, horizonte
-    )
+    cerrar, causa = _cierre_con_prueba(captura, instante, umbral, horizonte)
     if cerrar:
         cerrables = [f for f in abiertas if _texto(f, "id_corrida") in cerrar]
         cerradas = _cerrar_fantasmas({**captura, "abiertas": cerrables}, causa)
@@ -333,7 +319,7 @@ def pasada(
 
     silencio_tanda = min(_silencio_de(f, captura["eventos"], instante) for f in abiertas)
     destinatario = (f" [{'; '.join(notas)}]" if notas else "")
-    if silencio_tanda <= umbral_congelada:
+    if silencio_tanda <= umbral:
         mensaje = (
             f"Tanda {id_tanda} viva (silencio {int(silencio_tanda)}s): nada que hacer."
         )
@@ -345,7 +331,7 @@ def pasada(
         )
         _avisar(
             cuerpo,
-            _clave_ofensa(id_tanda, silencio_tanda, umbral_congelada),
+            _clave_ofensa(id_tanda, silencio_tanda, umbral),
             marcador,
             instante,
         )
@@ -371,8 +357,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--umbral-congelada",
         type=int,
-        default=_UMBRAL_CONGELADA_DEFECTO,
-        help="segundos sin señales para considerar la tanda detenida",
+        default=None,
+        help="segundos sin señales para considerar la tanda detenida (config por defecto)",
     )
     parser.add_argument(
         "--horizonte-minutos",
@@ -387,7 +373,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--db", help="ruta alternativa a la base de datos")
     args = parser.parse_args(argv)
-    if args.umbral_congelada <= 0:
+    umbral = (
+        args.umbral_congelada
+        if args.umbral_congelada is not None
+        else umbral_congelada_segundos()
+    )
+    if umbral <= 0:
         parser.error("--umbral-congelada debe ser mayor que 0 (segundos)")
     opcion_db = Path(args.db) if args.db else None
     if opcion_db is not None:
@@ -396,7 +387,7 @@ def main(argv: list[str] | None = None) -> int:
         change_path(opcion_db)
     try:
         resumen = pasada(
-            umbral_congelada=args.umbral_congelada,
+            umbral_congelada=umbral,
             horizonte_minutos=args.horizonte_minutos,
             marcador=Path(args.marcador),
         )

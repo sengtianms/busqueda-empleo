@@ -30,7 +30,11 @@ from typing import Any, Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from scripts.estado_corrida import _VENTANA_TANDA_DEFECTO, _separar_abiertas, _texto
+from scripts.modelo_tanda import (
+    _separar_abiertas,
+    _texto,
+    ventana_tanda_segundos,
+)
 from scripts.notificar_veredicto import enviar_aviso
 from scripts.vigilante_tanda import _captura, _cerrar_fantasmas
 from shared.persistence import change_path, liberar_bloqueo, reset_path
@@ -314,7 +318,7 @@ def detener(*, gracia: float = _GRACIA_SEGUNDOS) -> str:
         abiertas,
         captura["grupos"],
         str(captura["id_silla"]),
-        _VENTANA_TANDA_DEFECTO,
+        ventana_tanda_segundos(),
     )
     objetivos: list[dict[str, Any]] = [
         fila for fila in (tanda, *filas_modulo) if fila is not None

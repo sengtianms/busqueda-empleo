@@ -28,9 +28,24 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from scripts.modelo_tanda import (
+    CODIGOS_MODULO,
+    CODIGOS_SET_COMPLETO,
+    MODULOS_UNIVERSO,
+    _abiertas,
+    _agrupar_por_corrida,
+    _analizar_evidencia,
+    _base_pendiente,
+    _nombre_por_familia,
+    _ordenar_eventos,
+    _parsear,
+    _separar_abiertas,
+    _texto,
+    umbral_congelada_segundos,
+    ventana_tanda_segundos,
+)
 from shared.config import load
 from shared.persistence import (
-    _db_path,
     change_path,
     consultar_bloqueo,
     ids_de_corrida_con_codigos,
@@ -39,126 +54,16 @@ from shared.persistence import (
     reset_path,
     resumen_ofertas_por_estado,
 )
-from shared.utilidades import FORMATO_TIMESTAMP, numero_secuencial_id
+from shared.utilidades import numero_secuencial_id
 
-CODIGOS_TANDA = frozenset({"modulo_ejecutado", "modulo_fallido", "corrida_programada"})
-
-# Un set de busqueda esta completo cuando dejo su captura o su registro; la
-# union de ambos codigos, por indice de set, es la unidad de ritmo.
-_CODIGOS_SET_COMPLETO = ("captura_completada", "ofertas_registradas")
-
-# Codigos propios de cada modulo: nombran una corrida abierta de un modulo
-# cuando su fila todavia no fue anunciada por el resumen de la tanda.
-FAMILIAS_CODIGOS: dict[str, frozenset[str]] = {
-    "descubrimiento": frozenset(
-        {
-            "ingreso_exitoso",
-            "consulta_exitosa",
-            "captura_completada",
-            "ofertas_registradas",
-            "navegador_renovado",
-            "lote_degradado",
-        }
-    ),
-    "preparacion": frozenset(
-        {
-            "oferta_preparada",
-            "preparacion_fallida",
-            "oferta_duplicada",
-            "revision_pendientes",
-        }
-    ),
-    "evaluacion": frozenset(
-        {"oferta_aprobada", "oferta_descartada", "evaluacion_fallida"}
-    ),
-}
-
-# Señales que identifican una corrida de módulo para la regla de identidad
-# tanda/tramo: el tic de arranque más los códigos propios de cada familia.
-CODIGOS_MODULO = frozenset({"tic_modulo_iniciado"}).union(*FAMILIAS_CODIGOS.values())
-
-MODULOS_UNIVERSO = frozenset({"preparacion", "evaluacion"})
-
+# Topes de PRESENTACIÓN del tablero (recortan listas en pantalla; no son
+# reglas de negocio: vivas aquí, no en la configuración).
 _TOPE_ERRORES = 8
 _TOPE_EVIDENCIA = 180
-_UMBRAL_CONGELADA_DEFECTO = 600
-_VENTANA_TANDA_DEFECTO = 900
-# La estimacion avanza con el reloj, pero una corrida sin senales no la hace
-# crecer sin limite: la ventana se detiene en el umbral de congelacion.
-_TOPE_VENTANA_SEGUNDOS = _UMBRAL_CONGELADA_DEFECTO
-
-
-def _analizar_evidencia(texto: str) -> dict[str, str]:
-    """Pares clave=valor (o clave: valor) de una evidencia oficial ('|' o ';')."""
-    pares: dict[str, str] = {}
-    for fragmento in str(texto or "").replace("|", ";").split(";"):
-        if "=" in fragmento:
-            clave, valor = fragmento.split("=", 1)
-        elif ":" in fragmento:
-            clave, valor = fragmento.split(":", 1)
-        else:
-            continue
-        pares[clave.strip()] = valor.strip()
-    return pares
-
-
-def _parsear(marca: str) -> datetime | None:
-    try:
-        return datetime.strptime(str(marca), FORMATO_TIMESTAMP)
-    except (TypeError, ValueError):
-        return None
-
-
-def _texto(fila: dict[str, Any], clave: str) -> str:
-    valor = fila.get(clave)
-    return "" if valor is None else str(valor)
 
 
 def _campo(detalle: dict[str, str], clave: str) -> str:
     return detalle.get(clave, "N/R")
-
-
-def _abiertas(corridas: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Filas de corrida sin cierre: fecha_fin ausente, vacia o 'N/A'."""
-    return [c for c in corridas if _texto(c, "fecha_fin") in ("", "N/A")]
-
-
-def _ordenar_eventos(eventos: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Orden determinista: marca temporal y, en empate, numero oficial."""
-    return sorted(
-        eventos,
-        key=lambda e: (
-            _texto(e, "marca_temporal"),
-            numero_secuencial_id(str(e.get("evento_id", ""))),
-        ),
-    )
-
-
-def _agrupar_por_corrida(eventos: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
-    grupos: dict[str, list[dict[str, Any]]] = {}
-    for evento in _ordenar_eventos(eventos):
-        grupos.setdefault(str(evento.get("id_corrida")), []).append(evento)
-    return grupos
-
-
-def _es_tanda(fila: dict[str, Any], grupos: dict[str, list[dict[str, Any]]]) -> bool:
-    return any(
-        str(e.get("codigo")) in CODIGOS_TANDA
-        for e in grupos.get(str(fila.get("id_corrida")), [])
-    )
-
-
-def _nombre_por_familia(eventos: list[dict[str, Any]]) -> str | None:
-    """Nombre del módulo: por su tic de arranque o por sus códigos propios."""
-    for evento in eventos:
-        if str(evento.get("codigo")) == "tic_modulo_iniciado":
-            nombre = _analizar_evidencia(str(evento.get("evidencia", ""))).get("modulo")
-            if nombre:
-                return nombre
-    for nombre, codigos in FAMILIAS_CODIGOS.items():
-        if any(str(e.get("codigo")) in codigos for e in eventos):
-            return nombre
-    return None
 
 
 def _nombres_config() -> list[str]:
@@ -197,59 +102,6 @@ def _duracion_compacta(segundos: float) -> str:
     if horas:
         return f"{horas}h {minutos:02d}m"
     return f"{minutos}m {restos:02d}s"
-
-
-def _separar_abiertas(
-    abiertas: list[dict[str, Any]],
-    grupos: dict[str, list[dict[str, Any]]],
-    id_silla: str,
-    ventana_segundos: int,
-) -> tuple[dict[str, Any] | None, list[dict[str, Any]], list[dict[str, Any]]]:
-    """(tanda, fila del módulo en curso, sobrantes) entre las filas abiertas.
-
-    Anclas oficiales: el módulo en curso es la abierta dueña de la silla
-    (la garantía de concurrencia la marca mientras corre) o, si la silla no
-    delata fila, la más nueva con códigos propios de módulo. La tanda es la
-    abierta con eventos de resumen del orquestador y, a falta de ellos, la
-    más nueva que arrancó dentro de la ventana de las pruebas (registra su
-    fila segundos antes de lanzar cada módulo). Todo lo demás son
-    sobrantes (corridas que quedaron abiertas, probablemente muertas).
-    """
-    if not abiertas:
-        return None, [], []
-    reciente = sorted(abiertas, key=lambda c: _texto(c, "fecha_inicio"), reverse=True)
-    modulo = next(
-        (
-            c
-            for c in reciente
-            if _texto(c, "id_corrida") == id_silla
-            or _nombre_por_familia(grupos.get(_texto(c, "id_corrida"), [])) is not None
-        ),
-        None,
-    )
-    resto = [c for c in reciente if c is not modulo]
-    tanda = next((c for c in resto if _es_tanda(c, grupos)), None)
-    if tanda is None:
-        if modulo is None:
-            return None, [], resto
-        _nexo_modulo_inicio = _parsear(_texto(modulo, "fecha_inicio"))
-        previos = [
-            c for c in resto if _arranco_junto(c, _nexo_modulo_inicio, ventana_segundos)
-        ]
-        tanda = previos[0] if previos else None
-    sobrantes = [c for c in resto if c is not tanda]
-    return tanda, ([] if modulo is None else [modulo]), sobrantes
-
-
-def _arranco_junto(fila: dict[str, Any], inicio_modulo: datetime | None, ventana: int) -> bool:
-    """Verdadero si la fila arrancó dentro de `ventana` antes del módulo."""
-    if inicio_modulo is None:
-        return False
-    inicio_fila = _parsear(_texto(fila, "fecha_inicio"))
-    if inicio_fila is None:
-        return False
-    separacion = (inicio_modulo - inicio_fila).total_seconds()
-    return 0 <= separacion <= ventana
 
 
 def _modulo_anunciado(
@@ -378,7 +230,7 @@ def _bloque_descubrimiento(
     completados = {
         str(e.get("indice_set"))
         for e in eventos
-        if str(e.get("codigo")) in _CODIGOS_SET_COMPLETO
+        if str(e.get("codigo")) in CODIGOS_SET_COMPLETO
         and str(e.get("indice_set", "")).isdigit()
     }
     resto_de_sets = (sets_total - len(completados)) if sets_total else 0
@@ -386,7 +238,7 @@ def _bloque_descubrimiento(
         fila,
         eventos,
         resto_de_sets,
-        _CODIGOS_SET_COMPLETO,
+        CODIGOS_SET_COMPLETO,
         "indice_set",
         instante,
     )
@@ -433,7 +285,7 @@ def _estimacion_linea(
     if instante is not None and instante > ultima:
         # La ventana avanza con el reloj, pero se detiene en el umbral de
         # congelacion: una corrida parada no hace crecer la estimacion.
-        fin = min(instante, ultima + timedelta(seconds=_TOPE_VENTANA_SEGUNDOS))
+        fin = min(instante, ultima + timedelta(seconds=umbral_congelada_segundos()))
     ritmo = (fin - inicio).total_seconds() / len(ids)
     return (
         f"   · quedan ~{_duracion_compacta(restantes * ritmo)}"
@@ -591,31 +443,23 @@ def _traza_final(
     return lineas
 
 
-def _base_pendiente() -> str | None:
-    """Motivo por el que la base no está lista para leerse; None si está bien.
-
-    Verificación previa a toda lectura: con la base ausente el lector
-    genérico crearía el archivo vacío (efecto colateral de escritura que
-    un visor de solo lectura no debe provocar).
-    """
-    try:
-        ruta = _db_path()
-    except Exception:  # configuración rota: dejar que las lecturas expliquen
-        return None
-    if not Path(ruta).exists():
-        return f"el archivo de datos no existe todavía: {ruta}"
-    return None
-
-
 def componer_estado(
     referencia: datetime | None = None,
     *,
     sets_total: int | None = None,
-    umbral_congelada: int = _UMBRAL_CONGELADA_DEFECTO,
-    ventana_tanda: int = _VENTANA_TANDA_DEFECTO,
+    umbral_congelada: int | None = None,
+    ventana_tanda: int | None = None,
 ) -> list[str]:
-    """Lineas del tablero para el instante de `referencia` (ahora por defecto)."""
+    """Lineas del tablero para el instante de `referencia` (ahora por defecto).
+
+    Sin umbrales explícitos se usan los de la configuración oficial
+    (sección `visibilidad:` del núcleo de la traza, `scripts/modelo_tanda.py`).
+    """
     instante = referencia or datetime.now()
+    umbral = (
+        umbral_congelada if umbral_congelada is not None else umbral_congelada_segundos()
+    )
+    ventana = ventana_tanda if ventana_tanda is not None else ventana_tanda_segundos()
     sets_total = sets_total if sets_total is not None else _total_sets_config()
     bordes: list[str] = [f"== ESTADO DE LA TANDA — {instante.strftime('%H:%M:%S')} =="]
     retraso = _base_pendiente()
@@ -635,9 +479,7 @@ def componer_estado(
         return bordes + [f"⚠ La base de datos no está lista: {exc}"]
 
     id_silla = _texto(silla, "id_corrida") if silla else ""
-    tanda, filas_modulo, ignoradas = _separar_abiertas(
-        abiertas, grupos, id_silla, ventana_tanda
-    )
+    tanda, filas_modulo, ignoradas = _separar_abiertas(abiertas, grupos, id_silla, ventana)
 
     if tanda is None and not filas_modulo:
         ciegas = [c for c in ignoradas if not grupos.get(_texto(c, "id_corrida"), [])]
@@ -672,7 +514,7 @@ def componer_estado(
 
     if tanda is not None:
         inicio = _parsear(_texto(tanda, "fecha_inicio")) or instante
-        vida = _vida_de_tanda(tanda, latidos, umbral_congelada, instante, silla is not None)
+        vida = _vida_de_tanda(tanda, latidos, umbral, instante, silla is not None)
         bordes.append(
             f"Tanda: {vida}"
             f" · iniciada {_texto(tanda, 'fecha_inicio')[11:16]}"
@@ -750,27 +592,31 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--umbral-congelada",
         type=int,
-        default=_UMBRAL_CONGELADA_DEFECTO,
-        help="segundos sin avances para avisar 'congelada'",
+        default=None,
+        help="segundos sin avances para avisar 'congelada' (config por defecto)",
     )
     parser.add_argument("--db", help="ruta alternativa a la base de datos")
     argumentos = parser.parse_args(argv)
-    if argumentos.umbral_congelada < 0:
+    # Paridad con el panel anterior: el rechazo de umbrales explícitos sólo
+    # aplica a valores NEGATIVOS (0 era admitido por el tablero; el centinela
+    # siempre lo rechazó). El getter de configuración nunca devuelve <= 0.
+    if argumentos.umbral_congelada is not None and argumentos.umbral_congelada < 0:
         parser.error("el umbral de 'congelada' no puede ser negativo")
+    umbral = (
+        argumentos.umbral_congelada
+        if argumentos.umbral_congelada is not None
+        else umbral_congelada_segundos()
+    )
     if argumentos.db:
         change_path(Path(argumentos.db))
     try:
         if argumentos.seguir:
             try:
-                _vivir(argumentos.intervalo, argumentos.umbral_congelada)
+                _vivir(argumentos.intervalo, umbral)
             except KeyboardInterrupt:
                 print("\nTablero cerrado.")
         else:
-            print(
-                "\n".join(
-                    componer_estado(umbral_congelada=argumentos.umbral_congelada)
-                )
-            )
+            print("\n".join(componer_estado(umbral_congelada=umbral)))
     finally:
         if argumentos.db:
             reset_path()

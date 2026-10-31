@@ -216,6 +216,13 @@ preparacion:
 concurrencia:
   umbral_obsolescencia_minutos: 120
 
+# --- Batch visibility (tablero + vigilante + mandos; punto 5) ---
+visibilidad:
+  # Segundos sin señales para considerar detenida la tanda (panel y centinela).
+  umbral_congelada_segundos: 600
+  # Ventana (segundos) para reconocer que una fila arrancó junto a su tanda.
+  ventana_tanda_segundos: 900
+
 # --- Credential storage (D4) ---
 almacen_credenciales:
   mecanismo: ".env"
