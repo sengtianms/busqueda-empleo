@@ -265,6 +265,18 @@
 
 ---
 
+## Núcleo de traza separado y umbrales en configuración (2026-10-31)
+
+> Punto 5 del plan de mejoras posterior a V1 (hallazgos 4.1/4.2; decisión D69, libro v1.48). El tablero era a la vez biblioteca y dibujante: el centinela y los mandos del operador tomaban sus piezas internas del archivo del panel, y el umbral de «congelada» (600 s) estaba pintado dos veces fuera de la configuración oficial. Cambio interno sin efecto visible: mismos textos en pantalla, mismas conductas del centinela y los mandos, mismos valores (600/900).
+
+| # | Cambio | Estado | Notas |
+|---|--------|--------|-------|
+| — | Biblioteca `scripts/modelo_tanda.py` | ✅ | Núcleo de la traza extraído del tablero (catálogos de códigos y piezas de análisis) con cuerpos idénticos verificados por revisión; tablero queda solo lectura+pintura; centinela y mandos apuntan a la biblioteca. |
+| — | Umbrales a la configuración oficial | ✅ | Nueva sección `visibilidad:` (600 s congelada, 900 s ventana de tanda) leída en el momento de usarla con respaldo defensivo; el valor repetido desaparece; números del reloj del sistema siguen en sus unidades (ya eran configuración). |
+| — | Pruebas y validaciones | ✅ | 12 pruebas nuevas de los respaldos de configuración (defectos, valores explícitos, valores inválidos y raíz del archivo no legible); 777 pruebas, ruff/mypy limpios; sin cambios de conducta; unidades del programador sin tocar. |
+
+---
+
 ## Phase 7. Module 4 — Deep Processing
 
 | # | Task | Source docs | Status | Notes |
