@@ -78,7 +78,7 @@ Task rules:
 ## Validation & Commands
 - `ruff check .` — lint (E/F/I/N/W, line length 100)
 - `mypy .` — typecheck (strict)
-- `pytest tests/` — test suite (currently 765 passing)
+- `pytest tests/` — test suite (currently 777 passing)
 - Local venv runs Python 3.14.6 (3.12 unavailable).
 
 Definition of Done:
