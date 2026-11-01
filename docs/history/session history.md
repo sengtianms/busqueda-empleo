@@ -5,6 +5,7 @@ Unless noted, decisions from previous sessions remain in effect.
 ## Sessions index
 | № | Date | Session ID | Summary |
 |---|---|---|---|
+| 48 | 31/10/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Optimization probes closed the speed hunt with a measured verdict: every lever dead or discarded — the 24h window is ignored by the platform, light reads save ~2%, reordering changes nothing, and the NOT-cascade lost 19 offers in its one isolated shadow smoke test (17%, every loss attributed to its two strongest rejection phrases applied to full job texts) so the user discarded it per the agreed verdict rule and let all probe artifacts go (~1.4 GB, production untouched); post-V1 backlog point 5 shipped (decision D69 in log v1.48): the observation room's trace nucleus extracted from the board renderer into one library with byte-equivalent bodies, sentinel and operator commands re-pointed, both shared thresholds moved to official configuration with defensive fallbacks, zero behavior change, 777 tests; fast-forward merged into the work branch, probe branch deleted, main untouched |
 | 47 | 26/10/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Watchdog cadence relaxed to one pass every 2 minutes (decision D68): the sentinel's wake-up calendar was the only change, validated with the scheduler's own analyzer before touching anything (the seconds-field variant would have meant a pass every 2 seconds and was rejected); a frozen-calendar guard test now protects the cadence; every threshold, rule, closure and alert untouched; the live deployment deliberately copied only the sentinel unit so the operator-paused batch clock stayed parked (transition passes under the old cadence observed, then even-minute firing only); both reviewers ran with minors resolved; 765 tests; remaining backlog awaits approval |
 | 46 | 26/10/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | First live-day corrections shipped and live-verified (decision D65): the scheduler unit now stops for real without a false emergency alert, the board's remaining time counts completed search sets only, and a same-second stage closure still names the batch by an identity rule; the ordered stop was confirmed on a real batch within a second (COR-0026/27); watchdog and board reads slimmed with identical output and ~100x faster reads (D66); session audit fixed to one row per search set with idempotent repeats, ending the repeated warning and the silent data loss (D67); 764 tests; remaining backlog awaiting approval |
 | 45 | 22/10/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Four operator commands for the batch lifecycle shipped and live-verified (decision D64 in log v1.43): pause turns the scheduler clock off surviving reboots while a running batch finishes normally (exercised for real — the imminent firing was cancelled by operator choice), resume re-arms the clock with a next-firing report and watchdog repair, stop cuts the running batch and closes it instantly with truthful operator authorship on the official closure, and a zero-wipe closes everything and releases chairs while never disabling the clock nor deleting data; two real-world lessons baked in: commands never cut their own ancestor chain, and a failed unit needs stop plus a failure-mark reset; 744 tests; cycle left paused by operator choice — hot verification awaits resume |
@@ -41,6 +42,28 @@ Unless noted, decisions from previous sessions remain in effect.
 | 14 | 09/08/2026 | `ses_01bcc78adffemcqFEiZxT52Eli` | Sub-fase 4.4: capture/registration nodes implemented, audited, and post-audit fixes applied (FK-free schema, name columns, upsert tests) |
 | 13 | 08/08/2026 | `ses_01be77680ffeuyoKct4Qrfx1GG` | Repo sync to `fase-4`; new `/save` section with general git commit and push guidance |
 | 12 | 08/08/2026 | `ses_01c089ce2ffe9MvQT4F1pC0MJN` | Sub-fase 4.2 deep audit + post-audit fixes (credentials mapping, playwright lifecycle) |
+
+## Session 48 — 31/10/2026
+`ses_f4af1b961ffe5t8xNspW5U761x` · `ajuste-final-v1`
+
+**Topics**
+- The optimization hunt for batch speed closed with a measured verdict: every lever — the 24-hour window, lighter reads, reordering query groups, longer cadences and the NOT-cascade — proved dead or discarded, so the ~15–18 min batch time is the price of the full 18-query sweep at the standing constraints (24 h window, 3 h cadence)
+- The NOT-cascade candidate ran its approved smoke test exactly once, fully isolated and in shadow mode: 19 offers lost against the production queries (17% of the harvest), 1 slide-in gain anomaly, zero platform truncations, every pagination count identical, production never written to
+- Every loss carried its own culprit: the rejection phrase and query that killed it, rebuilt offline from the test's own saved records after two presentation defects (an illegible report and blank detail titles) were repaired without re-opening the browser; the losses proved the cascade discards live managerial roles because its rejection phrases read full job texts, not titles
+- Cascade discarded by the user under the agreed verdict rule (losses far beyond the adjust-and-repeat threshold); the system was declared at its measurable optimum
+- All test material wiped per user order: both probe suites including the isolated browser profile copy, four August verification logs and the residual sondeo written report (~1.4 GB); only official content left in the docs folder and the repository untouched
+- Post-V1 backlog point 5 shipped: the observation room's shared brain — official code catalogs plus the tanda/module/strays classification and event helpers — extracted into one library from the board renderer with byte-equivalent bodies (code-reviewer verified); the sentinel and the operator commands now point at the library instead of privately borrowing from the renderer's file
+- The twice-painted frozen threshold (600 s) deleted; both shared thresholds (frozen alert 600 s, tanda window 900 s) became official configuration read at call time with defensive fallbacks (missing section, invalid values, broken file); presentation-only limits stay in the drawer; the system clock's own numbers declared out of scope as OS-level configuration
+- Parity corner preserved: the board still accepts an explicit zero threshold as it always did while the sentinel keeps rejecting it; 12 new tests cover the fallbacks; fast-forward merge into the work branch, the probe branch erased, main untouched at user order
+
+**Decisions**
+- D69 (decision log v1.48): trace-nucleus library extracted from the board renderer (byte-equivalent bodies), watchdog and operator commands re-pointed to it; shared thresholds moved to config `visibilidad:` (umbral_congelada_segundos 600, ventana_tanda_segundos 900) with defensive call-time getters; duplicated constant deleted; systemd unit numbers out of scope; zero behavior change
+- Decisions from previous sessions remain in effect
+
+**Status**
+- Post-V1 backlog point 5 complete and merged into `ajuste-final-v1` (probe branch deleted; `main` intentionally untouched); NOT-cascade discarded per verdict rule; artifact cleanup verified
+- Ruff and mypy clean; 777 tests (765 previous + 12 new)
+- Active branch: `ajuste-final-v1`
 
 ## Session 47 — 26/10/2026
 `ses_f4af1b961ffe5t8xNspW5U761x` · `ajuste-final-v1`
