@@ -6,6 +6,7 @@ Unless noted, decisions from previous sessions remain in effect.
 | № | Date | Session ID | Summary |
 |---|---|---|---|
 | 48 | 31/10/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Optimization probes closed the speed hunt with a measured verdict: every lever dead or discarded — the 24h window is ignored by the platform, light reads save ~2%, reordering changes nothing, and the NOT-cascade lost 19 offers in its one isolated shadow smoke test (17%, every loss attributed to its two strongest rejection phrases applied to full job texts) so the user discarded it per the agreed verdict rule and let all probe artifacts go (~1.4 GB, production untouched); post-V1 backlog point 5 shipped (decision D69 in log v1.48): the observation room's trace nucleus extracted from the board renderer into one library with byte-equivalent bodies, sentinel and operator commands re-pointed, both shared thresholds moved to official configuration with defensive fallbacks, zero behavior change, 777 tests; fast-forward merged into the work branch, probe branch deleted, main untouched |
+| 49 | 09/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Housekeeping session: the temp folder's five November probe bundles were audited before touching anything (zero references from code, tests, scheduled automation or official docs), one disposable backup archive was saved into the data backup area (~6 MB, 149 entries) and then every probe folder was wiped; the temp folder itself and its structure keeper kept per the official project layout; no code, config or doc changes and tracker without updates |
 | 47 | 26/10/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Watchdog cadence relaxed to one pass every 2 minutes (decision D68): the sentinel's wake-up calendar was the only change, validated with the scheduler's own analyzer before touching anything (the seconds-field variant would have meant a pass every 2 seconds and was rejected); a frozen-calendar guard test now protects the cadence; every threshold, rule, closure and alert untouched; the live deployment deliberately copied only the sentinel unit so the operator-paused batch clock stayed parked (transition passes under the old cadence observed, then even-minute firing only); both reviewers ran with minors resolved; 765 tests; remaining backlog awaits approval |
 | 46 | 26/10/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | First live-day corrections shipped and live-verified (decision D65): the scheduler unit now stops for real without a false emergency alert, the board's remaining time counts completed search sets only, and a same-second stage closure still names the batch by an identity rule; the ordered stop was confirmed on a real batch within a second (COR-0026/27); watchdog and board reads slimmed with identical output and ~100x faster reads (D66); session audit fixed to one row per search set with idempotent repeats, ending the repeated warning and the silent data loss (D67); 764 tests; remaining backlog awaiting approval |
 | 45 | 22/10/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Four operator commands for the batch lifecycle shipped and live-verified (decision D64 in log v1.43): pause turns the scheduler clock off surviving reboots while a running batch finishes normally (exercised for real — the imminent firing was cancelled by operator choice), resume re-arms the clock with a next-firing report and watchdog repair, stop cuts the running batch and closes it instantly with truthful operator authorship on the official closure, and a zero-wipe closes everything and releases chairs while never disabling the clock nor deleting data; two real-world lessons baked in: commands never cut their own ancestor chain, and a failed unit needs stop plus a failure-mark reset; 744 tests; cycle left paused by operator choice — hot verification awaits resume |
@@ -42,6 +43,24 @@ Unless noted, decisions from previous sessions remain in effect.
 | 14 | 09/08/2026 | `ses_01bcc78adffemcqFEiZxT52Eli` | Sub-fase 4.4: capture/registration nodes implemented, audited, and post-audit fixes applied (FK-free schema, name columns, upsert tests) |
 | 13 | 08/08/2026 | `ses_01be77680ffeuyoKct4Qrfx1GG` | Repo sync to `fase-4`; new `/save` section with general git commit and push guidance |
 | 12 | 08/08/2026 | `ses_01c089ce2ffe9MvQT4F1pC0MJN` | Sub-fase 4.2 deep audit + post-audit fixes (credentials mapping, playwright lifecycle) |
+
+## Session 49 — 09/11/2026
+`ses_f4af1b961ffe5t8xNspW5U761x` · `ajuste-final-v1`
+
+**Topics**
+- Housekeeping only: workspace cleanup of temporary investigation leftovers
+- The temp folder's probe bundles were audited before touching anything — zero use detected from the code, tests, scheduled automation or official docs; the deleted material traced to November one-off investigations (overlap probes, filter duel, list duel) with conclusions already registered in official docs
+- Before deletion, a disposable backup archive was saved into the data backup area covering every former temp entry, confirmed by a complete integrity listing of its 149 items
+- All five probe folders wiped together with internal caches and trace outputs; the temp folder itself and its structure keeper kept, as required by the official project layout
+- Document-only session: no code, configuration or documentation touched, so lint/type/test validations were not required
+
+**Decisions**
+- Decisions from previous sessions remain in effect
+
+**Status**
+- Temp cleanup complete (folder at zero weight, ready for future temporary trials); no task or phase status change; tracker without updates
+- Ruff/mypy/pytest not run (no code changes); suite count stays at 777
+- Active branch: `ajuste-final-v1`
 
 ## Session 48 — 31/10/2026
 `ses_f4af1b961ffe5t8xNspW5U761x` · `ajuste-final-v1`
