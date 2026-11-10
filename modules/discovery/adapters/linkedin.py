@@ -55,8 +55,26 @@ _PARAMETROS_FILTROS: dict[str, str] = {
     "keywords": "keywords",
     "ubicacion": "location",
     "fecha_publicacion": "f_TPR",
-    "nivel_experiencia": "f_JT",
 }
+
+# D70 (2026-11-09): filtro "Nivel de experiencia" verificado en vivo sobre la
+# sesion real (sonda solo-lectura, 4 variaciones + union): la UI nueva lo
+# codifica en el mismo espacio `f_SAL` que la modalidad — un grupo de
+# taxonomia con sus opciones seleccionadas:
+#   f_SAL=f_SA_id_227001:<opcion>[,<opcion>...]
+# Codigos en orden canonico (el orden declarado en config es irrelevante:
+# siempre se emite en orden de taxonomia verificado; total sobrevive la
+# URL y la verificacion DOM la lee del panel).
+#   Sénior 277001 (28 ofertas) · Administrador 278001 (17) ·
+#   Director 272003 (7) · Ejecutivo 279001 (14) · los 4 juntos: 28
+_NIVEL_EXPERIENCIA_FACET = "227001"
+_NIVEL_EXPERIENCIA_F_SAL: dict[str, str] = {
+    "sénior": "277001",
+    "administrador": "278001",
+    "director": "272003",
+    "ejecutivo": "279001",
+}
+_NIVEL_EXPERIENCIA_CANONICO: list[str] = ["277001", "278001", "272003", "279001"]
 
 # D27 (2026-08-17): la UI nueva (SDUi) descarta f_WT de la URL; el remoto se
 # codifica como f_SAL=<id interno de taxonomia>. Solo "remoto" es
@@ -83,6 +101,13 @@ _SEL_RADIO_FECHA = "div[role='radio'][aria-label='{}']"
 _SEL_MOSTRAR_RESULTADOS = (
     "button:text-is('Mostrar resultados'), a:text-is('Mostrar resultados')"
 )
+
+# D70 (2026-11-09): fila plegable del grupo de experiencia y
+# casilla de opcion para el respaldo por UI (sonda viva planb6: abrir la
+# fila por texto, togglear cada casilla (input oculto) con foco+espacio y
+# confirmar con "Mostrar resultados"; la URL queda con el f_SAL canonico).
+_SEL_FILA_NIVEL = "label:has-text('Nivel de experiencia')"
+_SEL_OPCION_NIVEL = "input[type='checkbox'][aria-label='{}']"
 
 # D28 (2026-08-17): el total declarado se lee de texto visible del DOM.
 # (2026-10-22, verificado con sondas reales sobre la UI actual) el encabezado
@@ -361,7 +386,9 @@ class LinkedInAdapter:
         self._revisar_estado(html, "tiempo_agotado_consulta")
         esperados = self._filtros_esperados(set_filtros)
         if esperados and not self._verificar_filtros_aplicados(html, esperados):
-            self._aplicar_filtros_por_ui(page, esperados, html)
+            self._aplicar_filtros_por_ui(
+                page, esperados, html, self._niveles_declarados(set_filtros)
+            )
             self._esperar_resultados(page, ficha.timeout_segundos)
             html = self._contenido(page)
             self._revisar_estado(html, "tiempo_agotado_consulta")
@@ -527,11 +554,15 @@ class LinkedInAdapter:
     def _filtros_esperados(self, set_filtros: SetFiltros) -> list[str]:
         """Chips que deben estar activos en el DOM para el set de filtros.
 
-        Solo los filtros verificables en la UI nueva: modalidad (remoto) y
-        ventana de fecha (bucket canonico). ``keywords``/``geoid`` no
-        tienen chip verificable (LinkedIn conserva la ubicacion en estado,
-        no en la URL); ``location`` es un parametro muerto desde
-        2026-10-22.
+        Solo los filtros verificables en la UI nueva: modalidad (remoto),
+        ventana de fecha (bucket canonico) y nivel de experiencia (D70).
+        Para el nivel de experiencia la senal del DOM es la fila resumen
+        del grupo: `<n>Nivel de experiencia` con el numero pegado a la
+        palabra (sin espacio — formato observado en la sonda viva); con
+        una sola opcion el panel muestra el nombre de la casilla.
+        ``keywords``/``geoid`` no tienen chip verificable (LinkedIn
+        conserva la ubicacion en estado, no en la URL); ``location`` es un
+        parametro muerto desde 2026-10-22.
         """
         esperados: list[str] = []
         for filtro in set_filtros.filtros:
@@ -543,26 +574,36 @@ class LinkedInAdapter:
                 esperados.append("remoto")
             elif tipo == "fecha_publicacion":
                 esperados.append(_BUCKETS_FECHA_UI[str(valor)])
+            elif tipo == "nivel_experiencia":
+                seleccion: list[str] = (
+                    valor if isinstance(valor, list) else [str(valor)]
+                )
+                if len(seleccion) == 1:
+                    esperados.append(str(seleccion[0]).strip())
+                else:
+                    esperados.append(f"{len(seleccion)}Nivel de experiencia")
         return esperados
 
     def _verificar_filtros_aplicados(self, html: str, esperados: list[str]) -> bool:
-        """True si los chips esperados estan activos en el DOM (D27)."""
+        """True si los chips esperados estan activos en el DOM (D27, D70)."""
         soup = BeautifulSoup(html, "lxml")
         for esperado in esperados:
             if esperado == "remoto":
                 if not soup.select(f"{_SEL_CHIP_REMOTO}[aria-checked='true']"):
                     return False
                 continue
-            if not self._checkbox_fecha_marcado(soup, esperado):
+            if not self._casilla_marcada(soup, esperado):
                 return False
         return True
 
-    def _checkbox_fecha_marcado(self, soup: BeautifulSoup, etiqueta: str) -> bool:
-        """Checkbox de fecha marcado cuyo label[for] coincide exactamente.
+    def _casilla_marcada(self, soup: BeautifulSoup, etiqueta: str) -> bool:
+        """Checkbox marcado cuyo label[for] coincide exactamente.
 
         (D27, debug COR-0275) El DOM real usa input + label HERMANOS
         (<input id=...><label for=...>), no anidados; el id es inestable por
-        render, por eso se resuelve siempre via label[for].
+        render, por eso se resuelve siempre via label[for]. (D70) Sirve para
+        la ventana de fecha y tambien para las filas del grupo de nivel de
+        experiencia (casilla individual o fila resumen contadora).
         """
         for label in soup.find_all("label"):
             if label.get_text(strip=True) != etiqueta:
@@ -577,15 +618,37 @@ class LinkedInAdapter:
                 return True
         return False
 
-    def _aplicar_filtros_por_ui(
-        self, page: Any, esperados: list[str], html: str
-    ) -> None:
-        """Fallback por clics en la UI (D27): mejores esfuerzos, sin excepciones.
+    def _niveles_declarados(self, set_filtros: SetFiltros) -> list[str]:
+        """Niveles declarados por el set (texto crudo) para el respaldo UI.
 
+        Devuelve [] si el set no declara el filtro; los textos son los que
+        se escriben en config (el DOM los repite igual: "Sénior", etc.).
+        """
+        for filtro in set_filtros.filtros:
+            if str(filtro.get("tipo") or "") != "nivel_experiencia":
+                continue
+            valor = filtro.get("valor")
+            if not valor:
+                continue
+            seleccion: list[str] = (
+                valor if isinstance(valor, list) else [str(valor)]
+            )
+            return [str(v).strip() for v in seleccion]
+        return []
+
+    def _aplicar_filtros_por_ui(
+        self,
+        page: Any,
+        esperados: list[str],
+        html: str,
+        niveles: list[str] | None = None,
+    ) -> None:
+        """Fallback por clics en la UI (D27) y filas de nivel (D70).
+
+        Mejores esfuerzos, sin excepciones: el estado final lo decide la
+        verificacion posterior; los timeouts se absorben y el flujo sigue.
         Solo clica los filtros que NO estan activos en el DOM actual (el
-        clic sobre un radio activo lo DESACTIVA). El estado final lo decide
-        la verificacion posterior; los timeouts se absorben y el flujo
-        continua.
+        clic sobre un radio activo lo DESACTIVA).
         """
         try:
             sopa = BeautifulSoup(html, "lxml")
@@ -594,8 +657,23 @@ class LinkedInAdapter:
                     if sopa.select(f"{_SEL_CHIP_REMOTO}[aria-checked='true']"):
                         continue
                     page.click(_SEL_CHIP_REMOTO, timeout=5000)
+                elif esperado.endswith("Nivel de experiencia") or esperado in (
+                    niveles or []
+                ):
+                    # D70: abrir la fila del grupo, togglear cada casilla
+                    # declarada (input oculto: foco + espacio) y confirmar.
+                    if self._casilla_marcada(sopa, esperado):
+                        continue
+                    page.click(_SEL_FILA_NIVEL, timeout=5000)
+                    for nombre in niveles or []:
+                        casilla = page.locator(_SEL_OPCION_NIVEL.format(nombre))
+                        if casilla.count() == 0 or casilla.first.is_checked():
+                            continue
+                        casilla.first.focus()
+                        page.keyboard.press(" ")
+                    page.click(_SEL_MOSTRAR_RESULTADOS, timeout=5000)
                 else:
-                    if self._checkbox_fecha_marcado(sopa, esperado):
+                    if self._casilla_marcada(sopa, esperado):
                         continue
                     page.click(_SEL_PILL_FECHA, timeout=5000)
                     page.click(_SEL_RADIO_FECHA.format(esperado), timeout=5000)
@@ -809,6 +887,12 @@ class LinkedInAdapter:
             if tipo == "modalidad":
                 if not valor:
                     continue
+                if "f_SAL" in parametros:
+                    raise FlowError(
+                        "filtros_no_aplicables",
+                        "El set combina 'modalidad' con otro filtro del "
+                        "mismo espacio (f_SAL) — use solo uno.",
+                    )
                 valores: list[str] = valor if isinstance(valor, list) else [str(valor)]
                 normales = [v.strip().lower() for v in valores]
                 if any(v not in _MODALIDAD_F_SAL for v in normales):
@@ -818,6 +902,47 @@ class LinkedInAdapter:
                         f"actual (solo 'remoto', D27).",
                     )
                 parametros["f_SAL"] = _MODALIDAD_F_SAL["remoto"]
+                continue
+            if tipo == "nivel_experiencia":
+                # D70 (2026-11-09): codigos de taxonomia verificados en vivo;
+                # el orden declarado se canoniza al de taxonomia.
+                if not valor:
+                    continue
+                if "f_SAL" in parametros:
+                    raise FlowError(
+                        "filtros_no_aplicables",
+                        "El set combina 'nivel_experiencia' con otro filtro "
+                        "del mismo espacio (f_SAL) — use solo uno.",
+                    )
+                seleccion: list[str] = (
+                    valor if isinstance(valor, list) else [str(valor)]
+                )
+                normales_nivel = [str(v).strip().lower() for v in seleccion]
+                if not normales_nivel or any(
+                    v not in _NIVEL_EXPERIENCIA_F_SAL for v in normales_nivel
+                ):
+                    raise FlowError(
+                        "filtros_no_aplicables",
+                        f"Nivel de experiencia '{seleccion}' no representable "
+                        f"(aceptados: "
+                        f"{', '.join(_NIVEL_EXPERIENCIA_F_SAL)}).",
+                    )
+                if len(set(normales_nivel)) != len(normales_nivel):
+                    raise FlowError(
+                        "filtros_no_aplicables",
+                        f"Nivel de experiencia '{seleccion}' duplicado.",
+                    )
+                orden = {
+                    codigo: posicion
+                    for posicion, codigo in enumerate(_NIVEL_EXPERIENCIA_CANONICO)
+                }
+                codigos = sorted(
+                    (_NIVEL_EXPERIENCIA_F_SAL[v] for v in normales_nivel),
+                    key=lambda c: orden[c],
+                )
+                parametros["f_SAL"] = (
+                    f"f_SA_id_{_NIVEL_EXPERIENCIA_FACET}:{','.join(codigos)}"
+                )
                 continue
             parametro = _PARAMETROS_FILTROS.get(tipo)
             if not parametro:

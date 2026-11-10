@@ -34,7 +34,6 @@ from scripts.modelo_tanda import (
     MODULOS_UNIVERSO,
     _abiertas,
     _agrupar_por_corrida,
-    _analizar_evidencia,
     _base_pendiente,
     _nombre_por_familia,
     _ordenar_eventos,
@@ -43,6 +42,9 @@ from scripts.modelo_tanda import (
     _texto,
     umbral_congelada_segundos,
     ventana_tanda_segundos,
+)
+from scripts.modelo_tanda import (
+    _analizar_evidencia as _analizar_evidencia,
 )
 from shared.config import load
 from shared.persistence import (

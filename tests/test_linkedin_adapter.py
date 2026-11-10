@@ -62,6 +62,7 @@ class FakePage:
         self.keyboard = FakeKeyboard()
         self.esperas: list[tuple[str, str | None, int | None]] = []
         self.clics: list[str] = []
+        self.focos: list[int] = []
 
     def goto(self, enlace: str, wait_until: str | None = None) -> None:
         self.gotos.append(enlace)
@@ -77,6 +78,11 @@ class FakePage:
 
     def click(self, selector: str, timeout: int | None = None) -> None:
         self.clics.append(selector)
+
+    def locator(self, selector: str) -> "FakeOptionLocator":
+        """Stub del locator de casilla del nivel de experiencia (D70)."""
+        del selector
+        return FakeOptionLocator(self)
 
     def wait_for_selector(
         self,
@@ -94,10 +100,30 @@ class FakePage:
 
 
 class FakeKeyboard:
-    """Playwright-like keyboard stub with no-op press."""
+    """Playwright-like keyboard stub that records presses."""
+
+    def __init__(self) -> None:
+        self.pulsaciones: list[str] = []
 
     def press(self, tecla: str) -> None:
-        pass
+        self.pulsaciones.append(tecla)
+
+
+class FakeOptionLocator:
+    """Stub del locator de la casilla de un nivel (foco + espacio, D70)."""
+
+    def __init__(self, page: "FakePage") -> None:
+        self._page = page
+        self.first: FakeOptionLocator = self
+
+    def count(self) -> int:
+        return 1
+
+    def is_checked(self) -> bool:
+        return False
+
+    def focus(self) -> None:
+        self._page.focos.append(1)
 
 
 @pytest.fixture
@@ -1072,6 +1098,37 @@ class FakePageFallbackUI(FakePage):
         )
 
 
+class FakePageFallbackNivel(FakePage):
+    """Simula el respaldo por UI del nivel (D70): tras confirmar, el DOM
+    trae la fila resumen contadora y la URL viaja con el f_SAL canonico."""
+
+    def __init__(self, por_url: dict[str, str]) -> None:
+        super().__init__(por_url)
+        self._html_tras_clic = (
+            "<html><body>"
+            "<p>28 resultados</p>"
+            "<input id='c1' type='checkbox' checked/>"
+            "<label for='c1'>Últimas 24 horas</label>"
+            "<div componentkey='job-card-component-ref-99901'>"
+            "<div componentkey='job-card-component-ref-99901'>"
+            "<span aria-hidden='true'>Oferta Con Filtros</span>"
+            "</div></div>"
+            "<input id='c3' type='checkbox' checked/>"
+            "<label for='c3'>4Nivel de experiencia</label>"
+            "</body></html>"
+        )
+
+    def click(self, selector: str, timeout: int | None = None) -> None:
+        self.clics.append(selector)
+        if "Mostrar resultados" in selector:
+            self._actual = self._html_tras_clic
+            self.url = (
+                "https://www.linkedin.com/jobs/search-results/?currentJobId=1"
+                "&keywords=Data+Engineer&geoId=100876405&f_TPR=r86400"
+                "&f_SAL=f_SA_id_227001%3A277001%2C278001%2C272003%2C279001"
+            )
+
+
 def test_apply_filters_verifica_chips_sin_clics(
     ficha_publica: FichaFuente,
     set_filtros: SetFiltros,
@@ -1837,3 +1894,282 @@ def test_capture_batch_freno_ofertas_por_tramo(
     assert estado.desplazamiento_final == 3
     assert estado.hay_mas_ofertas is True
     assert estado.limite_alcanzado is False
+
+
+# ---------------------- nivel de experiencia (D70) ----------------------- #
+
+URL_RESULTADOS_NIVEL = (
+    "https://www.linkedin.com/jobs/search-results/"
+    "?keywords=Data+Engineer&geoId=100876405&f_TPR=r86400"
+    "&f_SAL=f_SA_id_227001%3A277001%2C278001%2C272003%2C279001"
+)
+
+NIVELES_DEFAULT = ["Sénior", "Administrador", "Director", "Ejecutivo"]
+
+
+def _set_nivel(
+    ficha_publica: FichaFuente,
+    niveles: list[str] | None = None,
+    con_base: bool = True,
+) -> SetFiltros:
+    filtros: list[dict[str, Any]] = []
+    if con_base:
+        filtros = [
+            {"tipo": "keywords", "valor": ["Data Engineer"]},
+            {"tipo": "geoid", "valor": "100876405"},
+            {"tipo": "fecha_publicacion", "valor": "r86400"},
+        ]
+    if niveles is None:
+        niveles = NIVELES_DEFAULT
+    filtros.append({"tipo": "nivel_experiencia", "valor": niveles})
+    return SetFiltros(fuente_id=ficha_publica.fuente_id, indice=0, filtros=filtros)
+
+
+def _html_nivel_aplicado() -> str:
+    return (
+        "<html><body>"
+        "<p>28 resultados</p>"
+        "<input id='c1' type='checkbox' checked/>"
+        "<label for='c1'>Empleos</label>"
+        "<input id='c2' type='checkbox' checked/>"
+        "<label for='c2'>Últimas 24 horas</label>"
+        "<div componentkey='job-card-component-ref-99901'>"
+        "<div componentkey='job-card-component-ref-99901'>"
+        "<span aria-hidden='true'>Oferta</span>"
+        "</div></div>"
+        "<input id='c3' type='checkbox' checked/>"
+        "<label for='c3'>4Nivel de experiencia</label>"
+        "</body></html>"
+    )
+
+
+def test_construir_url_nivel_experiencia_canonico() -> None:
+    """Los 4 niveles viajan como grupo 227001 en orden de taxonomía (D70)."""
+    ficha = FichaFuente.model_validate(
+        {
+            "fuente_id": "linkedin",
+            "nombre": "LinkedIn",
+            "enlace": URL_BUSQUEDA,
+            "tipo_acceso": "con_autenticacion",
+            "credenciales_referencia": [],
+            "criterio_exito": "MainFeed",
+            "timeout_segundos": 30,
+            "sets": [],
+        }
+    )
+    enlace = LinkedInAdapter()._construir_url_busqueda(
+        "https://www.linkedin.com/jobs/search-results/", _set_nivel(ficha)
+    )
+    # urlencode (quote_plus) codifica ':' y ',' manteniendo el orden canonico.
+    assert enlace.startswith(
+        "https://www.linkedin.com/jobs/search-results/?keywords=Data+Engineer"
+        "&geoId=100876405&f_TPR=r86400"
+    )
+    assert enlace.endswith(
+        "&f_SAL=f_SA_id_227001%3A277001%2C278001%2C272003%2C279001"
+    )
+
+
+def test_construir_url_nivel_experiencia_orden_canonico_independiente() -> None:
+    """El orden declarado en config no cambia la URL emitida (D70)."""
+    def _url(niveles: list[str]) -> str:
+        setp = SetFiltros(
+            fuente_id="linkedin",
+            indice=0,
+            filtros=[{"tipo": "nivel_experiencia", "valor": niveles}],
+        )
+        return LinkedInAdapter()._construir_url_busqueda(
+            "https://www.linkedin.com/jobs/search-results", setp
+        )
+
+    assert _url(NIVELES_DEFAULT) == _url(list(reversed(NIVELES_DEFAULT)))
+    assert _url(NIVELES_DEFAULT).endswith(
+        "f_SAL=f_SA_id_227001%3A277001%2C278001%2C272003%2C279001"
+    )
+
+
+def test_construir_url_nivel_experiencia_uno_solo() -> None:
+    setp = SetFiltros(
+        fuente_id="linkedin",
+        indice=0,
+        filtros=[{"tipo": "nivel_experiencia", "valor": ["Sénior"]}],
+    )
+    enlace = LinkedInAdapter()._construir_url_busqueda(
+        "https://www.linkedin.com/jobs/search-results", setp
+    )
+    assert enlace.endswith("f_SAL=f_SA_id_227001%3A277001")
+
+
+def test_construir_url_nivel_experiencia_desconocido_falla() -> None:
+    setp = SetFiltros(
+        fuente_id="linkedin",
+        indice=0,
+        filtros=[{"tipo": "nivel_experiencia", "valor": ["Senior", "Sénior"]}],
+    )
+    with pytest.raises(FlowError) as exc:
+        LinkedInAdapter()._construir_url_busqueda(
+            "https://www.linkedin.com/jobs/search-results", setp
+        )
+    assert exc.value.codigo_motivo == "filtros_no_aplicables"
+
+
+def test_construir_url_nivel_experiencia_duplicado_falla() -> None:
+    setp = SetFiltros(
+        fuente_id="linkedin",
+        indice=0,
+        filtros=[{"tipo": "nivel_experiencia", "valor": ["Sénior", "Sénior"]}],
+    )
+    with pytest.raises(FlowError) as exc:
+        LinkedInAdapter()._construir_url_busqueda(
+            "https://www.linkedin.com/jobs/search-results", setp
+        )
+    assert exc.value.codigo_motivo == "filtros_no_aplicables"
+
+
+def test_construir_url_nivel_experiencia_vacio_se_ignora() -> None:
+    setp = SetFiltros(
+        fuente_id="linkedin",
+        indice=0,
+        filtros=[{"tipo": "nivel_experiencia", "valor": []}],
+    )
+    enlace = LinkedInAdapter()._construir_url_busqueda(
+        "https://www.linkedin.com/jobs/search-results", setp
+    )
+    assert enlace == "https://www.linkedin.com/jobs/search-results"
+
+
+def test_construir_url_nivel_experiencia_conflicto_modalidad_falla() -> None:
+    setp = SetFiltros(
+        fuente_id="linkedin",
+        indice=0,
+        filtros=[
+            {"tipo": "modalidad", "valor": "remoto"},
+            {"tipo": "nivel_experiencia", "valor": NIVELES_DEFAULT},
+        ],
+    )
+    with pytest.raises(FlowError) as exc:
+        LinkedInAdapter()._construir_url_busqueda(
+            "https://www.linkedin.com/jobs/search-results", setp
+        )
+    assert exc.value.codigo_motivo == "filtros_no_aplicables"
+
+
+def test_filtros_esperados_nivel_resumen_y_unico() -> None:
+    adapter = LinkedInAdapter()
+    set_varios = SetFiltros(
+        fuente_id="linkedin",
+        indice=0,
+        filtros=[
+            {"tipo": "fecha_publicacion", "valor": "r86400"},
+            {"tipo": "nivel_experiencia", "valor": NIVELES_DEFAULT},
+        ],
+    )
+    assert adapter._filtros_esperados(set_varios) == [
+        "Últimas 24 horas",
+        "4Nivel de experiencia",
+    ]
+    set_uno = SetFiltros(
+        fuente_id="linkedin",
+        indice=0,
+        filtros=[{"tipo": "nivel_experiencia", "valor": ["Sénior"]}],
+    )
+    assert adapter._filtros_esperados(set_uno) == ["Sénior"]
+
+
+def test_verificar_filtros_nivel_marcado_y_ausente() -> None:
+    html = _html_nivel_aplicado()
+    adapter = LinkedInAdapter()
+    assert adapter._verificar_filtros_aplicados(
+        html, ["Últimas 24 horas", "4Nivel de experiencia"]
+    )
+    assert not adapter._verificar_filtros_aplicados(html, ["3Nivel de experiencia"])
+
+
+def test_apply_filters_nivel_experiencia_verifica_sin_clics(
+    ficha_publica: FichaFuente, politicas: PoliticasCaptura
+) -> None:
+    """La URL aplica el nivel (sonda viva D70) y el DOM lo confirma."""
+    pagina = FakePage({URL_RESULTADOS_NIVEL: _html_nivel_aplicado()})
+    resultado = LinkedInAdapter().apply_filters(
+        pagina,
+        ficha_publica,
+        _set_nivel(ficha_publica),
+        politicas,
+    )
+    assert resultado.estado == "exito"
+    assert resultado.total_declarado == 28
+    assert pagina.clics == []
+
+
+def test_apply_filters_nivel_experiencia_no_aplicado_falla_set(
+    ficha_publica: FichaFuente, politicas: PoliticasCaptura
+) -> None:
+    """Si el panel no refleja el nivel, el set falla honesto (jamás captura)."""
+    html_sin_nivel = _html_nivel_aplicado().replace(
+        "<label for='c3'>4Nivel de experiencia</label>", ""
+    )
+    pagina = FakePage({URL_RESULTADOS_NIVEL: html_sin_nivel})
+    with pytest.raises(FlowError) as exc:
+        LinkedInAdapter().apply_filters(
+            pagina,
+            ficha_publica,
+            _set_nivel(ficha_publica),
+            politicas,
+        )
+    assert exc.value.codigo_motivo == "filtros_no_aplicables"
+
+
+def test_apply_filters_fallback_nivel_aplica_filtros(
+    ficha_publica: FichaFuente, politicas: PoliticasCaptura
+) -> None:
+    """Plan B (D70, sonda viva): abre el grupo, toggles con espacio y
+    confirma; el DOM queda con la fila resumen y la URL con f_SAL."""
+    html_sin_nivel = _html_nivel_aplicado().replace(
+        "<label for='c3'>4Nivel de experiencia</label>", ""
+    )
+    pagina = FakePageFallbackNivel({URL_RESULTADOS_NIVEL: html_sin_nivel})
+    resultado = LinkedInAdapter().apply_filters(
+        pagina,
+        ficha_publica,
+        _set_nivel(ficha_publica),
+        politicas,
+    )
+    assert resultado.estado == "exito"
+    assert resultado.total_declarado == 28
+    assert pagina.clics == [
+        "label:has-text('Nivel de experiencia')",
+        "button:text-is('Mostrar resultados'), a:text-is('Mostrar resultados')",
+    ]
+    assert pagina.focos == [1, 1, 1, 1]
+    assert pagina.keyboard.pulsaciones == [" ", " ", " ", " "]
+    assert resultado.evidencia_acotada.startswith(
+        "url: https://www.linkedin.com/jobs/search-results/?currentJobId=1"
+    )
+    assert (
+        "f_SAL=f_SA_id_227001%3A277001%2C278001%2C272003%2C279001"
+        in resultado.evidencia_acotada
+    )
+
+
+def test_apply_filters_fallback_nivel_no_aplica_falla_set(
+    ficha_publica: FichaFuente, politicas: PoliticasCaptura
+) -> None:
+    """Si ni la URL ni los clics aplican, el set falla honesto (D27/D70)."""
+    html_sin_nivel = _html_nivel_aplicado().replace(
+        "<label for='c3'>4Nivel de experiencia</label>", ""
+    )
+    pagina = FakePage({URL_RESULTADOS_NIVEL: html_sin_nivel})
+    with pytest.raises(FlowError) as exc:
+        LinkedInAdapter().apply_filters(
+            pagina,
+            ficha_publica,
+            _set_nivel(ficha_publica),
+            politicas,
+        )
+    assert exc.value.codigo_motivo == "filtros_no_aplicables"
+    assert pagina.clics == [
+        "label:has-text('Nivel de experiencia')",
+        "button:text-is('Mostrar resultados'), a:text-is('Mostrar resultados')",
+    ]
+    assert pagina.focos == [1, 1, 1, 1]
+    assert pagina.keyboard.pulsaciones == [" ", " ", " ", " "]

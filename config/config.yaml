@@ -25,150 +25,96 @@ fuentes:
     # honrarse por LinkedIn (2026-10-22); los sets no lo usan, la
     # geografía viaja solo por geoid.
     sets_de_filtros:
-      - indice_set: 0   # G01 Excelencia Operacional · Colombia
+      - indice_set: 0   # G01 Excelencia operacional, liderazgo de operaciones y servicios · Colombia
         filtros:
           - tipo: "keywords"
-            valor: ['("excelencia operacional" OR "operational excellence" OR "excelencia operativa" OR OpEx OR "business excellence") AND (líder OR jefe OR coordinador OR gerente OR lead OR manager OR head OR director)']
+            valor: ['("operational excellence" OR "excelencia operacional" OR OpEx OR "business excellence" OR "continuous improvement" OR "mejora continua" OR "operations manager" OR "gerente de operaciones" OR "jefe de operaciones" OR "director de operaciones" OR "head of operations" OR "plant manager" OR "gerente de planta" OR "jefe de planta" OR "production manager" OR "gerente de producción" OR "jefe de producción" OR "capacity planning" OR "planeación de capacidad" OR "operational planning" OR "planeación operativa" OR "resource planning" OR "planeación de recursos" OR "service operations" OR "operaciones de servicio" OR "service delivery" OR "gerente de servicios" OR "director de servicios" OR "gestión de servicios" OR "operational governance" OR "gobierno operacional" OR "gobierno de operaciones")']
           - tipo: "geoid"
             valor: "100876405"
           - tipo: "fecha_publicacion"
             valor: "r86400"
-      - indice_set: 1   # G02 Mejora Continua · Colombia
+          - tipo: "nivel_experiencia"
+            valor: ["Sénior", "Administrador", "Director", "Ejecutivo"]
+      - indice_set: 1   # G02 Transformación operacional, digital, industrial y organizacional · Colombia
         filtros:
           - tipo: "keywords"
-            valor: ['("mejora continua" OR "mejoramiento continuo" OR "continuous improvement" OR "Lean Six Sigma" OR "Six Sigma" OR LSS) AND (líder OR jefe OR ingeniero OR lead OR manager OR coordinador OR director) NOT (practicante OR aprendiz OR auxiliar OR intern OR trainee OR junior)']
+            valor: ['("operations transformation" OR "transformación operacional" OR "transformación operativa" OR "business transformation" OR "transformación empresarial" OR "transformación del negocio" OR "digital transformation" OR "transformación digital" OR "process transformation" OR "transformación de procesos" OR "organizational transformation" OR "transformación organizacional" OR "enterprise transformation" OR "industrial transformation" OR "transformación industrial" OR "change management" OR "gestión del cambio" OR "change manager" OR "gerente de transformación" OR "director de transformación" OR "industry 4.0" OR "smart manufacturing" OR "manufactura inteligente")']
           - tipo: "geoid"
             valor: "100876405"
           - tipo: "fecha_publicacion"
             valor: "r86400"
-      - indice_set: 2   # G03 Transformación Operacional · Colombia
+          - tipo: "nivel_experiencia"
+            valor: ["Sénior", "Administrador", "Director", "Ejecutivo"]
+      - indice_set: 2   # G03 Optimización de procesos, Lean, Process Mining, calidad y confiabilidad · Colombia
         filtros:
           - tipo: "keywords"
-            valor: ['("transformación operacional" OR "transformación operativa" OR "operations transformation" OR "operational transformation" OR "business transformation" OR "process transformation") AND (operaciones OR operations OR procesos OR process) AND (líder OR gerente OR manager OR lead OR director OR head) NOT (ventas OR comercial OR marketing OR sales)']
+            valor: ['("process improvement" OR "mejora de procesos" OR "process excellence" OR "excelencia de procesos" OR "Lean Six Sigma" OR "Lean manufacturing" OR "manufactura esbelta" OR "manufacturing excellence" OR "process mining" OR "minería de procesos" OR "business process management" OR "gestión por procesos" OR "value stream mapping" OR "mapeo de flujo de valor" OR VSM OR DMAIC OR Kaizen OR "root cause analysis" OR "análisis de causa raíz" OR "statistical process control" OR "control estadístico de procesos" OR "theory of constraints" OR "teoría de restricciones" OR "quality systems" OR "sistemas de gestión de calidad" OR "quality management" OR "gestión de calidad" OR CAPA OR "predictive maintenance" OR "mantenimiento predictivo" OR "asset reliability" OR "confiabilidad de activos" OR "confiabilidad operacional")']
           - tipo: "geoid"
             valor: "100876405"
           - tipo: "fecha_publicacion"
             valor: "r86400"
-      - indice_set: 3   # G04 Optimización de Procesos · Colombia
+          - tipo: "nivel_experiencia"
+            valor: ["Sénior", "Administrador", "Director", "Ejecutivo"]
+      - indice_set: 3   # G04 Automatización inteligente, hiperautomatización y agentes de IA · Colombia
         filtros:
           - tipo: "keywords"
-            valor: ['("optimización de procesos" OR "mejoramiento de procesos" OR "gestión por procesos" OR "process improvement" OR "process excellence" OR "process optimization" OR BPM) AND (líder OR jefe OR gerente OR coordinador OR lead OR manager OR head OR director) NOT (practicante OR aprendiz OR auxiliar OR intern OR junior)']
+            valor: ['("intelligent automation" OR "automatización inteligente" OR "process automation" OR "automatización de procesos" OR hyperautomation OR hiperautomatización OR RPA OR "AI agent" OR "AI agents" OR "agentes de IA" OR "agentic automation" OR "AI automation" OR "workflow automation" OR "automatización de flujos de trabajo" OR "business process automation" OR "automatización de procesos de negocio" OR "process orchestration" OR "orquestación de procesos" OR "end-to-end automation" OR "automatización end-to-end" OR "automatización de extremo a extremo") AND (operations OR operaciones OR "business process" OR procesos OR workflow OR "flujo de trabajo")']
           - tipo: "geoid"
             valor: "100876405"
           - tipo: "fecha_publicacion"
             valor: "r86400"
-      - indice_set: 4   # G05 Manufactura y Lean · Colombia
+          - tipo: "nivel_experiencia"
+            valor: ["Sénior", "Administrador", "Director", "Ejecutivo"]
+      - indice_set: 4   # G05 Analítica operacional, inteligencia de negocio y sistemas de decisión · Colombia
         filtros:
           - tipo: "keywords"
-            valor: ['("ingeniero de procesos" OR "líder de procesos" OR "process engineer" OR "manufacturing excellence" OR "excelencia en manufactura" OR "Lean manufacturing" OR "Lean production" OR "Manufactura esbelta" OR "Lean management") AND (manufactura OR producción OR planta OR manufacturing) AND (gerente OR manager OR líder OR lead OR director OR head OR senior) NOT (practicante OR junior OR intern)']
+            valor: ['("operations analytics" OR "analítica operacional" OR "decision support" OR "soporte a decisiones" OR "decision intelligence" OR "business intelligence" OR "inteligencia de negocios" OR "data strategy" OR "estrategia de datos" OR "data governance" OR "gobierno del dato" OR "gobierno de datos" OR "data quality" OR "calidad de datos" OR "analytics governance" OR "gobierno de analítica" OR "operational performance" OR "desempeño operacional" OR "business performance" OR "desempeño del negocio" OR "performance management" OR "gestión del desempeño" OR "KPI governance" OR "gobierno de indicadores" OR "KPI management" OR "gestión de indicadores" OR "decision support systems" OR "sistemas de soporte a decisiones" OR "business intelligence manager" OR "analytics manager") AND (manager OR director OR lead OR head OR gerente OR líder OR jefe OR responsable)']
           - tipo: "geoid"
             valor: "100876405"
           - tipo: "fecha_publicacion"
             valor: "r86400"
-      - indice_set: 5   # G06 Industria 4.0 · Colombia
+          - tipo: "nivel_experiencia"
+            valor: ["Sénior", "Administrador", "Director", "Ejecutivo"]
+      - indice_set: 5   # G06 Business Operations, estrategia y ejecución empresarial · Colombia
         filtros:
           - tipo: "keywords"
-            valor: ['("industria 4.0" OR "industry 4.0" OR "smart manufacturing" OR "manufactura digital" OR "digital manufacturing" OR "advanced manufacturing") AND (operaciones OR manufactura OR planta OR operations OR manufacturing) AND (líder OR gerente OR manager OR lead OR director OR head OR senior)']
+            valor: ['("business operations" OR "operaciones de negocio" OR "operaciones empresariales" OR BizOps OR "strategy and operations" OR "estrategia y operaciones" OR "strategic operations" OR "operaciones estratégicas" OR "operations strategy" OR "estrategia de operaciones" OR "strategy execution" OR "ejecución de la estrategia" OR "revenue operations" OR "operaciones de ingresos" OR RevOps OR "product operations" OR "operaciones de producto" OR "strategic planning" OR "planeación estratégica" OR "business strategy" OR "estrategia empresarial" OR "business planning" OR "planeación de negocio" OR "corporate strategy" OR "estrategia corporativa") AND (manager OR director OR senior OR lead OR head OR gerente OR líder OR jefe)']
           - tipo: "geoid"
             valor: "100876405"
           - tipo: "fecha_publicacion"
             valor: "r86400"
-      - indice_set: 6   # G07 Planeación de la Demanda (S&OP) · Colombia
+          - tipo: "nivel_experiencia"
+            valor: ["Sénior", "Administrador", "Director", "Ejecutivo"]
+      - indice_set: 6   # G07 Estrategia, transformación y gobierno de inteligencia artificial · Colombia
         filtros:
           - tipo: "keywords"
-            valor: ['("planeación de la demanda" OR "planeación de demanda" OR "demand planning" OR "supply planning" OR "S&OP" OR "IBP" OR "planeador de demanda" OR "demand planner" OR "supply planner") AND (líder OR jefe OR coordinador OR gerente OR senior OR lead OR manager OR director OR head)']
+            valor: ['("AI transformation" OR "transformación con IA" OR "AI strategy" OR "estrategia de IA" OR "AI adoption" OR "adopción de IA" OR "AI operating model" OR "modelo operativo de IA" OR "AI governance" OR "gobierno de IA" OR "artificial intelligence" OR "inteligencia artificial" OR "generative AI" OR "IA generativa" OR "AI enablement" OR "habilitación de IA" OR "implementación de IA" OR "integración de inteligencia artificial") AND (operations OR operaciones OR "business process" OR procesos OR workflow OR "flujo de trabajo")']
           - tipo: "geoid"
             valor: "100876405"
           - tipo: "fecha_publicacion"
             valor: "r86400"
-      - indice_set: 7   # G08 Process Mining · Colombia
+          - tipo: "nivel_experiencia"
+            valor: ["Sénior", "Administrador", "Director", "Ejecutivo"]
+      - indice_set: 7   # G08 Arquitectura de negocio, arquitectura de procesos y modelos operativos · Colombia
         filtros:
           - tipo: "keywords"
-            valor: ['("process mining" OR "minería de procesos" OR Celonis OR Signavio OR "business process mining") AND (operations OR operaciones OR procesos OR process) AND (senior OR líder OR lead OR manager OR consultor OR consultant OR director) NOT (junior OR intern OR developer)']
+            valor: ['("business architecture" OR "arquitectura de negocio" OR "business architect" OR "arquitecto de negocio" OR "process architecture" OR "arquitectura de procesos" OR "process architect" OR "arquitecto de procesos" OR "operating model" OR "target operating model" OR "modelo operativo" OR "modelo operativo objetivo" OR "operating model design" OR "diseño del modelo operativo" OR "organizational design" OR "diseño organizacional" OR "business process management" OR "gestión por procesos" OR "process governance" OR "gobierno de procesos" OR "global process owner" OR "responsable global de procesos" OR "business process owner" OR "process owner" OR "dueño de procesos" OR "propietario de procesos" OR "responsable de procesos")']
           - tipo: "geoid"
             valor: "100876405"
           - tipo: "fecha_publicacion"
             valor: "r86400"
-      - indice_set: 8   # G09 Automatización Inteligente · Colombia
+          - tipo: "nivel_experiencia"
+            valor: ["Sénior", "Administrador", "Director", "Ejecutivo"]
+      - indice_set: 8   # G09 Cadena de suministro, planeación, producción e inventarios · Colombia
         filtros:
           - tipo: "keywords"
-            valor: ['("intelligent automation" OR "automatización inteligente" OR "process automation" OR "automatización de procesos" OR "RPA" OR "hyperautomation" OR "hiperautomatización") AND (operaciones OR operations OR procesos OR "process improvement" OR mejoramiento) AND (líder OR gerente OR consultor OR coordinador OR lead OR manager OR consultant OR head) NOT (intern OR junior OR practicante OR developer OR MLOps OR DevOps)']
+            valor: ['("supply chain" OR "cadena de suministro" OR "supply planning" OR "planeación de abastecimiento" OR "demand planning" OR "planeación de demanda" OR "S&OP" OR IBP OR "inventory management" OR "gestión de inventarios" OR "materials planning" OR "planeación de materiales" OR "abastecimiento" OR "procurement planning" OR "planeación de compras" OR "supply chain planning" OR "planificación de la cadena de suministro" OR "inventory optimization" OR "optimización de inventarios" OR "production planning" OR "planeación de producción" OR "inventory planning" OR "planeación de inventarios" OR "replenishment planning" OR "planeación de reposición" OR "logistics operations" OR "operaciones logísticas" OR "distribution planning" OR "planeación de distribución" OR "supply chain excellence" OR "gerente de cadena de suministro" OR "director de cadena de suministro" OR "gerente de logística")']
           - tipo: "geoid"
             valor: "100876405"
           - tipo: "fecha_publicacion"
             valor: "r86400"
-      - indice_set: 9   # G10 Analítica Operacional · Colombia
-        filtros:
-          - tipo: "keywords"
-            valor: ['("operations analytics" OR "operational analytics" OR "analítica operacional" OR "decision support" OR "analista de operaciones" OR "business intelligence" OR BI) AND ("Power BI" OR SQL OR Python OR Tableau OR Looker) AND (senior OR líder OR lead OR manager OR director OR head) NOT (junior OR intern OR practicante)']
-          - tipo: "geoid"
-            valor: "100876405"
-          - tipo: "fecha_publicacion"
-            valor: "r86400"
-      - indice_set: 10   # G11 Business Operations (BizOps) · Colombia
-        filtros:
-          - tipo: "keywords"
-            valor: ['("business operations" OR bizops OR "strategy and operations" OR "strategic operations") AND (data OR analytics OR automation OR AI) AND (senior OR líder OR lead OR manager OR director OR head OR consultor) NOT (junior OR intern OR practicante)']
-          - tipo: "geoid"
-            valor: "100876405"
-          - tipo: "fecha_publicacion"
-            valor: "r86400"
-      - indice_set: 11   # G12 Consultoría de Procesos y Operaciones · Colombia
-        filtros:
-          - tipo: "keywords"
-            valor: ['(consultor OR consultant OR consulting OR advisor) AND ("excelencia operacional" OR "operational excellence" OR "process improvement" OR "mejora de procesos" OR "supply chain" OR "Lean management" OR "Lean Six Sigma" OR "transformación") AND (senior OR manager OR lead OR líder OR director OR principal OR head) NOT (junior OR intern OR practicante)']
-          - tipo: "geoid"
-            valor: "100876405"
-          - tipo: "fecha_publicacion"
-            valor: "r86400"
-      - indice_set: 12   # G13 IA Aplicada a Operaciones · Colombia
-        filtros:
-          - tipo: "keywords"
-            valor: ['("AI" OR "artificial intelligence" OR "GenAI" OR "inteligencia artificial" OR "IA generativa" OR "LLM" OR "AI agent*") AND ("process improvement" OR "operational excellence" OR "process transformation" OR "operations transformation" OR "mejora de procesos" OR "excelencia operacional" OR "mejoramiento continuo" OR "transformación operacional") AND (lead OR manager OR consultant OR líder OR gerente OR jefe OR consultor OR director OR head) NOT (MLOps OR "machine learning engineer" OR "software engineer" OR "prompt engineer" OR developer OR DevOps)']
-          - tipo: "geoid"
-            valor: "100876405"
-          - tipo: "fecha_publicacion"
-            valor: "r86400"
-      - indice_set: 13   # G14 Agentes de IA e Hiperautomatización · Colombia
-        filtros:
-          - tipo: "keywords"
-            valor: ['("AI agent*" OR "agentic" OR "agentes de IA" OR "intelligent automation" OR "hyperautomation" OR "automatización inteligente" OR "AI automation" OR "RPA" OR "GenAI") AND (operations OR process OR operaciones OR procesos OR "process excellence" OR "business operations" OR transformación) AND (lead OR manager OR consultant OR líder OR gerente OR consultor OR director OR head) NOT (MLOps OR DevOps OR "software engineer" OR developer OR desarrollador OR junior OR intern)']
-          - tipo: "geoid"
-            valor: "100876405"
-          - tipo: "fecha_publicacion"
-            valor: "r86400"
-      - indice_set: 14   # G15 Arquitectura de Negocio y Modelos Operativos (Operating Model) · Colombia
-        filtros:
-          - tipo: "keywords"
-            valor: ['("business architect" OR "process architect" OR "arquitecto de procesos" OR "operating model" OR "enterprise architecture" OR "diseño organizacional") AND (transformación OR transformation OR operaciones OR operations OR "business transformation") AND (senior OR lead OR manager OR director OR principal OR head OR consultor) NOT (junior OR intern OR software OR IT OR developer)']
-          - tipo: "geoid"
-            valor: "100876405"
-          - tipo: "fecha_publicacion"
-            valor: "r86400"
-      - indice_set: 15   # G16 Operaciones de Servicio (Service Operations) · Colombia
-        filtros:
-          - tipo: "keywords"
-            valor: ['("service operations" OR "operaciones de servicio" OR "service delivery" OR "Lean service" OR "healthcare operations" OR "clinical operations" OR "service design") AND (líder OR gerente OR manager OR lead OR director OR head OR "process improvement") NOT (junior OR intern OR "call center" OR representante OR auxiliar)']
-          - tipo: "geoid"
-            valor: "100876405"
-          - tipo: "fecha_publicacion"
-            valor: "r86400"
-      - indice_set: 16   # G17 Confiabilidad y Mantenimiento Predictivo (Reliability) · Colombia
-        filtros:
-          - tipo: "keywords"
-            valor: ['("predictive maintenance" OR "mantenimiento predictivo" OR "reliability" OR "confiabilidad" OR "asset management" OR "gestión de activos" OR "condition monitoring") AND (operaciones OR operations OR manufactura OR planta OR manufacturing) AND (líder OR gerente OR manager OR lead OR senior OR engineer OR "data scientist") NOT (junior OR intern OR technician OR técnico OR mecánico)']
-          - tipo: "geoid"
-            valor: "100876405"
-          - tipo: "fecha_publicacion"
-            valor: "r86400"
-      - indice_set: 17   # G18 Cadena de Suministro Integral (Más allá de la Planeación) · Colombia
-        filtros:
-          - tipo: "keywords"
-            valor: ['("supply chain" OR "cadena de suministro" OR "inventory management" OR "gestión de inventarios" OR "materials planning" OR "abastecimiento" OR "logistics operations") AND (optimización OR optimization OR analítica OR analytics OR "process improvement") AND (líder OR gerente OR manager OR lead OR director OR head OR senior) NOT (junior OR intern OR practicante OR auxiliar OR conductor OR chofer)']
-          - tipo: "geoid"
-            valor: "100876405"
-          - tipo: "fecha_publicacion"
-            valor: "r86400"
+          - tipo: "nivel_experiencia"
+            valor: ["Sénior", "Administrador", "Director", "Ejecutivo"]
     politicas_de_captura:
       max_paginas: 100
       max_ofertas_por_corrida: 1000

@@ -277,6 +277,21 @@
 
 ---
 
+## Filtro de nivel de experiencia y matriz definitiva de 9 grupos (2026-11-09)
+
+> Decisión D70 (libro v1.49). A petición del usuario, la captura automática ahora aplica el filtro «Nivel de experiencia» (Sénior, Administrador, Director, Ejecutivo) y la matriz de búsqueda pasa de los 18 grupos provisionales a 9 grupos definitivos. Mecánica comprobada en vivo contra la sesión real del sistema (sonda de solo lectura sobre copia aislada del perfil, sin tanda en curso): la plataforma de búsqueda obedece el filtro escrito en la dirección de la búsqueda, sin necesidad de clics, y el panel lo refleja; cada código se comprobó uno por uno y en unión.
+
+| # | Cambio | Estado | Notas |
+|---|--------|--------|-------|
+| — | Filtro `nivel_experiencia` en la configuración de búsqueda | ✅ | Los grupos lo declaran por nombre (Sénior/Administrador/Director/Ejecutivo); el sistema solo acepta esas cuatro etiquetas, rechaza repetidas y desconocidas, y emite el código canónico verificado (grupo 227001: 277001·278001·272003·279001) — idéntico al que capturó el usuario en su prueba manual. La asignación muerta del buscador antiguo (f_JT) se retira. |
+| — | Guardia de compatibilidad en el espacio compartido | ✅ | El filtro de nivel y el de modalidad remota usan el mismo parámetro: un grupo no puede declarar ambos (hoy ninguno usa modalidad; el aviso es honesto antes de escribir). |
+| — | Comprobación del panel tras cada carga | ✅ | Con los 4 niveles el panel muestra la fila resumen contadora «4Nivel de experiencia» (el número va pegado a la palabra, formato observado en vivo); con una sola, la casilla por nombre. Misma mecánica que la ventana de fecha: dirección primero, respaldo de clics segundo, y fallo honesto del grupo si tampoco así se aplica. |
+| — | Respaldo por clics comprobado en vivo | ✅ | Secuencia captada en vivo: abrir la fila del grupo, marcar cada casilla (entrada oculta: foco + espacio; el clic directo no surte efecto) y confirmar con «Mostrar resultados»; la URL queda con el código canónico y el panel con la fila resumen. Programado en el adaptador y defendido por pruebas. |
+| — | Matriz definitiva de 9 grupos (recorte de D60 por el usuario) | ✅ | Los 9 grupos declarados por el usuario (frases integras, tal como las escribió) sustituyen a los 18; cada uno conserva geoid Colombia (100876405) y últimas 24 horas (r86400) y añade los 4 niveles. Índices consecutivos 0–8. |
+| — | Verificación en vivo y efectos medidos | ✅ | Con la palabra clave de prueba: sin filtro 57 ofertas; con los 4 niveles 28 (por nivel: Sénior 28, Administrador 17, Director 7, Ejecutivo 14); Colombia y 24 h intactas en todas las variaciones y sin señales de capa de protección. En tandas reales se espera menos volumen por grupo: desaparecen las de pasantía y nivel inicial, que la evaluación descartaba con veto. |
+| — | Pruebas y validaciones | ✅ | 13 pruebas nuevas (canonicidad del orden, etiquetas desconocidas/repetidas, conflicto con modalidad, resumen y casilla única del panel, respaldo por clics completo y su fallo honesto); 790 pruebas, ruff/mypy limpios (más arreglo de higiene: reexportación explícita en el tablero que el chequeo de tipos ya reclamaba). Sin cambios de esquema, prompts, contratos ni flujos. |
+---
+
 ## Phase 7. Module 4 — Deep Processing
 
 | # | Task | Source docs | Status | Notes |
