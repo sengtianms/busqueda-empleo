@@ -5,6 +5,7 @@ Unless noted, decisions from previous sessions remain in effect.
 ## Sessions index
 | № | Date | Session ID | Summary |
 |---|---|---|---|
+| 53 | 10/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Two criterion decisions registered documents-only, closing two more post-V1 backlog items: the naming criterion for the future stages was fixed before their design (Spanish continuity, the user's choice — the future Modules 4–5 follow the same Spanish-identifier rule already approved three times, with the unchanged public module entry), and the naming drift of the operations layer was regularized by extending the exception rather than renaming (the operator-facing pieces — narration voice, commands, live board, watchdog, notifier, reports, wrappers, unit names and their tests — are now an approved Spanish exception, closed to that layer, with zero renames and the live deployment untouched); both changes verified by the docs reviewer as CONFORME with minors resolved; the doc reviewer also re-confirmed that the already-implemented chair-cut backlog item (4.3) was closed in the previous stretch |
 | 52 | 10/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Exact chair cut by process number shipped per the approved plan: the run chair now records the holder's OS process number on every way it can be taken, and the operator stop/wipe commands cut that exact holder first — with the name-pattern method kept only as a safety net for missing, dead, lying or own-chain clues; a strict clue judge (alive, born after the last system boot, own system identity, never an ancestor) protects innocent bystanders; live database migrated with backup on a verified-at-zero machine and a three-scenario live rehearsal on copies; both official closing reviewers ran (quota recovered) and returned CONFORME with all minors resolved; 817 tests |
 | 51 | 10/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Search-list attribution and a duplicate-encounters ledger shipped per the approved plan: every captured offer carries the list that brought it (position-keyed ids, full search phrase stored per list, catalog self-fed at every run start with retired lists kept readable), and every silent re-encounter of an already-registered offer is recorded with the scanned list and the originating one while the dedup behavior stays untouched; a read-only per-list report answers which lists harvest most and which duplicate most; the live database migrated with backup leaving the 129 historical offers unattributed by user order; official closing reviewers blocked again by the reviewer model quota, manual closing review applied; 806 tests |
 | 50 | 09/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Experience-level filter added to the capture (decision D70 in log v1.49): the platform's seniority filter was decoded on a live isolated session copy, applied straight through the search address, verified against the filter panel and given a keyboard-driven screen-touch fallback; the 18 provisional query groups were replaced by the user's nine definitive ones (Colombia, last 24 h and all four levels each), so junior postings stop entering capture and the per-group harvest roughly halves; official closing reviewers unavailable at quota exhaustion, manual closing review applied; 790 tests |
@@ -46,6 +47,28 @@ Unless noted, decisions from previous sessions remain in effect.
 | 14 | 09/08/2026 | `ses_01bcc78adffemcqFEiZxT52Eli` | Sub-fase 4.4: capture/registration nodes implemented, audited, and post-audit fixes applied (FK-free schema, name columns, upsert tests) |
 | 13 | 08/08/2026 | `ses_01be77680ffeuyoKct4Qrfx1GG` | Repo sync to `fase-4`; new `/save` section with general git commit and push guidance |
 | 12 | 08/08/2026 | `ses_01c089ce2ffe9MvQT4F1pC0MJN` | Sub-fase 4.2 deep audit + post-audit fixes (credentials mapping, playwright lifecycle) |
+
+## Session 53 — 10/11/2026
+`ses_f4af1b961ffe5t8xNspW5U761x` · `ajuste-final-v1`
+
+**Topics**
+- Same OpenCode conversation as the previous entries; this stretch covers two criterion decisions from the post-V1 backlog, both documents-only with zero code touched
+- Backlog item explained and confirmed already closed: the exact cut by chair holder (4.3) had been implemented in the previous stretch, so its old backlog wording no longer described the system
+- Future-stages naming criterion fixed before their design: the user chose Spanish continuity, so the two unbuilt stages (deep processing, results management) will follow the same Spanish-identifier rule approved three times for the built stages, with each module's public entry unchanged (the same door the chain launcher consumes today)
+- Operations-layer naming drift regularized: the operator-facing pieces — narration voice living among the shared services, the four lifecycle commands, the live board, the watchdog, the verdict notifier, the run reports, their one-line wrappers and the system-scheduler unit names, plus their tests — were built Spanish-named after the style contract was written and had never been authorized on paper
+- The user chose extending the exception over renaming: zero files renamed because the live scheduler units point at the wrappers by name, so the paper now matches reality instead of reality being bent to the paper
+- The exception is categorical and closed to the operations layer (future operator-facing additions included); every other shared service and all remaining code/config/tests stay English except the registered exceptions (data layer, module packages)
+- Docs reviewer verified both decisions against the repo (every named piece exists, the scheduler units really reference the wrapper paths, no Spanish-named operations piece left outside the list) and its one weighted finding — the data layer wrongly listed among the English-only services — was corrected before closing
+- Pre-existing cosmetic note re-flagged for a future batch: the decision log's version table has a small date-ordering disorder that predates this session
+
+**Decisions**
+- D73 (decision log v1.52): Spanish naming criterion for the future stages — Modules 4–5 (Phases 7–8) follow the same Spanish-identifier criterion approved for the built stages (exception extended when built); public module entry stays the launcher-consumed `ejecutar_flujo()` with Spanish node/domain names inside; registered before the Module 4 technical sheet exists
+- D74 (decision log v1.53): naming exception for the operations layer — the operator-facing pieces (narration voice, command engine, live board, watchdog, nucleus library, verdict notifier, run reports, wrappers/installer, systemd unit names, layer tests) are an approved Spanish exception, categorical and closed to that layer; no renames, live deployment untouched; data layer and module packages keep their own registered exceptions
+- Decisions from previous sessions remain in effect
+
+**Status**
+- Both criterion decisions registered, reviewer-approved (CONFORME) and closed; documents-only stretch: lint/type/tests not required (no code changed; suite stays at 817)
+- Phases 7–8 remain future-version planning; active branch: `ajuste-final-v1`
 
 ## Session 52 — 10/11/2026
 `ses_f4af1b961ffe5t8xNspW5U761x` · `ajuste-final-v1`

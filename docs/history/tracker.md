@@ -321,6 +321,24 @@
 | — | Pruebas y validaciones | ✅ | 11 pruebas nuevas (migración con fila de legado + el camino real de esquema anterior al cambio; dueño válido, identidad ajena, silla anterior al arranque, número muerto, silla sin número, mano propia rechazada, corte exacto de detener, caída al respaldo con pista mentirosa, corte exacto de limpiar — con procesos señuelo reales; los caminos de adquisición/sobrescritura se actualizaron en pruebas existentes para llevar el número); 817 pruebas, ruff/mypy limpios. Revisión de cierre conforme en ambos revisores. Alineados libro de decisiones (v1.51), tablas de la base (§2.8), DOC-13A (v1.21, incluidas sus secciones de la silla) y contrato operativo. El vigía y los cierres de fantasmas intactos (actúan por silencio, no por procesos). |
 ---
 
+## Criterio de nombres para las etapas futuras (2026-11-10)
+
+> Decisión D73 (libro v1.52). Pendiente post-V1 resuelto (decisión de criterio, no construcción): cómo se nombrarán las piezas públicas de las dos etapas aún no construidas (Módulo 4 — Procesamiento profundo, Módulo 5 — Gestión de resultados), porque el encadenador invoca a cada etapa por ese acuerdo.
+
+| # | Cambio | Estado | Notas |
+|---|--------|--------|-------|
+| — | Criterio fijado antes del diseño del Módulo 4 | ✅ | El usuario eligió continuidad: las etapas futuras siguen el criterio en español ya aprobado tres veces (preparación, encadenador, evaluación), extendiendo la misma excepción a esos paquetes cuando se construyan. La entrada pública de cada módulo no cambia (la misma puerta que consume hoy el encadenador). Registrado en el libro de decisiones y en el contrato de operación; solo documentos, cero efecto inmediato, nada construido tocado. |
+---
+
+## Excepción de nombres para la capa de operación (2026-11-10)
+
+> Decisión D74 (libro v1.53). Pendiente post-V1 resuelto (decisión de contrato, no código): la capa de operación y vigilancia — construida tras la Versión 1 con nombres en español porque sus mensajes son para el operador — quedó autorizada oficialmente en el contrato de estilo, que hasta hoy solo permitía español en los datos y en los módulos.
+
+| # | Cambio | Estado | Notas |
+|---|--------|--------|-------|
+| — | Excepción ampliada en lugar de renombrar | ✅ | El usuario eligió ampliar la excepción (opción A): la voz de narración, los mandos, el tablero, el vigía, el avisador, los informes, sus envoltorios y pruebas quedan autorizados con nombres en español, con la lista cerrada a esa capa (las incorporaciones futuras orientadas al operador entran también). El resto de servicios compartidos y todo lo demás sigue en inglés. Cero archivos renombrados: el despliegue vivo (el reloj y el vigía apuntan a esos envoltorios por su nombre) queda intacto; solo documentos, nada construido tocado. |
+---
+
 ## Phase 7. Module 4 — Deep Processing
 
 | # | Task | Source docs | Status | Notes |
