@@ -60,6 +60,7 @@ def init_db() -> None:
         _migrate_normalizacion_nombres_d41(conn)
         _migrate_evaluacion_d48(conn)
         _migrate_listas_duplicados_d71(conn)
+        _migrate_silla_proceso_d72(conn)
         for sentencia in _INDICES:
             conn.execute(sentencia)
         conn.commit()
@@ -522,6 +523,26 @@ def _migrate_listas_duplicados_d71(conn: sqlite3.Connection) -> None:
         ).fetchone()
         if presente is None:
             conn.execute(ESQUEMAS[tabla])
+
+
+def _migrate_silla_proceso_d72(conn: sqlite3.Connection) -> None:
+    """D72 migration: the lock row records the process holding it.
+
+    Adds `bloqueo.proceso INTEGER DEFAULT ''` when absent. `adquirir_bloqueo`
+    captures the OS process number internally on every acquisition path so
+    the operator's stop/wipe commands cut the exact holder first and only
+    fall back to the name-pattern hunt when the number is missing, dead or
+    lying (recycled after a reboot). New rows always carry it; rows created
+    before D72 keep '' and the commands treat it as "no clue" (planned
+    exception noted in the decision). Idempotent: guarded ALTER; reversible
+    with `ALTER TABLE bloqueo DROP COLUMN proceso`.
+    """
+    columnas = {
+        fila["name"]
+        for fila in conn.execute("PRAGMA table_info(bloqueo)").fetchall()
+    }
+    if columnas and "proceso" not in columnas:
+        conn.execute("ALTER TABLE bloqueo ADD COLUMN proceso INTEGER DEFAULT ''")
 
 
 def _migrate_ubicacion_rename(conn: sqlite3.Connection) -> None:

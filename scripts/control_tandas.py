@@ -12,7 +12,11 @@ una una sola activación y todas idempotentes (repetirlas es seguro):
   la vía ordenada del programador; si fue lanzada a mano, junto con su
   navegador — y deja ya mismo el cierre honesto de esa corrida usando la
   maquinaria del vigía, con la orden del operador anotada en la evidencia.
-- **limpiar**: barrido a cero: detiene todo residuo en marcha, cierra toda
+  D72: el dueño de la silla se corta primero por su número exacto de
+  proceso; el método por nombre queda como red de seguridad cuando la
+  pista falta, está muerta o miente.
+- **limpiar**: barrido a cero: detiene todo residuo en marcha (el dueño de
+  la silla por su número exacto, D72, y el resto por nombre), cierra toda
   corrida abierta, suelta la silla que quede y verifica "nada corriendo".
   Nunca borra datos históricos y nunca desactiva el reloj (eso es pausar).
 
@@ -25,6 +29,7 @@ import signal
 import subprocess
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
@@ -37,7 +42,12 @@ from scripts.modelo_tanda import (
 )
 from scripts.notificar_veredicto import enviar_aviso
 from scripts.vigilante_tanda import _captura, _cerrar_fantasmas
-from shared.persistence import change_path, liberar_bloqueo, reset_path
+from shared.persistence import (
+    change_path,
+    consultar_bloqueo,
+    liberar_bloqueo,
+    reset_path,
+)
 
 _UNIT_TANDA = "busqueda-empleo.service"
 _RELOJ = "busqueda-empleo.timer"
@@ -48,6 +58,18 @@ _RELOJ_VIGIA = "busqueda-empleo-vigilante.timer"
 _PATRONES_PROCESOS = ("modules.orchestrator", "corrida_programada.sh")
 _PATRON_NAVEGADOR = "ms-playwright"
 _GRACIA_SEGUNDOS = 3.0
+
+# D72: identidad propia para juzgar el número de la silla. Los rastros
+# oficiales del flujo (también las entradas directas de cada módulo) y la
+# ruta del proyecto, por si la corrida se lanzó de una forma atípica.
+_RAIZ_PROYECTO = str(Path(__file__).resolve().parents[1])
+_RASTROS_SILLA = (
+    *_PATRONES_PROCESOS,
+    "modules.discovery",
+    "modules.preparation",
+    "modules.evaluation",
+    _RAIZ_PROYECTO,
+)
 
 # Estados en los que una unidad cuenta como viva. La unidad de tanda corre
 # como Type=exec (D65) y figura 'active' durante toda la corrida; 'activating'
@@ -194,12 +216,133 @@ def _ancestros() -> set[int]:
     return mano
 
 
-def _matar_derivados(gracia: float = _GRACIA_SEGUNDOS) -> int:
-    """Corta los procesos en marcha de la tanda; devuelve cuántos cayeron.
+def _vivo(pid: int) -> bool:
+    """Un número vive de verdad solo si su proceso existe y no es cadáver."""
+    if pid <= 1:
+        return False
+    try:
+        texto = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8")
+    except OSError:
+        return False
+    estado = texto.rpartition(")")[2].split()[0] if ")" in texto else ""
+    return estado != "Z"
 
-    Primero la señal suave y, si tras la gracia alguien se negó a morir,
-    la fuerza para los sobrevivientes. Los antepasados del propio mando
-    (la terminal que escribirá los patrones) jamás son objetivo.
+
+def _btime() -> float | None:
+    """Instante del último arranque del sistema (btime de /proc/stat)."""
+    try:
+        texto = Path("/proc/stat").read_text(encoding="utf-8")
+    except OSError:
+        return None
+    linea = next(
+        (linea for linea in texto.splitlines() if linea.startswith("btime")),
+        None,
+    )
+    if linea is None:
+        return None
+    try:
+        return float(linea.split()[1])
+    except (IndexError, ValueError):
+        return None
+
+
+def _identidad_propia(pid: int) -> bool:
+    """El proceso lleva rastros propios del sistema (D72).
+
+    Rastros oficiales del flujo, entradas directas de los módulos o la ruta
+    del proyecto — una corrida lanzada de una forma atípica pero desde este
+    proyecto sigue siendo reconocible.
+    """
+    try:
+        bruto = Path(f"/proc/{pid}/cmdline").read_bytes()
+    except OSError:
+        return False
+    texto = bruto.decode("utf-8", errors="replace").replace("\x00", " ")
+    return any(rastro in texto for rastro in _RASTROS_SILLA)
+
+
+def _silla_proceso() -> int | None:
+    """Número exacto del dueño vivo de la silla, si la pista sirve (D72).
+
+    El número sirve solo si: (1) el proceso existe ahora y no es cadáver;
+    (2) la silla nació después del último arranque del sistema — un reinicio
+    recicla números y una silla anterior al arranque miente; (3) la
+    identidad del proceso es propia del sistema; (4) no es un antepasado del
+    propio mando (la mano que manda jamás es objetivo). Ante cualquier duda
+    devuelve None y el mando cae al método por nombre como red de seguridad.
+    """
+    try:
+        silla = consultar_bloqueo()
+    except Exception:
+        return None
+    if not silla:
+        return None
+    valor = silla.get("proceso")
+    if valor is None:
+        return None
+    try:
+        pid = int(valor)
+    except (TypeError, ValueError):
+        return None
+    if not _vivo(pid) or pid in _ancestros():
+        return None
+    try:
+        nacimiento = datetime.strptime(
+            str(silla.get("marca_temporal", "")), "%Y-%m-%d %H:%M:%S"
+        )
+    except ValueError:
+        return None
+    arranque = _btime()
+    if arranque is None:
+        return None  # sin hora de arranque no hay modo de juzgar el reciclaje
+    if datetime.fromtimestamp(arranque) > nacimiento:
+        return None
+    if not _identidad_propia(pid):
+        return None
+    return pid
+
+
+def _cortar_silla_exacta(gracia: float) -> int | None:
+    """Corte exacto por el número de la silla (D72); devuelve el pid cortado.
+
+    Corta al dueño vivo de la silla con precisión junto con el navegador que
+    la captura pueda dejar suelto (el navegador no tiene número en la
+    silla: se recoge por su rastro como siempre). Si la pista no sirvió
+    (sin número, muerto, mentiroso o antepasado propio) devuelve None y el
+    mando cae al método por nombre.
+    """
+    pid = _silla_proceso()
+    if pid is None:
+        return None
+    _rematar_con_gracia({pid} | _procesos(_PATRON_NAVEGADOR), gracia)
+    return pid
+
+
+def _rematar_con_gracia(objetivos: set[int], gracia: float) -> int:
+    """Corta los procesos dados; suave primero, fuerza para los que se nieguen.
+
+    Los antepasados del propio mando (la terminal que lo invocó) jamás son
+    objetivo. Devuelve cuántos fueron cortados.
+    """
+    objetivos = objetivos - _ancestros()
+    if not objetivos:
+        return 0
+    _cortar(objetivos)
+    _pausa(gracia)
+    sobrevivientes = {pid for pid in objetivos if _vivo(pid)}
+    if sobrevivientes:
+        _cortar(sobrevivientes, senal=signal.SIGKILL)
+    _pausa(0.2)
+    return len(objetivos)
+
+
+def _matar_derivados(gracia: float = _GRACIA_SEGUNDOS) -> int:
+    """Corte por nombre (método clásico, red de seguridad de D72).
+
+    Sondeo por parecido de nombre — procesos propios de la tanda y navegador.
+    Primero la señal suave y, si tras la gracia alguien se negó a morir, la
+    fuerza para los sobrevivientes. Los antepasados del propio mando jamás
+    son objetivo. Devuelve cuántos fueron cortados.
     """
     propios, navegador = _pistas_de_procesos()
     objetivos = (propios | navegador) - _ancestros()
@@ -275,7 +418,9 @@ def detener(*, gracia: float = _GRACIA_SEGUNDOS) -> str:
     Objetivo de cierre: el núcleo vivo identificado con las mismas anclas
     del tablero (tanda + módulo en curso). Si las anclas no delatan nada y
     hay filas abiertas, cayeron ya con el proceso: son todas de esta tanda
-    y el operador ordenó detenerla.
+    y el operador ordenó detenerla. El corte a mano va exacto primero
+    (D72): el número de la silla, si sirve; el método por nombre solo de
+    respaldo.
     """
     mensajes: list[str] = []
     actuo = False
@@ -294,10 +439,18 @@ def detener(*, gracia: float = _GRACIA_SEGUNDOS) -> str:
         _ctl("stop", _UNIT_TANDA)
         _ctl("reset-failed", _UNIT_TANDA)
         mensajes.append("La unidad de la tanda quedó marcada como fallida: despejada.")
-    cortados = _matar_derivados(gracia=gracia)
-    if cortados:
+    pid_silla = _cortar_silla_exacta(gracia=gracia)
+    if pid_silla is not None:
         actuo = True
-        mensajes.append(f"{cortados} proceso(s) de tanda manual cortado(s).")
+        mensajes.append(
+            f"Corrida dueña de la silla cortada de forma exacta "
+            f"(proceso {pid_silla})."
+        )
+    else:
+        cortados = _matar_derivados(gracia=gracia)
+        if cortados:
+            actuo = True
+            mensajes.append(f"{cortados} proceso(s) de tanda manual cortado(s).")
     captura = _captura()
     if captura is None:
         mensajes.append(
@@ -355,7 +508,11 @@ def detener(*, gracia: float = _GRACIA_SEGUNDOS) -> str:
 
 
 def limpiar(*, gracia: float = _GRACIA_SEGUNDOS) -> str:
-    """Barrido a cero: nada corriendo, sin silla y sin corridas abiertas."""
+    """Barrido a cero: nada corriendo, sin silla y sin corridas abiertas.
+
+    El dueño de la silla se corta por su número exacto (D72) y el barrido
+    por nombre queda como red de seguridad para sueltos y navegador.
+    """
     mensajes: list[str] = []
     actuo = False
     if _en_marcha(_UNIT_TANDA):
@@ -367,6 +524,12 @@ def limpiar(*, gracia: float = _GRACIA_SEGUNDOS) -> str:
         _ctl("stop", _UNIT_TANDA)
         _ctl("reset-failed", _UNIT_TANDA)
         mensajes.append("La unidad de la tanda quedó marcada como fallida: despejada.")
+    pid_silla = _cortar_silla_exacta(gracia=gracia)
+    if pid_silla is not None:
+        actuo = True
+        mensajes.append(
+            f"Dueño de la silla cortado de forma exacta (proceso {pid_silla})."
+        )
     cortados = _matar_derivados(gracia=gracia)
     if cortados:
         actuo = True

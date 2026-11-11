@@ -307,6 +307,20 @@
 | — | Pruebas y validaciones | ✅ | 16 pruebas nuevas (sincronización, migración con legado, marcado de lista, casos de duplicado misma-lista/otra-lista/tanda-anterior/intra-lote, evidencia del evento y el informe); 806 pruebas, ruff/mypy limpios. Alineados DOC-13A (entidades + diccionario), tablas de la base, catálogo de prefijos (LT/DUP) y ficha del módulo 1. |
 ---
 
+## Corte exacto por número de proceso en la silla (2026-11-10)
+
+> Decisión D72 (libro v1.51). Mejora post-V1 aprobada del pendiente «número de proceso en la silla»: al tomar la silla, toda corrida deja anotado su número de proceso (el número que el sistema da a cada programa en marcha), y los mandos detener/limpiar lo usan como pista de corte exacto. Hoy la silla solo decía *quién* y *cuándo*; los mandos cazaban por parecido de nombre.
+
+| # | Cambio | Estado | Notas |
+|---|--------|--------|-------|
+| — | La silla anota su número | ✅ | Campo nuevo pequeño (`proceso`) escrito por dentro de la única puerta de toma de silla, en sus tres caminos (silla nueva, vencida que se sobrescribe, forzada) — una corrida no puede tomar la silla sin dejar su número. Filas previas al cambio quedan sin pista (la silla normalmente está vacía entre tandas); excepción anotada en la decisión. |
+| — | Juez de la pista (comprobación doble) | ✅ | El número sirve solo si el proceso vive de verdad (y no es cadáver), la silla nació después del último arranque del sistema (un reinicio recicla números: silla anterior al arranque = mentira; y si la hora de arranque no se puede leer, la duda también invalida la pista), su identidad es propia del sistema (rastros oficiales del flujo, entradas directas de los módulos o la ruta del proyecto — una corrida atípica de este proyecto sigue reconocible) y no es un antepasado del propio mando. Ante cualquier duda, el mando cae al método por nombre como red de seguridad. |
+| — | Corte exacto primero en los mandos | ✅ | `detener`: la parada ordenada de la tanda programada sigue siendo la vía principal (intacta, D65); el corte a mano va por el número de la silla junto con el barrido del navegador, y el método por nombre (comportamiento idéntico al anterior) queda solo de respaldo. `limpiar`: el dueño de la silla se corta exacto primero y el barrido a cero sigue recogiendo sueltos y navegador. La garantía inviolable se mantiene y se prueba: la cadena propia del mando jamás es objetivo. |
+| — | Migración en producción | ✅ | Sin tanda activa (reloj en pausa por orden del operador), silla libre y ninguna corrida abierta: respaldo `job_search_pre_d72_20261110_195807.db`, campo aplicado, doble arranque sin cambios. Reversible con una línea. |
+| — | Ensayo en vivo sobre copias | ✅ | Tres escenarios reales con procesos señuelo: número válido → corte exacto a la primera con aviso de escritorio y cierre honesto; número mentiroso (vivo pero ajeno) → pista descartada, método por nombre tomó el turno y el inocente no fue tocado; silla sin número (fila previa) → sin pista, mensaje honesto. |
+| — | Pruebas y validaciones | ✅ | 11 pruebas nuevas (migración con fila de legado + el camino real de esquema anterior al cambio; dueño válido, identidad ajena, silla anterior al arranque, número muerto, silla sin número, mano propia rechazada, corte exacto de detener, caída al respaldo con pista mentirosa, corte exacto de limpiar — con procesos señuelo reales; los caminos de adquisición/sobrescritura se actualizaron en pruebas existentes para llevar el número); 817 pruebas, ruff/mypy limpios. Revisión de cierre conforme en ambos revisores. Alineados libro de decisiones (v1.51), tablas de la base (§2.8), DOC-13A (v1.21, incluidas sus secciones de la silla) y contrato operativo. El vigía y los cierres de fantasmas intactos (actúan por silencio, no por procesos). |
+---
+
 ## Phase 7. Module 4 — Deep Processing
 
 | # | Task | Source docs | Status | Notes |

@@ -1,5 +1,6 @@
 """Internal: write operations (ids, offers, runs, events, lock)."""
 
+import os
 import sqlite3
 import uuid
 from datetime import datetime
@@ -106,6 +107,14 @@ def adquirir_bloqueo(
     forzar: bool = False,
     umbral_minutos: int | None = None,
 ) -> bool:
+    """Takes the global concurrency lock for a run (D72).
+
+    Captures the OS process number internally (`os.getpid`) so every chair
+    row carries who is exactly holding it — the operator's stop/wipe
+    commands use it as the exact-cut clue (D72). All three paths (fresh
+    insert, stale overwrite, forced overwrite) refresh the number.
+    """
+    proceso = os.getpid()
     conn = _connection()
     try:
         conn.execute("BEGIN IMMEDIATE")
@@ -115,8 +124,9 @@ def adquirir_bloqueo(
         if fila is None:
             try:
                 conn.execute(
-                    "INSERT INTO bloqueo (id_corrida, marca_temporal) VALUES (?, ?)",
-                    (id_corrida, marca_temporal),
+                    "INSERT INTO bloqueo (id_corrida, marca_temporal, proceso) "
+                    "VALUES (?, ?, ?)",
+                    (id_corrida, marca_temporal, proceso),
                 )
             except sqlite3.IntegrityError:
                 conn.rollback()
@@ -125,8 +135,9 @@ def adquirir_bloqueo(
             return True
         if forzar:
             cursor = conn.execute(
-                "UPDATE bloqueo SET id_corrida = ?, marca_temporal = ? WHERE id_corrida = ?",
-                (id_corrida, marca_temporal, fila["id_corrida"]),
+                "UPDATE bloqueo SET id_corrida = ?, marca_temporal = ?, proceso = ? "
+                "WHERE id_corrida = ?",
+                (id_corrida, marca_temporal, proceso, fila["id_corrida"]),
             )
             if cursor.rowcount == 0:
                 conn.rollback()
@@ -143,8 +154,9 @@ def adquirir_bloqueo(
             conn.rollback()
             return False
         cursor = conn.execute(
-            "UPDATE bloqueo SET id_corrida = ?, marca_temporal = ? WHERE id_corrida = ?",
-            (id_corrida, marca_temporal, fila["id_corrida"]),
+            "UPDATE bloqueo SET id_corrida = ?, marca_temporal = ?, proceso = ? "
+            "WHERE id_corrida = ?",
+            (id_corrida, marca_temporal, proceso, fila["id_corrida"]),
         )
         if cursor.rowcount == 0:
             conn.rollback()

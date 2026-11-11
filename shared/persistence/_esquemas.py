@@ -122,10 +122,16 @@ ESQUEMAS: dict[str, str] = {
         "fecha_ultima_edicion TEXT DEFAULT ''"
         ")"
     ),
+    # D72 (2026-11-10): la silla anota el numero de proceso que la tomo.
+    # `proceso` lo escribe `adquirir_bloqueo` por dentro (os.getpid) en sus
+    # tres caminos; los mandos detener/limpiar lo usan como pista exacta y
+    # caen al metodo por nombre solo si falta, esta muerto o miente. Las
+    # filas previas a D72 quedan '' (sin pista) por instruccion del plan.
     "bloqueo": (
         "CREATE TABLE IF NOT EXISTS bloqueo ("
         "id_corrida TEXT PRIMARY KEY,"
-        "marca_temporal TEXT NOT NULL"
+        "marca_temporal TEXT NOT NULL,"
+        "proceso INTEGER DEFAULT ''"
         ")"
     ),
     # D71 (2026-11-10): identificador oficial de cada lista de busqueda.

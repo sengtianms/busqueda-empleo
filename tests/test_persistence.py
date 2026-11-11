@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from typing import Any
 
@@ -135,9 +136,26 @@ def test_acquire_and_release_lock(temp_db_file: Path) -> None:
     assert consultar_bloqueo() == {
         "id_corrida": "COR-0001",
         "marca_temporal": "2026-08-07 10:00:00",
+        "proceso": os.getpid(),
     }
     liberar_bloqueo("COR-0001")
     assert consultar_bloqueo() is None
+
+
+def _silla_manual(id_corrida: str, marca: str, proceso: object) -> None:
+    """Escribe una fila de silla a mano (simula filas previas a D72)."""
+    from shared.persistence import _connection
+
+    conn = _connection()
+    try:
+        conn.execute(
+            "INSERT INTO bloqueo (id_corrida, marca_temporal, proceso) "
+            "VALUES (?, ?, ?)",
+            (id_corrida, marca, proceso),
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def test_lock_obsoleto_se_sobrescribe(temp_db_file: Path) -> None:
@@ -146,12 +164,13 @@ def test_lock_obsoleto_se_sobrescribe(temp_db_file: Path) -> None:
     from shared.persistence import adquirir_bloqueo, consultar_bloqueo
 
     viejo = datetime.datetime.now() - datetime.timedelta(minutes=300)
-    assert adquirir_bloqueo("COR-0001", viejo.strftime("%Y-%m-%d %H:%M:%S")) is True
+    _silla_manual("COR-0001", viejo.strftime("%Y-%m-%d %H:%M:%S"), "")
     assert adquirir_bloqueo("COR-0002", datetime.datetime.now().strftime(
         "%Y-%m-%d %H:%M:%S")) is True
     lock = consultar_bloqueo()
     assert lock is not None
     assert lock["id_corrida"] == "COR-0002"
+    assert lock["proceso"] == os.getpid()  # la silla vencida renovó el número (D72)
 
 
 def test_lock_vigente_rechaza(temp_db_file: Path) -> None:
@@ -513,11 +532,95 @@ def test_lock_forzar_sobrescribe_y_contienda_mantiene(temp_db_file: Path) -> Non
     from shared.persistence import adquirir_bloqueo, consultar_bloqueo
 
     ahora = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    assert adquirir_bloqueo("COR-0001", ahora) is True
+    _silla_manual("COR-0001", ahora, "")
     assert adquirir_bloqueo("COR-0002", ahora, forzar=True) is True
     lock = consultar_bloqueo()
     assert lock is not None
     assert lock["id_corrida"] == "COR-0002"
+    assert lock["proceso"] == os.getpid()  # la silla forzada renovó el número (D72)
+
+
+def test_bloqueo_proceso_migracion_idempotente(temp_db_file: Path) -> None:
+    """D72: la migración es idempotente y las filas previas sobreviven.
+
+    Una silla de antes del cambio (sin número) no se pierde ni se duplica
+    la columna en arranques repetidos; la adquisición posterior escribe el
+    número normalmente.
+    """
+    import datetime
+
+    from shared.persistence import (
+        _connection,
+        adquirir_bloqueo,
+        consultar_bloqueo,
+        init_db,
+    )
+
+    _silla_manual("COR-LEGADO", "2026-10-22 10:00:00", "")
+    init_db()
+    init_db()
+    conn = _connection()
+    try:
+        columnas = [
+            fila["name"]
+            for fila in conn.execute("PRAGMA table_info(bloqueo)").fetchall()
+        ]
+    finally:
+        conn.close()
+    assert columnas.count("proceso") == 1
+    silla = consultar_bloqueo()
+    assert silla is not None
+    assert silla["id_corrida"] == "COR-LEGADO"
+    assert silla["proceso"] == ""  # fila previa a D72 intacta (sin pista)
+    ahora = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    assert adquirir_bloqueo("COR-NUEVA", ahora, forzar=True) is True
+    renovada = consultar_bloqueo()
+    assert renovada is not None
+    assert renovada["id_corrida"] == "COR-NUEVA"
+    assert renovada["proceso"] == os.getpid()
+
+
+def test_bloqueo_proceso_migracion_desde_esquema_antiguo(tmp_path: Path) -> None:
+    """D72: el ALTER protegido alcanza una base real anterior al cambio.
+
+    La base conserva su silla con el esquema de antes (sin la columna) y
+    una fila de legado; el arranque la amplía sin perder la fila.
+    """
+    import sqlite3
+
+    from shared.persistence import change_path, init_db, reset_path
+
+    path = tmp_path / "silla_vieja.db"
+    conn = sqlite3.connect(str(path))
+    conn.execute(
+        "CREATE TABLE bloqueo ("
+        "id_corrida TEXT PRIMARY KEY,"
+        "marca_temporal TEXT NOT NULL"
+        ")"
+    )
+    conn.execute(
+        "INSERT INTO bloqueo (id_corrida, marca_temporal) "
+        "VALUES ('COR-LEGADO', '2026-10-22 10:00:00')"
+    )
+    conn.commit()
+    conn.close()
+
+    change_path(path)
+    try:
+        init_db()
+        columnas = [
+            fila[1]
+            for fila in sqlite3.connect(str(path)).execute(
+                "PRAGMA table_info(bloqueo)"
+            ).fetchall()
+        ]
+        filas = sqlite3.connect(str(path)).execute(
+            "SELECT id_corrida, proceso FROM bloqueo"
+        ).fetchall()
+    finally:
+        reset_path()
+    assert columnas.count("proceso") == 1
+    assert filas == [("COR-LEGADO", "")]
 
 
 def test_upsert_oferta_inserta_nueva(temp_db_file: Path) -> None:

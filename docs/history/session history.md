@@ -5,6 +5,7 @@ Unless noted, decisions from previous sessions remain in effect.
 ## Sessions index
 | № | Date | Session ID | Summary |
 |---|---|---|---|
+| 52 | 10/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Exact chair cut by process number shipped per the approved plan: the run chair now records the holder's OS process number on every way it can be taken, and the operator stop/wipe commands cut that exact holder first — with the name-pattern method kept only as a safety net for missing, dead, lying or own-chain clues; a strict clue judge (alive, born after the last system boot, own system identity, never an ancestor) protects innocent bystanders; live database migrated with backup on a verified-at-zero machine and a three-scenario live rehearsal on copies; both official closing reviewers ran (quota recovered) and returned CONFORME with all minors resolved; 817 tests |
 | 51 | 10/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Search-list attribution and a duplicate-encounters ledger shipped per the approved plan: every captured offer carries the list that brought it (position-keyed ids, full search phrase stored per list, catalog self-fed at every run start with retired lists kept readable), and every silent re-encounter of an already-registered offer is recorded with the scanned list and the originating one while the dedup behavior stays untouched; a read-only per-list report answers which lists harvest most and which duplicate most; the live database migrated with backup leaving the 129 historical offers unattributed by user order; official closing reviewers blocked again by the reviewer model quota, manual closing review applied; 806 tests |
 | 50 | 09/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Experience-level filter added to the capture (decision D70 in log v1.49): the platform's seniority filter was decoded on a live isolated session copy, applied straight through the search address, verified against the filter panel and given a keyboard-driven screen-touch fallback; the 18 provisional query groups were replaced by the user's nine definitive ones (Colombia, last 24 h and all four levels each), so junior postings stop entering capture and the per-group harvest roughly halves; official closing reviewers unavailable at quota exhaustion, manual closing review applied; 790 tests |
 | 49 | 09/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Housekeeping session: the temp folder's five November probe bundles were audited before touching anything (zero references from code, tests, scheduled automation or official docs), one disposable backup archive was saved into the data backup area (~6 MB, 149 entries) and then every probe folder was wiped; the temp folder itself and its structure keeper kept per the official project layout; no code, config or doc changes and tracker without updates |
@@ -45,6 +46,28 @@ Unless noted, decisions from previous sessions remain in effect.
 | 14 | 09/08/2026 | `ses_01bcc78adffemcqFEiZxT52Eli` | Sub-fase 4.4: capture/registration nodes implemented, audited, and post-audit fixes applied (FK-free schema, name columns, upsert tests) |
 | 13 | 08/08/2026 | `ses_01be77680ffeuyoKct4Qrfx1GG` | Repo sync to `fase-4`; new `/save` section with general git commit and push guidance |
 | 12 | 08/08/2026 | `ses_01c089ce2ffe9MvQT4F1pC0MJN` | Sub-fase 4.2 deep audit + post-audit fixes (credentials mapping, playwright lifecycle) |
+
+## Session 52 — 10/11/2026
+`ses_f4af1b961ffe5t8xNspW5U761x` · `ajuste-final-v1`
+
+**Topics**
+- Post-V1 backlog item implemented from the approved plan: the run chair records the exact OS process number of whoever holds it, closing the gap between "the exact process" and "a similar one" in an operator emergency
+- The number is written inside the single acquisition door on all three ways the chair can be taken (fresh take, stale takeover, forced takeover) — no run can hold the chair without leaving its number; rows created before the change keep no clue, as the planned exception beside the no-empty-fields precedent
+- A strict judge validates the clue before any cut: the process must be alive (and not a zombie), the chair must have been born after the last system boot (a reboot recycles numbers, so an older chair lies), the process identity must belong to the system (official flow traces, the modules' direct entries or the project root — an atypical launch from this project stays recognizable) and it must never be an ancestor of the issuing command; an unreadable boot time also invalidates the clue — any doubt falls back
+- The operator stop/wipe commands cut the chair holder exactly first (together with the browser sweep) and keep the name-pattern hunt only as a safety net; the scheduled ordered stop remains the primary path and the watchdog's ghost closures stay untouched — they act on silence, not on processes
+- Migration additive, idempotent and reversible; the live database was migrated with backup while the machine was verified at zero (chair empty, no open runs, batch clock still paused by operator order) and a double init confirmed no-op
+- Three-scenario live rehearsal on database copies with real dummy processes: a valid number got the exact first-try cut with the desktop notice; a lying number (alive but foreign identity) was rejected with the name method taking over and the innocent bystander untouched; a legacy chair without a number answered honestly
+- Both official closing reviewers ran this time (the reviewer model quota recovered) and returned CONFORME; their three minors were resolved before closing — the any-doubt rule now holds literally in code, the data-model document completed its two chair sections with the new attribute, and a real pre-change-schema migration test was added following the repo's existing legacy-schema pattern
+- 11 new tests, several driving real dummy processes through the machine's process table
+
+**Decisions**
+- D72 (decision log v1.51): exact process-number cut for the run chair — the chair gains the holder's process number written by the single acquisition door on every path, pre-change rows keep no clue as the registered exception; the clue must pass alive + post-boot + own-identity + non-ancestor or the commands fall back to the name-pattern method; stop keeps the ordered scheduler stop primary and cuts the holder exactly first, wipe cuts the holder exactly then sweeps; watchdog/ghost closures untouched; idempotent reversible migration; live DB migrated in place with backup
+- Decisions from previous sessions remain in effect
+
+**Status**
+- Exact chair cut by process number implemented, live-migrated, reviewer-approved and closed; validations green: lint, type check (108 files) and 817 tests passing
+- Both official closing reviewers ran (quota recovered) and returned CONFORME; all findings resolved before validation
+- Phases 7–8 remain future-version planning; active branch: `ajuste-final-v1`
 
 ## Session 51 — 10/11/2026
 `ses_f4af1b961ffe5t8xNspW5U761x` · `ajuste-final-v1`

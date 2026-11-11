@@ -3,8 +3,10 @@
 import os
 import signal
 import subprocess
+from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 import pytest
 
@@ -121,6 +123,45 @@ def _silla(id_corrida: str, marca: str) -> None:
     from shared.persistence import adquirir_bloqueo
 
     assert adquirir_bloqueo(id_corrida, marca, forzar=True)
+
+
+def _silla_con_proceso(id_corrida: str, marca: str, proceso: int | str) -> None:
+    """Escribe una fila de silla con el número de proceso dado (D72).
+
+    `proceso=''` simula una fila previa a D72 (sin pista).
+    """
+    from shared.persistence import _connection
+
+    conn = _connection()
+    try:
+        conn.execute(
+            "INSERT INTO bloqueo (id_corrida, marca_temporal, proceso) "
+            "VALUES (?, ?, ?)",
+            (id_corrida, marca, proceso),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+@contextmanager
+def _senuelo(rastro: str) -> Iterator[int]:
+    """Proceso durmiente real con argv0 impostado (para juzgar la silla).
+
+    `exec -a` cambia el argv[0]: el cmdline resultante lleva (o no) el
+    rastro pedido, así que puede hacerse de dueño válido o de inocente.
+    El señuelo muere siempre al salir, pase lo que pase en la prueba.
+    """
+    proceso = subprocess.Popen(["bash", "-c", f'exec -a "{rastro}" sleep 120'])
+    try:
+        yield proceso.pid
+    finally:
+        proceso.kill()
+        proceso.wait()
+
+
+def _marca_fresca() -> str:
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
 def _leer(id_corrida: str) -> dict[str, Any] | None:
@@ -436,3 +477,116 @@ def test_limpiar_suelta_silla_desconocida(monkeypatch: pytest.MonkeyPatch) -> No
     assert "Silla restante de COR-ANON liberada." in salida
     assert "Todo en cero" in salida
     assert "reloj de tandas está en pausa" in salida
+
+
+# ---------------------------------------------------------------------------
+# D72: la silla anota su número de proceso y los mandos cortan exacto primero.
+# ---------------------------------------------------------------------------
+
+
+def test_silla_proceso_acepta_al_dueno_valido() -> None:
+    """Dueño vivo, silla posterior al arranque e identidad propia: pista válida."""
+    with _senuelo("python -m modules.orchestrator") as pid:
+        _silla_con_proceso("COR-VIVA", _marca_fresca(), pid)
+        assert control._silla_proceso() == pid
+
+
+def test_silla_proceso_rechaza_identidad_ajena() -> None:
+    """Vivo pero sin rastros propios (inocente con el número heredado): mentira."""
+    with _senuelo("dormilon_inocente") as pid:
+        _silla_con_proceso("COR-MENTIRA", _marca_fresca(), pid)
+        assert control._silla_proceso() is None
+
+
+def test_silla_proceso_rechaza_silla_anterior_al_arranque() -> None:
+    """Silla de antes del último arranque: número reciclado tras un reinicio."""
+    with _senuelo("python -m modules.orchestrator") as pid:
+        _silla_con_proceso("COR-REINICIO", "2020-01-01 00:00:00", pid)
+        assert control._silla_proceso() is None
+
+
+def test_silla_proceso_rechaza_numero_muerto() -> None:
+    muerto = subprocess.Popen(["sleep", "0.1"])
+    muerto.wait()
+    _silla_con_proceso("COR-MUERTO", _marca_fresca(), muerto.pid)
+    assert control._silla_proceso() is None
+
+
+def test_silla_proceso_rechaza_silla_sin_numero() -> None:
+    """Fila previa a D72 (sin número): sin pista, el mando cae al método viejo."""
+    _silla_con_proceso("COR-LEGADO", _marca_fresca(), "")
+    assert control._silla_proceso() is None
+
+
+def test_silla_proceso_rechaza_la_mano_propia() -> None:
+    """La cadena propia del mando jamás es objetivo, ni por número."""
+    _silla_con_proceso("COR-YO", _marca_fresca(), os.getpid())
+    assert control._silla_proceso() is None
+
+
+def test_detener_corta_la_silla_de_forma_exacta(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Corte a la primera por el número de la silla, con navegador barrido."""
+    sistema = _SistemaGrabadora({f"is-active {_UNIT_TANDA}": "inactive"})
+    avisos, cortes = _instalar(monkeypatch, sistema)
+    _procesos_inertes(monkeypatch)
+    monkeypatch.setattr(control, "_procesos", lambda patron: set())
+    with _senuelo("python -m modules.orchestrator") as pid:
+        _corrida("COR-D", "2026-10-22 20:55:05")
+        _evento("COR-D", "tic_modulo_iniciado", "2026-10-22 20:55:10", "modulo=descubrimiento")
+        _silla_con_proceso("COR-D", _marca_fresca(), pid)
+        salida = control.detener(gracia=0.1)
+    assert f"Corrida dueña de la silla cortada de forma exacta (proceso {pid})." in salida
+    assert cortes.registros == [
+        ({pid}, signal.SIGTERM),
+        ({pid}, signal.SIGKILL),  # el señuelo "se negó" al sustituto de señal
+    ]
+    from shared.persistence import consultar_bloqueo
+
+    fila = _leer("COR-D")
+    assert fila is not None
+    assert fila["estado"] == "abortada"
+    assert fila["motivo_terminacion"] == "proceso_desaparecido"
+    assert consultar_bloqueo() is None  # la silla quedó suelta
+
+
+def test_detener_cae_al_metodo_por_nombre_cuando_la_pista_miente(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Número vivo pero ajeno: sin corte exacto; el método viejo toma el turno."""
+    sistema = _SistemaGrabadora({f"is-active {_UNIT_TANDA}": "inactive"})
+    avisos, cortes = _instalar(monkeypatch, sistema)
+    _procesos_inertes(monkeypatch)
+    with _senuelo("dormilon_inocente") as pid:
+        _corrida("COR-CIEGA", "2026-10-22 20:59:59")
+        _silla_con_proceso("COR-CIEGA", _marca_fresca(), pid)
+        salida = control.detener(gracia=0.1)
+    assert "forma exacta" not in salida
+    cortados = {pid_ for registro, _ in cortes.registros for pid_ in registro}
+    assert pid not in cortados  # el inocente jamás fue objetivo
+    fila = _leer("COR-CIEGA")
+    assert fila is not None
+    assert fila["estado"] == "abortada"  # el cierre honesto sigue igual
+
+
+def test_limpiar_corta_al_dueno_de_la_silla_de_forma_exacta(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sistema = _SistemaGrabadora(
+        {
+            f"is-active {_UNIT_TANDA}": "inactive",
+            f"is-enabled {_RELOJ}": "disabled",
+        }
+    )
+    _instalar(monkeypatch, sistema)
+    _procesos_inertes(monkeypatch)
+    monkeypatch.setattr(control, "_procesos", lambda patron: set())
+    with _senuelo("python -m modules.orchestrator") as pid:
+        _silla_con_proceso("COR-ANON", _marca_fresca(), pid)
+        salida = control.limpiar(gracia=0.1)
+    assert f"Dueño de la silla cortado de forma exacta (proceso {pid})." in salida
+    from shared.persistence import consultar_bloqueo
+
+    assert consultar_bloqueo() is None  # la silla anónima quedó suelta igual
+    assert "Todo en cero" in salida

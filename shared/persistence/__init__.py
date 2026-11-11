@@ -190,6 +190,9 @@ from ._migraciones import (
     _migrate_sesiones_id as _migrate_sesiones_id,
 )
 from ._migraciones import (
+    _migrate_silla_proceso_d72 as _migrate_silla_proceso_d72,
+)
+from ._migraciones import (
     _migrate_ubicacion_rename as _migrate_ubicacion_rename,
 )
 from ._migraciones import (

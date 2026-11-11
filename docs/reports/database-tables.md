@@ -200,9 +200,10 @@ Auditoría de las sesiones de plataforma por lote capturado. La escribe el **nod
 
 ### 2.8. `bloqueo`
 
-Bloqueo de concurrencia de corridas (una sola corrida activa a la vez **en todo el pipeline** — Módulos 1, 2 y 3 comparten el mismo bloqueo global, D3/D33/D48). Máximo una fila. La escribe el **nodo INICIO** con `adquirir_bloqueo()` (insert, o update por obsolescencia o con `forzar`) y la elimina el **nodo Finalizar** con `liberar_bloqueo()`. El INICIO también hace una prueba de escritura con `sondear_escritura()` (insert + rollback, sin dejar datos). El orquestador transversal **no gestiona el bloqueo** — lo asume tomado por el módulo en su INICIO.
+Bloqueo de concurrencia de corridas (una sola corrida activa a la vez **en todo el pipeline** — Módulos 1, 2 y 3 comparten el mismo bloqueo global, D3/D33/D48). Máximo una fila. La escribe el **nodo INICIO** con `adquirir_bloqueo()` (insert, o update por obsolescencia o con `forzar`) y la elimina el **nodo Finalizar** con `liberar_bloqueo()`. El INICIO también hace una prueba de escritura con `sondear_escritura()` (insert + rollback, sin dejar datos). El orquestador transversal **no gestiona el bloqueo** — lo asume tomado por el módulo en su INICIO. **As-built D72 (2026-11-10):** la silla anota el número de proceso del sistema operativo que la tomó (`proceso`, escrito por `adquirir_bloqueo()` por dentro en sus tres caminos); los mandos del operador lo usan como pista de corte exacto y caen al método por nombre solo si la pista falta, está muerta o miente (viva + nacida tras el último arranque + identidad propia + no antepasada).
 
 | Columna | Tipo | Qué hace | Cuándo se diligencia |
 |---|---|---|---|
 | `id_corrida` | TEXT (PK) | Corrida dueña del bloqueo | En el INICIO, al adquirir el bloqueo (insert o update por obsolescencia/forzado) |
 | `marca_temporal` | TEXT NOT NULL | Fecha/hora de adquisición del bloqueo; base para el umbral de obsolescencia | En el INICIO, al adquirir el bloqueo; se actualiza al renovar el bloqueo |
+| `proceso` | INTEGER DEFAULT '' | Número de proceso del sistema que tomó la silla (D72); pista exacta para los mandos detener/limpiar | Por dentro de `adquirir_bloqueo()` en sus tres caminos; filas previas a D72 quedan `''` (sin pista; excepción anotada en la decisión) |
