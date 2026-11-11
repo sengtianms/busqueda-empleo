@@ -22,21 +22,23 @@ Official record of all persistent entities in the job search automation data mod
 | Corrida | Operational | Traceability | Execution instance (run) of the Discovery (Module 1), Preparation (Module 2), Initial Evaluation (Module 3) module, or of the scheduled run (transversal orchestrator); all module records anchor to its `id_corrida` (RN-01). |
 | Sesion | Operational | Traceability | Audit of each platform session used by the Discovery module (Module 1) during a run. |
 | Bloqueo | Operational | Concurrency | Persistent lock guaranteeing a single active run across the whole pipeline (Modules 1, 2 and 3, decisions D3 module 2 / D33 / D48). |
+| Search List | Main | Opportunity Discovery | Identity of a configured search list (`listas_busquedas`, D71): deterministic `LT-xxxx` id by config position plus the full keywords phrase. |
+| Duplicate Encounter | Operational | Traceability | One row per silent duplicate encounter of the Discovery dedup (`duplicados_descubiertas`, D71): the scanned list, the origin list of the original row, run, external id, link and timestamp. |
 
 **Scope of implemented persistence** — decisions 2026-07-30 and 2026-08-07:  
-The MVP database (`job_search.db`) persists only: `secuencia_ids`, `empresas`, `ubicaciones`, and `ofertas_descubiertas`. The Discovery module additionally defines `eventos`, `sesiones`, `corridas`, and `bloqueo` as tables in the same SQLite file (decision D2, 2026-08-07). Remaining entities are deferred to later modules. This note formalizes the implemented scope; the full inventory remains the target model. **As-built D31 (2026-08-18):** the `fuentes` table was dropped from the physical model (never populated; sources are config-driven via `config.yaml`); the physical DB now has 8 tables. **As-built D32 (2026-08-19):** the physical table `ofertas` was renamed to `ofertas_descubiertas` to distinguish it from the offer tables of later stages (Preparation, Evaluation, Processing); prefix `OFE`, indexes and function names unchanged. **As-built D33 (2026-08-20):** Module 2 (Preparation) populates `empresas` and `ubicaciones` catalogs; adds `ubicacion_nombre`, `modalidad`, and `id_duplicidad` to `ofertas_descubiertas`; re-adds `id_oferta` to `eventos`; extends `corridas` with `total_preparadas` and `total_duplicadas`. **As-built D45 (2026-08-26):** column `ubicacion_nombre` renamed to `ubicacion` (session-35 traspaso batch; idempotent migration); Module 1 writes it at card capture together with `modalidad`. **As-built D49 (2026-10-15, construcción Fase 6):** Module 3 «Evaluación inicial» adds `resultado_evaluacion_inicial` to `ofertas_descubiertas`, extends `estado` with `aceptada_ei`/`descartada_ei`, extends `corridas` with `total_aprobadas`/`total_descartadas`, and adds per-offer events `oferta_aprobada`/`oferta_descartada`/`evaluacion_fallida` — migrated via `_migrate_evaluacion_d48`; verified COR-0004 (42 `aceptada_ei` + 27 `descartada_ei`).
+The MVP database (`job_search.db`) persists only: `secuencia_ids`, `empresas`, `ubicaciones`, and `ofertas_descubiertas`. The Discovery module additionally defines `eventos`, `sesiones`, `corridas`, and `bloqueo` as tables in the same SQLite file (decision D2, 2026-08-07). Remaining entities are deferred to later modules. This note formalizes the implemented scope; the full inventory remains the target model. **As-built D31 (2026-08-18):** the `fuentes` table was dropped from the physical model (never populated; sources are config-driven via `config.yaml`); the physical DB now has 8 tables. **As-built D32 (2026-08-19):** the physical table `ofertas` was renamed to `ofertas_descubiertas` to distinguish it from the offer tables of later stages (Preparation, Evaluation, Processing); prefix `OFE`, indexes and function names unchanged. **As-built D33 (2026-08-20):** Module 2 (Preparation) populates `empresas` and `ubicaciones` catalogs; adds `ubicacion_nombre`, `modalidad`, and `id_duplicidad` to `ofertas_descubiertas`; re-adds `id_oferta` to `eventos`; extends `corridas` with `total_preparadas` and `total_duplicadas`. **As-built D45 (2026-08-26):** column `ubicacion_nombre` renamed to `ubicacion` (session-35 traspaso batch; idempotent migration); Module 1 writes it at card capture together with `modalidad`. **As-built D49 (2026-10-15, construcción Fase 6):** Module 3 «Evaluación inicial» adds `resultado_evaluacion_inicial` to `ofertas_descubiertas`, extends `estado` with `aceptada_ei`/`descartada_ei`, extends `corridas` with `total_aprobadas`/`total_descartadas`, and adds per-offer events `oferta_aprobada`/`oferta_descartada`/`evaluacion_fallida` — migrated via `_migrate_evaluacion_d48`; verified COR-0004 (42 `aceptada_ei` + 27 `descartada_ei`). **As-built D71 (2026-11-10):** two tables added (10 total): `listas_busquedas` (search-list identity; synced by Module 1 INICIO from config; ids outside `secuencia_ids`) and `duplicados_descubiertas` (dedup duplicate encounters, `DUP` ids); `ofertas_descubiertas` gains `id_lista` (nullable only on pre-D71 rows by user instruction).
 
 ## 2. Detailed Specification of Entities
 
 Each entity is specified with: description/purpose, attributes, primary key, alternate keys, foreign keys, relationships, constraints, state machine, and observations. Full attribute metadata — type, requirement, defaults, domains, sensitivity, persistence, actual implementation names — is in §5.
 
-Specification order: Offer, Source, Company, Location, Processed Offer, Initial Evaluation, Detailed Evaluation, Generated Document, Application, Event, Decision, Configuration, Catalog, Corrida, Sesion, Bloqueo.
+Specification order: Offer, Source, Company, Location, Processed Offer, Initial Evaluation, Detailed Evaluation, Generated Document, Application, Event, Decision, Configuration, Catalog, Corrida, Sesion, Bloqueo, Search List, Duplicate Encounter.
 
 ### 2.1. Entity: Offer
 
 **Description/purpose:** Represents each job opportunity identified during discovery. Main entity of the model. Stores original offer information before normalization, evaluation, or document generation, and preserves the official reference throughout its lifecycle.
 
-**Attributes:** `id`, `fuente_id`, `company_id`, `location_id`, `id_corrida`, `id_sesion`, `indice_set`, `id_externo`, `fecha_ultima_verificacion`, `enlace`, `title`, `original_description`, `publication_date`, `fecha_descubrimiento`, `status`, `active`, `observations`, `fecha_creacion`, `update_date`, `ubicacion`, `modalidad`, `empresa`, `id_duplicidad`, `resultado_evaluacion_inicial`. **As-built D41 (2026-08-25):** physical column `empresa TEXT DEFAULT 'N/R'` added — raw company text from the listing card, written by Module 1 at registration (mirrors `ubicacion`; never overwritten on re-registration; historical rows keep `'N/R'`). **As-built D45 (2026-08-26):** `ubicacion_nombre` renamed to `ubicacion`. **As-built D49 (2026-10-15):** `resultado_evaluacion_inicial` (`TEXT DEFAULT 'N/A'`) carries the full veto result (v1–v5, decisión, justificación; `entregable_principal` added by D52), written by Module 3 — migrated via `_migrate_evaluacion_d48`.
+**Attributes:** `id`, `fuente_id`, `company_id`, `location_id`, `id_corrida`, `id_sesion`, `indice_set`, `id_externo`, `fecha_ultima_verificacion`, `enlace`, `title`, `original_description`, `publication_date`, `fecha_descubrimiento`, `status`, `active`, `observations`, `fecha_creacion`, `update_date`, `ubicacion`, `modalidad`, `empresa`, `id_duplicidad`, `resultado_evaluacion_inicial`, `id_lista` (D71: search list that brought it, `LT-xxxx` derived from `indice_set` at capture; NULL only legitimate on pre-D71 rows under the user's explicit no-attribution exception, registered beside the D31 `fecha_ultima_verificacion` precedent). **As-built D41 (2026-08-25):** physical column `empresa TEXT DEFAULT 'N/R'` added — raw company text from the listing card, written by Module 1 at registration (mirrors `ubicacion`; never overwritten on re-registration; historical rows keep `'N/R'`). **As-built D45 (2026-08-26):** `ubicacion_nombre` renamed to `ubicacion`. **As-built D49 (2026-10-15):** `resultado_evaluacion_inicial` (`TEXT DEFAULT 'N/A'`) carries the full veto result (v1–v5, decisión, justificación; `entregable_principal` added by D52), written by Module 3 — migrated via `_migrate_evaluacion_d48`.
 
 **Primary key:** `id`.  
 **Alternate keys:** None.  
@@ -396,7 +398,47 @@ MVP capture deviation (D4, 2026-08-09): `fuente_id` is stored as a raw `fuente_i
 
 **Observations:** `umbral_obsolescencia` is centralized in the system configuration file; no hardcoded values.
 
-### 2.17. Data management rules (D31, 2026-08-18)
+### 2.17. Entity: Search List (D71)
+
+**Description/purpose:** Official identity of a configured search list. Lets every captured offer and every duplicate encounter carry WHICH list produced them, so per-list harvest and duplication can be analyzed (`scripts/reporte_listas.py`).
+
+**Attributes:** `id_lista`, `texto`.
+
+**Primary key:** `id_lista` (`LT-0001..LT-0009`, deterministic from the `indice_set` position: 0 → LT-0001).  
+**Alternate keys:** None.  
+**Foreign keys:** None (derives from `Configuration.indice_set` semantically).
+
+**Relationships:** labels Offer 1:N (`ofertas_descubiertas.id_lista`); triggers Duplicate Encounter 1:N (encounter list); may be the origin list of Duplicate Encounter 1:N.
+
+**Constraints:**
+- Deliberately OUT of `secuencia_ids`: the id derives from config position, never from a counter; ids never change when a phrase is edited.
+- Synced by Module 1 INICIO from the official config: changed `texto` updates the row, a removed list keeps its row (historical attribution stays readable), a set without a phrase is skipped with a Loguru warning.
+- Sync failure is best-effort (Loguru-only): no event code, no run impact.
+
+**State machine:** Not applicable.
+
+### 2.18. Entity: Duplicate Encounter (D71)
+
+**Description/purpose:** One row per silent duplicate encounter of the Discovery dedup — when capture re-meets an offer whose `id_externo` is already registered (same batch cross-list or an earlier batch). Makes "which list duplicates the most and from where" answerable.
+
+**Attributes:** `id_duplicado`, `id_corrida`, `id_lista`, `id_externo`, `enlace`, `id_lista_origen`, `fecha_encuentro`.
+
+**Primary key:** `id_duplicado` (`DUP-0001..`, own `secuencia_ids` sequence).  
+**Alternate keys:** None.  
+**Foreign keys:** `id_corrida → Corrida`; `id_lista`/`id_lista_origen → Search List`; `id_externo` semantically → Offer.
+
+**Relationships:** references Offer N:1 (by `id_externo`, no FK constraint, D4 pattern); encounter list and origin list to Search List.
+
+**Constraints:**
+- Written ONLY by the dedup existing-branch (`upsert_lote_ofertas`/`upsert_oferta`) on the same connection as the usual `fecha_ultima_verificacion` refresh; the dedup mechanics never change (no new offer row, no state transition).
+- `id_lista_origen` is read from the original offer's row: NULL only when the original is a pre-D71 offer (unknown origin, user exception) — intra-lot repeats resolve through the in-batch map so the origin is always present for post-D71 rows.
+- Counts ENCOUNTERS, not distinct offers (a repeat met three times yields three rows).
+
+**State machine:** Not applicable.
+
+**Observations:** Module 2's same-title/same-company `duplicada` state is a different mechanism (T-rules) and shares nothing with this entity.
+
+### 2.19. Data management rules (D31, 2026-08-18)
 
 Fundamental rules applicable to all persisted data from this decision onward:
 
@@ -438,7 +480,7 @@ Defines entities, relationships, and organization rules independently of impleme
 
 ### 4.1. Main entities
 
-Offer, Source, Company, Location, Processed Offer, Initial Evaluation, Detailed Evaluation, Generated Document, Application, Event, Decision, Configuration, Catalog, Corrida, Sesion, Bloqueo.
+Offer, Source, Company, Location, Processed Offer, Initial Evaluation, Detailed Evaluation, Generated Document, Application, Event, Decision, Configuration, Catalog, Corrida, Sesion, Bloqueo, Search List, Duplicate Encounter.
 
 ### 4.2–4.3. Relationships and cardinalities
 
@@ -460,6 +502,9 @@ Offer, Source, Company, Location, Processed Offer, Initial Evaluation, Detailed 
 | Corrida → Sesion | 1:N |
 | Corrida → Bloqueo | 1:0..1 |
 | Source → Sesion | 1:N |
+| Search List → Offer | 1:N (labels the offer with the list that brought it — D71) |
+| Search List → Duplicate Encounter | 1:N (encountered-on list and origin list — D71) |
+| Corrida → Duplicate Encounter | 1:N (run where the encounter happened — D71) |
 
 ### 4.4. Logical flow
 
@@ -467,7 +512,7 @@ Main information flow:
 
 `Source → Offer → Processed Offer → Initial Evaluation → Detailed Evaluation → Generated Document → Application`
 
-Event and Decision record traceability throughout the process. Catalog and Configuration provide supporting controlled values and operational parameters. During Discovery — module 1 — each Corrida anchors Offers, Events, and Sesiones via `id_corrida`, and is protected by Bloqueo while active.
+Event and Decision record traceability throughout the process. Catalog and Configuration provide supporting controlled values and operational parameters. During Discovery — module 1 — each Corrida anchors Offers, Events, and Sesiones via `id_corrida`, and is protected by Bloqueo while active; every Offer carries the Search List that brought it and every silent duplicate re-meet accrues a Duplicate Encounter (D71).
 
 ### 4.5. Model integrity
 
@@ -497,7 +542,7 @@ Each attribute documents, at minimum: Entity, Attribute, Description, Logical ty
 
 ### 5.2. Coverage
 
-The dictionary includes all attributes of: Offer, Source, Company, Location, Processed Offer, Initial Evaluation, Detailed Evaluation, Generated Document, Application, Event, Decision, Configuration, Catalog, Corrida, Sesion, Bloqueo. Implemented attributes not documented here are not permitted.
+The dictionary includes all attributes of: Offer, Source, Company, Location, Processed Offer, Initial Evaluation, Detailed Evaluation, Generated Document, Application, Event, Decision, Configuration, Catalog, Corrida, Sesion, Bloqueo, Search List, Duplicate Encounter. Implemented attributes not documented here are not permitted.
 
 **Common audit fields:**  
 For entities §5.5.1–5.5.13, unless otherwise specified:
@@ -779,6 +824,21 @@ Any addition, modification, or deletion of attributes must update this dictionar
 - `umbral_obsolescencia` — Seconds after which lock may become obsolete. Integer; required. Constraint: from configuration; no hardcoded values; defined in configuration file. Internal; Permanent.
 - `estado` — Lock state. Catalog; required; FK Catalog. Default: `activo`. Domain: `activo`, `obsoleto`, `liberado`. Constraint: at most one active lock across the whole pipeline — Modules 1, 2 and 3 share the same global lock (decision D3 module 2 / D33 / D48). Internal; Permanent.
 
+#### 5.5.17. Search List (D71)
+
+- `id_lista` — Search-list id by config position (`LT-0001..`); TEXT PK; NOT sequential (`secuencia_ids` untouched). Internal; Permanent.
+- `texto` — Full keywords phrase of the list (items joined with spaces); TEXT NOT NULL. Internal; Permanent (updated by the INICIO sync, never deleted).
+
+#### 5.5.18. Duplicate Encounter (D71)
+
+- `id_duplicado` — Encounter id (`DUP-0001..`, own sequence); TEXT PK. Internal; Permanent.
+- `id_corrida` — Run where the encounter occurred; TEXT NOT NULL; FK Corrida. Internal; Permanent.
+- `id_lista` — List being scanned (`LT-xxxx`); TEXT NOT NULL. Internal; Permanent.
+- `id_externo` — External id of the re-met offer; TEXT NOT NULL (dedup key). Internal; Permanent.
+- `enlace` — Link as carried by the processed row; TEXT DEFAULT `'N/A'` (D31 normalization). Internal; Permanent.
+- `id_lista_origen` — Origin list of the original row; TEXT; NULL only when the original is a pre-D71 offer (user exception, D71). Internal; Permanent.
+- `fecha_encuentro` — Encounter date/time; TEXT NOT NULL. Internal; Permanent.
+
 ## 6. Entity–Relationship Diagram
 
 The ERD is the official graphical representation of the Logical Data Model. It must represent official entities, relationships, and cardinalities; remain consistent with entity specifications, Logical Data Model, and Data Dictionary; avoid ambiguous or duplicate relationships; and maintain readable layout. No differences are permitted among these four artifacts.
@@ -806,6 +866,10 @@ erDiagram
      CORRIDA ||--o{ SESION : "registers"
      CORRIDA ||--o| BLOQUEO : "is protected by"
      SESION }o--|| SOURCE : "is established on"
+     SEARCH_LIST ||--o{ OFFER : "brings (D71)"
+     SEARCH_LIST ||--o{ DUPLICATE_ENCOUNTER : "is encountered on (D71)"
+     SEARCH_LIST ||--o{ DUPLICATE_ENCOUNTER : "originally brought the offer (D71)"
+     CORRIDA ||--o{ DUPLICATE_ENCOUNTER : "anchors the encounter (D71)"
      CONFIGURATION }o--|| CATALOG : "category, data_type / provides values"
      CATALOG ||--o{ OFFER : "provides values"
      CATALOG ||--o{ SOURCE : "provides values"
@@ -834,6 +898,9 @@ OFFER ──1:0..1──> APPLICATION <──1:N── GENERATED_DOCUMENT <─�
 CORRIDA ──1:N──> OFFER / EVENT / SESION   — module 1 traceability, id_corrida
 CORRIDA ──1:0..1──> BLOQUEO
 SESION ──N:1──> SOURCE
+SEARCH_LIST ──1:N──> OFFER — which list brought it (D71)
+SEARCH_LIST ──1:N──> DUPLICATE_ENCOUNTER — encountered-on list + origin list (D71)
+CORRIDA ──1:N──> DUPLICATE_ENCOUNTER (D71)
 CATALOG ──1:N──> all entities using controlled values — support
 CONFIGURATION ──N:1──> CATALOG — support
 ```
@@ -853,6 +920,7 @@ Every data-model modification must be recorded before becoming official. Each ve
 
 | Version | Date | Author | Change description |
 | --- | --- | --- | --- |
+| 1.20 | 2026-11-10 | System | Decision D71 — search-list attribution + duplicate-encounters ledger: `ofertas_descubiertas` gains `id_lista` (TEXT; NULL only on pre-D71 rows under the user's explicit no-attribution exception, registered beside the D31 `fecha_ultima_verificacion` precedent; written by Module 1 capture from `indice_set`, never touched by the dedup refresh); new entities Search List (`listas_busquedas` — deterministic `LT-0001..` ids by config position, `texto` = full keywords phrase, synced by INICIO, deliberately OUT of `secuencia_ids`) and Duplicate Encounter (`duplicados_descubiertas` — `DUP-…` own sequence, one row per silent `id_externo` re-meet in the dedup existing-branch with encounter list + origin list read from the original row); indexes `idx_duplicados_id_lista`/`idx_duplicados_id_externo`; Module 2's `duplicada` mechanism untouched; live DB migrated with backup (10 tables, 9 lists loaded, 129 legacy rows unattributed). §1 inventory rows, §2.17/§2.18 entity specs (former §2.17 rules renumbered to §2.19), §2.1 Offer attributes and scope note, §5.5.1 and new §5.5.17/§5.5.18 updated; ERD updated (SEARCH_LIST/DUPLICATE_ENCOUNTER nodes + 3 relationships). |
 | 1.19 | 2026-10-19 | System | Evaluation prompt v5 (D52): `resultado_evaluacion_inicial` JSON now includes `entregable_principal` (one line, ≤20 words, no double quotes) ahead of v1–v5/decision/justification; V1 is deliverable-first, the golden rule is narrowed and calibration examples were added; no schema/data changes (historical rows keep their previous JSON). |
 | 1.18 | 2026-10-17 | System | Evaluation justification upgraded (D51): prompt `compatibility.md` v4 — per-offer evidence-backed justifications (axis + quoted description evidence + viability for approvals; veto + triggering data for discards), template phrases prohibited; word cap 20 → 60 aligned in prompt and VAL-04 validator. No schema/data changes. |
 | 1.17 | 2026-10-15 | System | Module 3 built (D49): `_migrate_evaluacion_d48` applied; `estado` 10 values and `resultado_evaluacion_inicial`/`total_aprobadas`/`total_descartadas` live (verified COR-0004: 42 `aceptada_ei` + 27 `descartada_ei`); legacy scoring retired (`evaluation.weights`, `score`/`pass_threshold`, `decision_engine.py`); prompt `compatibility.md` v3. |

@@ -6,11 +6,11 @@ Fuente de verdad: `shared/persistence.py` (esquemas y funciones de escritura) y 
 
 ## 1. Resumen
 
-La BD tiene 8 tablas. Se habilita con `init_db()` (crea tablas y aplica migraciones idempotentes, incluida la migración al catálogo español D7/D8, la limpieza D31 y la creación de índices, decisión D16). Fechas en formato `YYYY-MM-DD HH:MM:SS` (hora local). IDs secuenciales con prefijo por tabla (`EMP`, `UBI`, `OFE`, `COR`, `SES`, `EVT`, `BLO`) generados por `generar_id()`.
+La BD tiene 10 tablas. Se habilita con `init_db()` (crea tablas y aplica migraciones idempotentes, incluida la migración al catálogo español D7/D8, la limpieza D31 y la creación de índices, decisión D16; D71 añade `listas_busquedas` + `duplicados_descubiertas` vía `_migrate_listas_duplicados_d71`). Fechas en formato `YYYY-MM-DD HH:MM:SS` (hora local). IDs secuenciales con prefijo por tabla (`EMP`, `UBI`, `OFE`, `COR`, `SES`, `EVT`, `BLO`, `DUP` y `LT` sin secuencia — determinista por posición de config, D71) generados por `generar_id()`.
 
-**Regla de gestión de datos (decisión D31, 2026-08-18):** ningún campo persistido puede quedar vacío (`''`/NULL); cuando un valor no aplica o no está disponible se guarda `N/A` (o `N/R`). La normalización ocurre en la frontera de persistencia (`escribir_evento()`, `_upsert_ofertas_en()`) y las columnas afectadas declaran `DEFAULT 'N/A'`. Exenciones: `id_externo` (colisionaría en la deduplicación) y `fecha_ultima_verificacion` (por instrucción explícita del usuario; vacía hasta que una re-visita la refresca). Las consultas de conteo tratan `N/A` como vacío (`contar_distintos` excluye NULL, `''` y `'N/A'`).
+**Regla de gestión de datos (decisión D31, 2026-08-18):** ningún campo persistido puede quedar vacío (`''`/NULL); cuando un valor no aplica o no está disponible se guarda `N/A` (o `N/R`). La normalización ocurre en la frontera de persistencia (`escribir_evento()`, `_upsert_ofertas_en()`) y las columnas afectadas declaran `DEFAULT 'N/A'`. Exenciones: `id_externo` (colisionaría en la deduplicación), `fecha_ultima_verificacion` (por instrucción explícita del usuario; vacía hasta que una re-visita la refresca) y, desde D71, `id_lista` (NULL solo en las filas previas al cambio, por instrucción del usuario de no atribuirlas). Las consultas de conteo tratan `N/A` como vacío (`contar_distintos` excluye NULL, `''` y `'N/A'`).
 
-Índices (creados con `CREATE INDEX IF NOT EXISTS`, no únicos — la unicidad estricta es del Módulo 2, decisión D4): `idx_ofertas_id_externo` (deduplicación por oferta), `idx_ofertas_id_corrida` y `idx_eventos_id_corrida` (métricas de cierre y auditoría).
+Índices (creados con `CREATE INDEX IF NOT EXISTS`, no únicos — la unicidad estricta es del Módulo 2, decisión D4): `idx_ofertas_id_externo` (deduplicación por oferta), `idx_ofertas_id_corrida` y `idx_eventos_id_corrida` (métricas de cierre y auditoría), y desde D71 `idx_duplicados_id_lista`/`idx_duplicados_id_externo` (informe por lista).
 
 Estado actual (conteos tras la vuelta completa del 2026-10-15 sobre la base limpiada del barrido de pruebas; última migración con `init_db`/`_migrate_evaluacion_d48`, D49):
 
@@ -24,6 +24,8 @@ Estado actual (conteos tras la vuelta completa del 2026-10-15 sobre la base limp
 | `eventos` | 142 | Nodos del flujo → `escribir_evento()` (incluye los eventos del Módulo 2 — `oferta_preparada`/`preparacion_fallida`/`oferta_duplicada`/`revision_pendientes` —, del Módulo 3 — `oferta_aprobada`/`oferta_descartada`/`evaluacion_fallida` — y del orquestador — `modulo_ejecutado`/`corrida_programada`/`modulo_fallido`) |
 | `sesiones` | 1 | Módulo 1 — Nodo Captura → `escribir_fila("sesiones")` |
 | `bloqueo` | 0 | Módulo 1/2/3 — Nodo INICIO → `adquirir_bloqueo()` (global del pipeline); Nodo Finalizar → `liberar_bloqueo()` |
+| `listas_busquedas` | 9 | Módulo 1 — Nodo INICIO → `_sincronizar_listas_desde_config()` (upsert desde config; D71) |
+| `duplicados_descubiertas` | 0 | Módulo 1 — Captura → `upsert_lote_ofertas()`/`upsert_oferta()` rama de dedup (D71); informe de solo lectura `scripts/reporte_listas.py` |
 
 ### Momentos del flujo que diligencian las tablas
 
@@ -42,7 +44,7 @@ Control interno del generador de IDs secuenciales (`PREFIJO-NNNN`). No se escrib
 | Columna | Tipo | Qué hace | Cuándo se diligencia |
 |---|---|---|---|
 | `tabla_nombre` | TEXT (PK) | Nombre de la tabla para la que se lleva la secuencia | En el primer `generar_id()` de esa tabla (automático) |
-| `prefijo` | TEXT NOT NULL | Prefijo del ID de esa tabla (`EMP`, `UBI`, `OFE`, `COR`, `SES`, `EVT`, `BLO`) | En el primer `generar_id()` de esa tabla (automático) |
+| `prefijo` | TEXT NOT NULL | Prefijo del ID de esa tabla (`EMP`, `UBI`, `OFE`, `COR`, `SES`, `EVT`, `BLO`, `DUP`; sin `LT` — el identificador de lista es determinista por posición, no secuencial, D71) | En el primer `generar_id()` de esa tabla (automático) |
 | `ultimo_numero` | INTEGER NOT NULL DEFAULT 0 | Último número asignado (se incrementa en 1 por cada ID) | En cada `generar_id()` (automático) |
 
 > **D31:** la secuencia de `fuentes` fue eliminada junto con la tabla (2026-08-18).
@@ -103,6 +105,7 @@ Oportunidades (vacantes) descubiertas. **Módulo 1 — Nodo Captura** la escribe
 | `id_corrida` | TEXT DEFAULT '' | Corrida que descubrió la oferta (no se sobrescribe) | Módulo 1 — Nodo Captura: en la inserción; el Módulo 2 nunca lo sobrescribe |
 | `id_sesion` | TEXT DEFAULT '' | Sesión de plataforma usada al descubrirla | Módulo 1 — Nodo Captura: en la inserción |
 | `indice_set` | INTEGER DEFAULT '' | Índice del set de filtros que la produjo | Módulo 1 — Nodo Captura: en la inserción |
+| `id_lista` | TEXT | Lista de búsqueda que la trajo (`listas_busquedas.id_lista`, `LT-xxxx` por posición de config, D71); NULL solo legítimo en filas previas a D71 (excepción expresa del usuario: no-atribuir-las, D71) | Módulo 1 — Nodo Captura: en la inserción (deriva de `indice_set`); el dedup existing-branch nunca la toca |
 | `id_externo` | TEXT DEFAULT '' | Identificador externo de la oferta en la fuente; clave de deduplicación del upsert (no se normaliza a `N/A` — D31) | Módulo 1 — Nodo Captura: en la inserción |
 | `fecha_ultima_verificacion` | TEXT DEFAULT '' | Marcador con semántica dual (D33): re-visita de dedup (Módulo 1, upsert) **o** verificación de duplicidad (Módulo 2 Nodo 3); `''` = pendiente. Exenta de la regla `N/A` (D31, punto 4) | Módulo 1 — Nodo Captura: re-Visita de dedup (D4); Módulo 2 — Nodo 3: tras evaluar la oferta |
 | `ubicacion` | TEXT DEFAULT 'N/A' | Texto crudo de la ubicación tal como aparece en la tarjeta del listado (traspaso D45; antes `ubicacion_nombre` capturado por el Módulo 2 desde la página) | Módulo 1 — Nodo Captura: en la inserción, desde la tarjeta (`'N/R'` si no viene); el lote (b) del Nodo 2 lo reusa para clasificar sin re-capturar la página |
@@ -111,7 +114,32 @@ Oportunidades (vacantes) descubiertas. **Módulo 1 — Nodo Captura** la escribe
 | `id_duplicidad` | TEXT DEFAULT 'N/A' | ID de la oferta original cuando esta es `duplicada`; `N/A` para ofertas originales o sin verificar | Módulo 2 — Nodo 3: cuando confirma duplicado (terminal) |
 | `resultado_evaluacion_inicial` | TEXT DEFAULT 'N/A' | Resultado completo de la evaluación inicial (entregable principal, v1–v5, decisión APROBADA/DESCARTADA, justificación una línea); `'N/A'` = pendiente | Módulo 3 — Nodo Evaluación inicial (D49): pasos 5–6 lo diligencian; fallos persistentes dejan `'N/A'`. D52: incluye `entregable_principal` (una línea, ≤20 palabras); la ruta V3-FAIL sin descripción (exenta de VAL-04) guarda `entregable_principal = 'N/A'` (D31) |
 
-> **D31:** la columna `identificador_origen` fue eliminada (duplicado muerto de `id_externo`, nunca escrita). **D33:** se re-añade `eventos.id_oferta` (`DEFAULT 'N/A'`) para la trazabilidad por oferta del Módulo 2.
+> **D31:** la columna `identificador_origen` fue eliminada (duplicado muerto de `id_externo`, nunca escrita). **D33:** se re-añade `eventos.id_oferta` (`DEFAULT 'N/A'`) para la trazabilidad por oferta del Módulo 2. **D71:** nueva columna `id_lista` (lista que trajo la oferta, `LT-xxxx`; queda exenta de la regla de no-vacíos únicamente en las filas previas al cambio por instrucción del usuario).
+
+### 2.4b. `listas_busquedas` (D71)
+
+Identidad de las listas de búsqueda. La alimenta el **Nodo INICIO** del Módulo 1 en cada arranque (`_sincronizar_listas_desde_config`): un apunte por set con frase — `id_lista` = `LT-` + posición (`indice_set` 0 → `LT-0001`; determinista, **no** consume `secuencia_ids`), `texto` = frase completa de keywords. Un texto cambiado actualiza la fila; una lista retirada de la config conserva su fila (la atribución histórica debe seguir legible). Los sets sin frase se saltan con aviso; el id nunca depende del texto.
+
+| Columna | Tipo | Qué hace | Cuándo se diligencia |
+|---|---|---|---|
+| `id_lista` | TEXT (PK) | ID de la lista por posición de config (`LT-0001..`) | Nodo INICIO (sincronización desde config, D71) |
+| `texto` | TEXT NOT NULL | Frase de búsqueda completa del set (items de `valor` unidos con espacios) | Nodo INICIO (sincronización desde config, D71) |
+
+### 2.4c. `duplicados_descubiertas` (D71)
+
+Libro de encuentros duplicados del descubrimiento. Lo escribe `upsert_lote_ofertas()`/`upsert_oferta()` en la rama de "fila ya existente" del dedup por `id_externo` (Módulo 1 — Nodo Captura): un apunte por cada encuentro silencioso, sin alterar nada más del dedup (ni fila nueva en ofertas ni estado — solo el refresco habitual de `fecha_ultima_verificacion`). El mecanismo `duplicada` del Módulo 2 (títulos iguales de empresa igual) es otro fenómeno y no aplica aquí.
+
+| Columna | Tipo | Qué hace | Cuándo se diligencia |
+|---|---|---|---|
+| `id_duplicado` | TEXT (PK, prefijo `DUP`) | ID del apunte de encuentro (secuencia propia) | Automático (D71) |
+| `id_corrida` | TEXT NOT NULL | Corrida donde ocurrió el encuentro | Módulo 1 — Captura (rama de dedup) |
+| `id_lista` | TEXT NOT NULL | Lista que se estaba recorriendo (`LT-xxxx`) | Módulo 1 — Captura (rama de dedup) |
+| `id_externo` | TEXT NOT NULL | Identificador externo de la oferta repetida | Módulo 1 — Captura (rama de dedup) |
+| `enlace` | TEXT DEFAULT 'N/A' | Enlace de la fila procesada ('N/A' si la hilera no lo trae) | Módulo 1 — Captura (rama de dedup) |
+| `id_lista_origen` | TEXT | Lista que la trajo primero (leída de la fila original); NULL solo si la original es previa a D71 (sin atribución) | Módulo 1 — Captura (rama de dedup), D71 |
+| `fecha_encuentro` | TEXT NOT NULL | Hora del encuentro | Módulo 1 — Captura (rama de dedup) |
+
+Índices: `idx_duplicados_id_lista`, `idx_duplicados_id_externo`. El informe de lectura de solo lectura `scripts/reporte_listas.py` resume capturadas/duplicados/origenes por lista.
 
 ### 2.5. `corridas`
 

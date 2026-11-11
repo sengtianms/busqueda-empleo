@@ -43,6 +43,9 @@ from ._consultas import (
     contar_narracion as contar_narracion,
 )
 from ._consultas import (
+    contar_ofertas_sin_lista as contar_ofertas_sin_lista,
+)
+from ._consultas import (
     ids_de_corrida_con_codigos as ids_de_corrida_con_codigos,
 )
 from ._consultas import (
@@ -59,6 +62,9 @@ from ._consultas import (
 )
 from ._consultas import (
     leer_eventos_de_corridas as leer_eventos_de_corridas,
+)
+from ._consultas import (
+    leer_resumen_listas as leer_resumen_listas,
 )
 from ._consultas import (
     leer_tabla as leer_tabla,
@@ -97,6 +103,9 @@ from ._escrituras import (
     generar_id as generar_id,
 )
 from ._escrituras import (
+    id_lista_de_indice as id_lista_de_indice,
+)
+from ._escrituras import (
     liberar_bloqueo as liberar_bloqueo,
 )
 from ._escrituras import (
@@ -104,6 +113,9 @@ from ._escrituras import (
 )
 from ._escrituras import (
     registrar_evento as registrar_evento,
+)
+from ._escrituras import (
+    sincronizar_listas_busquedas as sincronizar_listas_busquedas,
 )
 from ._escrituras import (
     sondear_escritura as sondear_escritura,

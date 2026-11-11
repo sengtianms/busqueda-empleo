@@ -290,6 +290,21 @@
 | — | Matriz definitiva de 9 grupos (recorte de D60 por el usuario) | ✅ | Los 9 grupos declarados por el usuario (frases integras, tal como las escribió) sustituyen a los 18; cada uno conserva geoid Colombia (100876405) y últimas 24 horas (r86400) y añade los 4 niveles. Índices consecutivos 0–8. |
 | — | Verificación en vivo y efectos medidos | ✅ | Con la palabra clave de prueba: sin filtro 57 ofertas; con los 4 niveles 28 (por nivel: Sénior 28, Administrador 17, Director 7, Ejecutivo 14); Colombia y 24 h intactas en todas las variaciones y sin señales de capa de protección. En tandas reales se espera menos volumen por grupo: desaparecen las de pasantía y nivel inicial, que la evaluación descartaba con veto. |
 | — | Pruebas y validaciones | ✅ | 13 pruebas nuevas (canonicidad del orden, etiquetas desconocidas/repetidas, conflicto con modalidad, resumen y casilla única del panel, respaldo por clics completo y su fallo honesto); 790 pruebas, ruff/mypy limpios (más arreglo de higiene: reexportación explícita en el tablero que el chequeo de tipos ya reclamaba). Sin cambios de esquema, prompts, contratos ni flujos. |
+
+---
+
+## Atribución de listas de búsqueda y libro de duplicados (2026-11-10)
+
+> Decisión D71 (libro v1.50). A petición del usuario: (1) cada oferta queda marcada con la lista de búsqueda que la trajo (LT-0001..LT-0009 según la posición del grupo en la configuración), para saber qué listas capturan más y cuáles no; (2) cada encuentro duplicado — la oferta ya estaba en la base por otra lista de la misma tanda o de una tanda anterior — queda anotado en un libro propio con la lista donde se encontró y la lista que la trajo primero (el ejemplo del usuario: «se corrió la lista 2, ya se había encontrado con la lista 1»). Instrucción explícita del usuario: las ofertas previas al cambio quedan SIN lista y sus apuntes de origen quedan desconocidos («no son importantes y se borrarán en el futuro»).
+
+| # | Cambio | Estado | Notas |
+|---|-------|--------|-------|
+| — | Tabla `listas_busquedas` (LT-0001…) | ✅ | Identidad de cada lista: posición de config + frase de búsqueda completa. Se alimenta sola en cada arranque (mejor esfuerzo; texto cambiado actualiza, lista retirada conserva su fila para poder leer la atribución histórica). Sin secuencia de ids: el identificador deriva de la posición y nunca cambia al editar una frase. |
+| — | Columna `id_lista` en las ofertas | ✅ | Cada oferta nueva entra marcada con la lista que la trajo (deriva del grupo en curso); las filas de antes del cambio quedan sin valor por instrucción del usuario (excepción anotada junto a la de la fecha de re-verificación). El dedup nunca toca esa columna re-encontrando una oferta. |
+| — | Tabla `duplicados_descubiertas` (DUP-…) | ✅ | Un apunte por encuentro duplicado: tanda, lista recorrida, oferta (identificador externo + enlace), lista de origen (leída de la fila original; desconocida solo contra filas de antes del cambio) y hora. El comportamiento del dedup no cambia: siga refrescando solo la fecha de re-verificación. El mecanismo `duplicada` del Módulo 2 (títulos iguales) es otro fenómeno y no se toca. |
+| — | Informe de solo lectura `scripts/reporte_listas.py` | ✅ | Por lista: ofertas capturadas, encuentros duplicados provocados y de qué listas venían (con «sin atribución» para el caso histórico), totales y recuento del histórico sin lista; mensaje legible si la base aún no tiene la estructura. No toca datos; modo `--db` como el tablero. |
+| — | Migración en producción | ✅ | Sin tanda en curso: respaldo `job_search_pre_d71_20261110_063418.db`, estructura aplicada, 9 listas cargadas desde la config oficial, humo de datos comprobado y borrado, contadores saneados; 129 ofertas históricas sin lista (se verán así hasta que se limpie la base a futuro). |
+| — | Pruebas y validaciones | ✅ | 16 pruebas nuevas (sincronización, migración con legado, marcado de lista, casos de duplicado misma-lista/otra-lista/tanda-anterior/intra-lote, evidencia del evento y el informe); 806 pruebas, ruff/mypy limpios. Alineados DOC-13A (entidades + diccionario), tablas de la base, catálogo de prefijos (LT/DUP) y ficha del módulo 1. |
 ---
 
 ## Phase 7. Module 4 — Deep Processing

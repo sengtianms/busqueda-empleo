@@ -33,6 +33,7 @@ from shared.persistence import (
     init_db,
     registrar_corrida,
     registrar_evento,
+    sincronizar_listas_busquedas,
     sondear_escritura,
     umbral_obsolescencia_minutos,
 )
@@ -168,6 +169,56 @@ def _validar_descubrimiento(config: dict[str, Any]) -> str | None:
     return None
 
 
+def _sincronizar_listas_desde_config(config: dict[str, Any]) -> None:
+    """D71: alimenta `listas_busquedas` (id por posicion, texto por frase).
+
+    Los grupos de busqueda viven dentro de cada fuente (`fuentes[*]`.
+    `sets_de_filtros`): un apunte por set con `keywords`; el texto es la
+    frase completa (los items de `valor` unidos con espacios; normalmente
+    es uno). Los sets sin frase se saltan con aviso (no pueden formar fila
+    con texto vacio); el id sigue siendo determinista por `indice_set`
+    (0 -> LT-0001). Lanza lo que `sincronizar_listas_busquedas` lance: el
+    llamador decide (mejor esfuerzo, solo Loguru).
+    """
+    conjuntos: list[dict[str, Any]] = []
+    for fuente in config.get("fuentes", []):
+        if isinstance(fuente, dict):
+            sets_fuente = fuente.get("sets_de_filtros")
+            if isinstance(sets_fuente, list):
+                conjuntos.extend(
+                    c for c in sets_fuente if isinstance(c, dict)
+                )
+    if not conjuntos and isinstance(config.get("sets_de_filtros"), list):
+        conjuntos.extend(c for c in config["sets_de_filtros"] if isinstance(c, dict))
+    if not conjuntos:
+        return
+    listas: list[tuple[int, str]] = []
+    sin_frase: list[int] = []
+    for conjunto in conjuntos:
+        indice_bruto = conjunto.get("indice_set")
+        if not isinstance(indice_bruto, int) or indice_bruto < 0:
+            continue
+        filtros = conjunto.get("filtros")
+        frases: list[str] = []
+        if isinstance(filtros, list):
+            for filtro in filtros:
+                if not isinstance(filtro, dict) or filtro.get("tipo") != "keywords":
+                    continue
+                valor = filtro.get("valor")
+                if isinstance(valor, str):
+                    valor = [valor]
+                if isinstance(valor, list):
+                    frases.extend(str(item) for item in valor if str(item).strip())
+        if frases:
+            listas.append((indice_bruto, " ".join(frases)))
+        else:
+            sin_frase.append(indice_bruto)
+    if sin_frase:
+        logger.warning(f"D71 | sets sin frase de busqueda, se saltan: {sin_frase}")
+    if listas:
+        sincronizar_listas_busquedas(listas)
+
+
 def ejecutar_inicio(config: dict[str, Any] | None = None) -> ResultadoInicio:
     """Run the INICIO node steps in order (section 2 of the sheet)."""
     try:
@@ -247,6 +298,17 @@ def ejecutar_inicio(config: dict[str, Any] | None = None) -> ResultadoInicio:
             id_corrida=id_corrida,
             codigo="ERR-05",
             descripcion="database unavailable or not writable",
+        )
+
+    # D71: sincroniza `listas_busquedas` desde la configuracion (id de lista
+    # = posicion del set, texto = frase de keywords completa). Best-effort:
+    # un fallo solo se loguea (sin evento ni codigo nuevo) para no alterar
+    # las metricas de cierre; el flujo nunca se detiene por esto.
+    try:
+        _sincronizar_listas_desde_config(config)
+    except Exception as error:
+        logger.error(
+            f"D71 | run={id_corrida} | sincronizacion de listas fallida: {error}"
         )
 
     try:

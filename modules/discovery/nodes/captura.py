@@ -28,6 +28,7 @@ from shared.narrador import narrar_captura
 from shared.persistence import (
     actualizar_fila,
     escribir_fila,
+    id_lista_de_indice,
     leer_tabla,
     registrar_evento,
     upsert_lote_ofertas,
@@ -370,7 +371,8 @@ def registrar_ofertas(contexto: RunContext) -> ResultadoCaptura:
     """Nodo: Registrar ofertas en Ofertas Totales (v1.0).
 
     Deduplica por `id_externo` vía `upsert_lote_ofertas` (una conexión y un
-    reintento único para el lote completo). Si todas fallan, registra un
+    reintento único para el lote completo) y anota cada encuentro duplicado
+    en `duplicados_descubiertas` (D71). Si todas fallan, registra un
     evento crítico de lote degradado; el flujo siempre continúa.
     """
     lote = contexto.capture_batch
@@ -378,7 +380,7 @@ def registrar_ofertas(contexto: RunContext) -> ResultadoCaptura:
         return ResultadoCaptura(estado="ok", contexto=contexto)
 
     filas = [_oferta_a_dict(oferta, contexto) for oferta in lote.ofertas]
-    registradas, fallidas = _registrar_lote_con_reintento(filas)
+    registradas, duplicados, fallidas = _registrar_lote_con_reintento(filas)
 
     if registradas > 0:
         _registrar_evento(
@@ -387,6 +389,7 @@ def registrar_ofertas(contexto: RunContext) -> ResultadoCaptura:
             codigo="ofertas_registradas",
             evidencia=(
                 f"ofertas registradas: {registradas} | "
+                f"duplicados: {duplicados} | "
                 f"total: {len(lote.ofertas)}"
             ),
         )
@@ -431,6 +434,7 @@ def _oferta_a_dict(oferta: Offer, contexto: RunContext) -> dict[str, Any]:
         "enlace": oferta.enlace,
         "fuente_id": oferta.fuente_id,
         "indice_set": oferta.indice_set,
+        "id_lista": id_lista_de_indice(oferta.indice_set),
         "id_externo": oferta.id_externo,
         "fecha_publicacion": (
             oferta.fecha_publicacion.strftime(FORMATO_TIMESTAMP)
@@ -449,10 +453,11 @@ def _oferta_a_dict(oferta: Offer, contexto: RunContext) -> dict[str, Any]:
 
 def _registrar_lote_con_reintento(
     filas: list[dict[str, Any]],
-) -> tuple[int, int]:
+) -> tuple[int, int, int]:
     """Registra el lote completo en una conexión; reintenta una vez si falla.
 
-    Returns (registradas, fallidas).
+    Returns (registradas, duplicados, fallidas) — `duplicados` cuenta
+    encuentros duplicados anotados en `duplicados_descubiertas` (D71).
     """
     for intento in range(1, 3):
         try:
@@ -461,7 +466,7 @@ def _registrar_lote_con_reintento(
             logger.error(
                 f"Fallo registrando lote de ofertas (intento {intento}/2): {exc}"
             )
-    return 0, len(filas)
+    return 0, 0, len(filas)
 
 
 def quedan_sets_por_aplicar(contexto: RunContext) -> ResultadoCaptura:

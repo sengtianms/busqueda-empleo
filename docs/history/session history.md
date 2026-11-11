@@ -5,6 +5,7 @@ Unless noted, decisions from previous sessions remain in effect.
 ## Sessions index
 | № | Date | Session ID | Summary |
 |---|---|---|---|
+| 51 | 10/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Search-list attribution and a duplicate-encounters ledger shipped per the approved plan: every captured offer carries the list that brought it (position-keyed ids, full search phrase stored per list, catalog self-fed at every run start with retired lists kept readable), and every silent re-encounter of an already-registered offer is recorded with the scanned list and the originating one while the dedup behavior stays untouched; a read-only per-list report answers which lists harvest most and which duplicate most; the live database migrated with backup leaving the 129 historical offers unattributed by user order; official closing reviewers blocked again by the reviewer model quota, manual closing review applied; 806 tests |
 | 50 | 09/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Experience-level filter added to the capture (decision D70 in log v1.49): the platform's seniority filter was decoded on a live isolated session copy, applied straight through the search address, verified against the filter panel and given a keyboard-driven screen-touch fallback; the 18 provisional query groups were replaced by the user's nine definitive ones (Colombia, last 24 h and all four levels each), so junior postings stop entering capture and the per-group harvest roughly halves; official closing reviewers unavailable at quota exhaustion, manual closing review applied; 790 tests |
 | 49 | 09/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Housekeeping session: the temp folder's five November probe bundles were audited before touching anything (zero references from code, tests, scheduled automation or official docs), one disposable backup archive was saved into the data backup area (~6 MB, 149 entries) and then every probe folder was wiped; the temp folder itself and its structure keeper kept per the official project layout; no code, config or doc changes and tracker without updates |
 | 48 | 31/10/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Optimization probes closed the speed hunt with a measured verdict: every lever dead or discarded — the 24h window is ignored by the platform, light reads save ~2%, reordering changes nothing, and the NOT-cascade lost 19 offers in its one isolated shadow smoke test (17%, every loss attributed to its two strongest rejection phrases applied to full job texts) so the user discarded it per the agreed verdict rule and let all probe artifacts go (~1.4 GB, production untouched); post-V1 backlog point 5 shipped (decision D69 in log v1.48): the observation room's trace nucleus extracted from the board renderer into one library with byte-equivalent bodies, sentinel and operator commands re-pointed, both shared thresholds moved to official configuration with defensive fallbacks, zero behavior change, 777 tests; fast-forward merged into the work branch, probe branch deleted, main untouched |
@@ -44,6 +45,31 @@ Unless noted, decisions from previous sessions remain in effect.
 | 14 | 09/08/2026 | `ses_01bcc78adffemcqFEiZxT52Eli` | Sub-fase 4.4: capture/registration nodes implemented, audited, and post-audit fixes applied (FK-free schema, name columns, upsert tests) |
 | 13 | 08/08/2026 | `ses_01be77680ffeuyoKct4Qrfx1GG` | Repo sync to `fase-4`; new `/save` section with general git commit and push guidance |
 | 12 | 08/08/2026 | `ses_01c089ce2ffe9MvQT4F1pC0MJN` | Sub-fase 4.2 deep audit + post-audit fixes (credentials mapping, playwright lifecycle) |
+
+## Session 51 — 10/11/2026
+`ses_f4af1b961ffe5t8xNspW5U761x` · `ajuste-final-v1`
+
+**Topics**
+- Search-list attribution and duplicate-encounter tracking implemented from the approved plan, keeping the dedup behavior exactly as it was
+- Every new offer enters the database marked with the search list that brought it; the list id derives from the group's position in the configuration, so ids never change when a phrase is edited
+- Each list's identity row stores the full search phrase; the list catalog fills itself at every run start — an edited phrase refreshes its row, a retired list keeps its row so historical attribution stays readable, and a sync failure never stops a run
+- Every silent re-encounter with an already-registered offer (same batch, another list, or an earlier run) is now recorded in its own ledger: scanned list, originating list (unknown only for pre-change offers), run, external id, link and timestamp; encounter counts, not distinct offers
+- Offer registration now answers three numbers — new, duplicates, failures — and the registered-offers evidence shows the duplicate count
+- New read-only per-list report: harvest, duplicate encounters caused and where they came from (with «sin atribución» for the historical case), totals, legacy count, plus a legible message when the structure does not exist yet and an alternative-database option like the live board
+- The general run report exempts the list column from the no-empty audit for pre-change rows only, mirroring the verification-date precedent
+- Live database migrated with backup (10 tables now, 9 lists loaded from the official configuration, the 129 historical offers left unattributed by explicit user order, smoke rows cleaned and sequence counters sane)
+- Documentation aligned end to end; the manual closing review caught the two entities missing from the logical-model lists, relationships and diagram plus a prefix enumeration, all fixed and the diagram marked updated in the version row
+- Official closing reviewers could not run again — the reviewer model hit its usage quota for the second session in a row; the closing review was performed manually across all changed files
+
+**Decisions**
+- D71 (decision log v1.50): search-list attribution + duplicate-encounters ledger — new search-list table (deterministic ids by config position, full keywords phrase, synced at run start after the write probe, best-effort, stale rows kept, deliberately outside the id sequences); offers gain the list column written at capture for every new offer (NULL only for the 129 pre-change rows under the user's explicit no-attribution instruction, exempted beside the verification-date precedent in the run report's audit); new duplicate-encounters ledger logging every silent re-encounter inside the dedup existing branch with encounter list + origin list from the original row, dedup behavior untouched; batch and single registration return a triple (new, duplicates, failures); read-only per-list report added; Module 2's same-title duplicate mechanism untouched; live DB migrated with backup, 9 lists loaded, smoke rows cleaned, counters sane
+- Decisions from previous sessions remain in effect
+
+**Status**
+- Search-list attribution and duplicate-encounters ledger implemented, live-migrated and closed; validations green: lint, type check (108 files) and 806 tests passing
+- Official closing reviewers unavailable (reviewer model quota exhausted, second session in a row); manual closing review applied and its findings fixed before validation
+- Optional follow-up pending user decision: rerun the two official closing reviewers once the reviewer model quota recovers
+- Phases 7–8 remain future-version planning; active branch: `ajuste-final-v1`
 
 ## Session 50 — 09/11/2026
 `ses_f4af1b961ffe5t8xNspW5U761x` · `ajuste-final-v1`

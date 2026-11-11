@@ -648,7 +648,7 @@ def test_upsert_lote_ofertas_inserta_nuevas(temp_db_file: Path) -> None:
         _oferta_base("1", "https://www.linkedin.com/jobs/view/1"),
         _oferta_base("2", "https://www.linkedin.com/jobs/view/2"),
     ]
-    registradas, fallidas = upsert_lote_ofertas(filas)
+    registradas, duplicados, fallidas = upsert_lote_ofertas(filas)
 
     assert registradas == 2
     assert fallidas == 0
@@ -661,7 +661,7 @@ def test_upsert_lote_ofertas_mismo_id_externo_no_duplica(
     from shared.persistence import leer_tabla, upsert_lote_ofertas
 
     base = _oferta_base("789", "https://www.linkedin.com/jobs/view/789")
-    registradas, fallidas = upsert_lote_ofertas([dict(base), dict(base)])
+    registradas, duplicados, fallidas = upsert_lote_ofertas([dict(base), dict(base)])
 
     assert registradas == 2
     assert fallidas == 0
@@ -675,7 +675,7 @@ def test_upsert_lote_ofertas_fila_invalida_no_pierde_lote(temp_db_file: Path) ->
 
     invalida = _oferta_base("bad", None)
     valida = _oferta_base("ok", "https://www.linkedin.com/jobs/view/ok")
-    registradas, fallidas = upsert_lote_ofertas([invalida, valida])
+    registradas, duplicados, fallidas = upsert_lote_ofertas([invalida, valida])
 
     assert registradas == 1
     assert fallidas == 1
@@ -687,7 +687,7 @@ def test_upsert_lote_ofertas_fila_invalida_no_pierde_lote(temp_db_file: Path) ->
 def test_upsert_lote_ofertas_vacio_no_op(temp_db_file: Path) -> None:
     from shared.persistence import upsert_lote_ofertas
 
-    assert upsert_lote_ofertas([]) == (0, 0)
+    assert upsert_lote_ofertas([]) == (0, 0, 0)
 
 
 def test_upsert_oferta_fila_invalida_error_descriptivo(temp_db_file: Path) -> None:
@@ -1877,3 +1877,290 @@ def test_inicializar_si_ausente_d42(temp_db_file: Path) -> None:
     assert inicializar_si_ausente() is True
     assert inicializar_si_ausente() is False
     reset_path()
+
+
+# ---------------------------------------------------------------------------
+# D71: listas de busqueda + libro de duplicados
+# ---------------------------------------------------------------------------
+
+
+def test_id_lista_de_indice_determinista() -> None:
+    from shared.persistence import id_lista_de_indice
+
+    assert id_lista_de_indice(0) == "LT-0001"
+    assert id_lista_de_indice(1) == "LT-0002"
+    assert id_lista_de_indice(8) == "LT-0009"
+    assert id_lista_de_indice(None) is None
+    assert id_lista_de_indice(-1) is None
+
+
+def test_sincronizar_listas_inserta_actualiza_y_conserva(temp_db_file: Path) -> None:
+    from shared.persistence import (
+        leer_tabla,
+        sincronizar_listas_busquedas,
+    )
+
+    sincronizar_listas_busquedas([
+        (0, "frase una"),
+        (1, "frase dos"),
+    ])
+    filas = leer_tabla("listas_busquedas")
+    assert len(filas) == 2
+
+    # texto cambiado en la misma posicion: actualiza, id estable
+    sincronizar_listas_busquedas([
+        (0, "frase una corregida"),
+        (2, "frase tres"),
+    ])
+    por_id = {
+        fila["id_lista"]: fila["texto"]
+        for fila in leer_tabla("listas_busquedas")
+    }
+    # la fila sin lugar en la nueva configuracion se conserva (historia)
+    assert por_id == {
+        "LT-0001": "frase una corregida",
+        "LT-0002": "frase dos",
+        "LT-0003": "frase tres",
+    }
+
+
+def test_sincronizar_listas_rechaza_texto_invalido(temp_db_file: Path) -> None:
+    from shared.persistence import leer_tabla, sincronizar_listas_busquedas
+
+    with pytest.raises(ValueError):
+        sincronizar_listas_busquedas([(0, "   ")])
+    with pytest.raises((TypeError, ValueError)):
+        sincronizar_listas_busquedas([(0, None)])  # type: ignore[list-item]
+    # sin fila parcial: el lote completo se revierte
+    assert leer_tabla("listas_busquedas") == []
+
+
+def test_migracion_d71_columna_lista_con_legacy_nulo(temp_db_file: Path) -> None:
+    import sqlite3
+
+    from shared.persistence import escribir_fila, init_db
+
+    # oferta sin atribucion (simulada con fila previa a la columna)
+    oferta_id = escribir_fila(
+        "ofertas_descubiertas",
+        {
+            **_oferta_base("legado", "https://www.linkedin.com/jobs/view/L"),
+            "id_lista": None,
+            "fecha_descubrimiento": "2026-08-09 10:00:00",
+        },
+    )
+    con = sqlite3.connect(str(temp_db_file))
+    con.execute("ALTER TABLE ofertas_descubiertas DROP COLUMN id_lista")
+    con.execute("DROP TABLE listas_busquedas")
+    con.execute("DROP TABLE duplicados_descubiertas")
+    con.commit()
+    con.close()
+
+    init_db()  # pasara D71: re-crea tablas y re-agrega la columna
+    con = sqlite3.connect(str(temp_db_file))
+    con.row_factory = sqlite3.Row
+    columnas = {
+        fila["name"]
+        for fila in con.execute(
+            "PRAGMA table_info(ofertas_descubiertas)"
+        ).fetchall()
+    }
+    assert "id_lista" in columnas
+    fila = con.execute(
+        "SELECT id_lista FROM ofertas_descubiertas WHERE id = ?", (oferta_id,)
+    ).fetchone()
+    assert fila is not None and fila["id_lista"] is None  # legado: sin atribucion
+    con.execute("SELECT id_lista FROM listas_busquedas").fetchone()
+    con.execute("SELECT id_duplicado FROM duplicados_descubiertas").fetchone()
+    con.close()
+
+
+def test_upsert_oferta_marca_id_lista(temp_db_file: Path) -> None:
+    from shared.persistence import buscar_por_id, id_lista_de_indice, upsert_oferta
+
+    oferta = {
+        **_oferta_base("a1", "https://www.linkedin.com/jobs/view/a1"),
+        "id_lista": id_lista_de_indice(2),
+    }
+    id_oferta = upsert_oferta(oferta)
+    fila = buscar_por_id("ofertas_descubiertas", id_oferta)
+    assert fila is not None
+    assert fila["id_lista"] == "LT-0003"
+
+
+def test_duplicado_del_mismo_id_externo_anota_apunte_con_origen(
+    temp_db_file: Path,
+) -> None:
+    from shared.persistence import (
+        leer_tabla,
+        upsert_lote_ofertas,
+        upsert_oferta,
+    )
+
+    base = {
+        **_oferta_base("dup", "https://www.linkedin.com/jobs/view/dup"),
+        "id_corrida": "COR-A",
+        "id_lista": "LT-0001",  # LT-0001 la trajo primero
+    }
+    upsert_oferta(dict(base))
+
+    # misma tanda u otra posterior: el mismo id_externo bajo LT-0002
+    encontrado = {
+        **_oferta_base("dup", "https://www.linkedin.com/jobs/view/dup"),
+        "id_corrida": "COR-B",
+        "id_lista": "LT-0002",
+    }
+    registradas, duplicados, fallidas = upsert_lote_ofertas([encontrado])
+
+    assert (registradas, duplicados, fallidas) == (1, 1, 0)
+    apuntes = leer_tabla("duplicados_descubiertas")
+    assert len(apuntes) == 1
+    apunte = apuntes[0]
+    assert apunte["id_duplicado"].startswith("DUP-")
+    assert apunte["id_lista"] == "LT-0002"      # lista del encuentro
+    assert apunte["id_lista_origen"] == "LT-0001"  # lista que la trajo primero
+    assert apunte["id_corrida"] == "COR-B"
+    assert apunte["id_externo"] == "dup"
+    assert apunte["enlace"] == "https://www.linkedin.com/jobs/view/dup"
+    assert apunte["fecha_encuentro"] != ""
+
+
+def test_duplicado_no_toca_oferta_y_no_crea_filas(temp_db_file: Path) -> None:
+    from shared.persistence import (
+        buscar_por_id,
+        leer_tabla,
+        upsert_lote_ofertas,
+        upsert_oferta,
+    )
+
+    base = {
+        **_oferta_base("dup", "https://www.linkedin.com/jobs/view/dup"),
+        "id_lista": "LT-0001",
+    }
+    id_oferta = upsert_oferta(dict(base))
+    original = buscar_por_id("ofertas_descubiertas", id_oferta)
+    assert original is not None
+    fecha_antes = original["fecha_ultima_edicion"]
+    verificacion_antes = original["fecha_ultima_verificacion"]
+
+    upsert_lote_ofertas([{
+        **_oferta_base("dup", "https://www.linkedin.com/jobs/view/dup"),
+        "id_lista": "LT-0002",
+    }])
+
+    despues = buscar_por_id("ofertas_descubiertas", id_oferta)
+    assert despues is not None
+    # el original no cambia de estado ni de fecha de edicion
+    assert despues["estado"] == "descubierta"
+    assert despues["fecha_ultima_edicion"] == fecha_antes
+    # solo la re-verificacion avanza
+    assert despues["fecha_ultima_verificacion"] != verificacion_antes
+    # ninguna fila nueva en ofertas
+    assert len(leer_tabla("ofertas_descubiertas", {"id_externo": "dup"})) == 1
+
+
+def test_duplicado_misma_lista_y_sin_lista_origen(temp_db_file: Path) -> None:
+    from shared.persistence import leer_tabla, upsert_lote_ofertas, upsert_oferta
+
+    # oferta legada: sin id_lista (previa a D71, excepcion del usuario)
+    upsert_oferta({
+        **_oferta_base("legada", "https://www.linkedin.com/jobs/view/leg"),
+    })
+
+    # encuentros contra la misma oferta bajo LT-0001 (misma lista que el
+    # encuentro, pero la fila original no sabe su lista => origen nulo)
+    registradas, duplicados, fallidas = upsert_lote_ofertas([
+        {**_oferta_base("legada", "https://www.linkedin.com/jobs/view/leg"),
+         "id_lista": "LT-0001"},
+        # encuentro intra-lote: segunda vez en el mismo lote
+        {**_oferta_base("legada", "https://www.linkedin.com/jobs/view/leg"),
+         "id_lista": "LT-0001"},
+    ])
+    assert (registradas, duplicados, fallidas) == (2, 2, 0)
+
+    apuntes = leer_tabla("duplicados_descubiertas")
+    assert len(apuntes) == 2
+    for apunte in apuntes:
+        assert apunte["id_lista"] == "LT-0001"
+        assert apunte["id_lista_origen"] is None  # legada: origen desconocido
+        assert apunte["id_duplicado"].startswith("DUP-")
+
+
+def test_leer_resumen_listas_agrega_por_lista(temp_db_file: Path) -> None:
+    from shared.persistence import (
+        leer_resumen_listas,
+        sincronizar_listas_busquedas,
+        upsert_lote_ofertas,
+    )
+
+    sincronizar_listas_busquedas([(0, "lista alfa"), (1, "lista beta")])
+    upsert_lote_ofertas([
+        {**_oferta_base("1", "https://x/1"), "id_lista": "LT-0001"},
+        {**_oferta_base("2", "https://x/2"), "id_lista": "LT-0001"},
+        {**_oferta_base("3", "https://x/3"), "id_lista": "LT-0002"},
+        {**_oferta_base("legada", "https://x/leg"), "id_lista": None},
+    ])
+    # duplicados: dos encuentros en LT-0002 de origen LT-0001 y uno en
+    # LT-0001 contra la oferta legada (origen desconocido)
+    upsert_lote_ofertas([
+        {**_oferta_base("1", "https://x/1"), "id_lista": "LT-0002"},
+        {**_oferta_base("2", "https://x/2"), "id_lista": "LT-0002"},
+    ])
+    upsert_lote_ofertas([
+        {**_oferta_base("legada", "https://x/leg"), "id_lista": "LT-0001"},
+    ])
+
+    resumen = leer_resumen_listas()
+    assert [(r["id_lista"], r["texto"]) for r in resumen] == [
+        ("LT-0001", "lista alfa"),
+        ("LT-0002", "lista beta"),
+    ]
+    por_id = {r["id_lista"]: r for r in resumen}
+    assert por_id["LT-0001"]["ofertas"] == 2
+    assert por_id["LT-0002"]["ofertas"] == 1
+    assert por_id["LT-0001"]["duplicados"] == 1
+    assert por_id["LT-0002"]["duplicados"] == 2
+    assert por_id["LT-0002"]["origenes"] == {"LT-0001": 2}
+    assert por_id["LT-0001"]["origenes"] == {"": 1}  # legada: origen desconocido
+
+
+def test_reporte_listas_renderiza_y_avisa_sin_bases(temp_db_file: Path) -> None:
+    import io
+    import sqlite3
+    from contextlib import redirect_stdout
+
+    from scripts.reporte_listas import componer_informe, main
+    from shared.persistence import (
+        sincronizar_listas_busquedas,
+        upsert_lote_ofertas,
+    )
+
+    # con datos: una seccion por lista, totales y lineas de origen
+    sincronizar_listas_busquedas([(0, "lista " + "muylarga " * 12)])
+    upsert_lote_ofertas([
+        {**_oferta_base("1", "https://x/1"), "id_lista": "LT-0001"},
+        {**_oferta_base("legada", "https://x/leg"), "id_lista": None},
+    ])
+    upsert_lote_ofertas([
+        {**_oferta_base("1", "https://x/1"), "id_lista": "LT-0001"},
+    ])
+    lineas = componer_informe()
+    texto = "\n".join(lineas)
+    assert "LT-0001 | capturadas: 1 | duplicados: 1" in texto
+    assert "duplicados venian de: LT-0001=1" in texto
+    assert "Totales | capturadas: 1 | duplicados: 1" in texto
+    assert "quedan sin lista" in texto
+    assert any(linea.startswith("    frase: ") for linea in lineas)
+    # frase recortada con el punteado de corte
+    assert any(linea.endswith("...") for linea in lineas)
+
+    # sin tablas aun: main imprime aviso legible y sale 0
+    con = sqlite3.connect(str(temp_db_file))
+    con.execute("DROP TABLE listas_busquedas")
+    con.execute("DROP TABLE duplicados_descubiertas")
+    con.commit()
+    con.close()
+    salida = io.StringIO()
+    with redirect_stdout(salida):
+        assert main([]) == 0
+    assert "todavia no esta disponible" in salida.getvalue()

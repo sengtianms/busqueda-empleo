@@ -3,6 +3,7 @@
 import datetime
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 import yaml
 
@@ -280,3 +281,52 @@ def test_inicio_contienda_sobrescritura_err06(
         assert res.codigo == "ERR-06"
     finally:
         liberar_bloqueo("COR-VIEJA")
+
+
+def test_sincronizar_listas_desde_config_alimenta_tabla(temp_db_file: Path) -> None:
+    from modules.discovery.nodes.inicio import _sincronizar_listas_desde_config
+    from shared.persistence import leer_tabla
+
+    config: dict[str, Any] = {
+        "sets_de_filtros": [
+            {
+                "indice_set": 0,
+                "filtros": [{"tipo": "keywords", "valor": ["\"frase alfa\""]}],
+            },
+            {
+                "indice_set": 1,
+                "filtros": [
+                    {"tipo": "geoid", "valor": "100876405"},
+                    {"tipo": "keywords", "valor": ["frase", "beta"]},
+                ],
+            },
+            {"indice_set": 2, "filtros": []},  # sin frase: se salta con aviso
+            {"indice_set": 3},  # sin filtros: lo mismo
+        ],
+    }
+    _sincronizar_listas_desde_config(config)
+
+    filas = {fila["id_lista"]: fila["texto"] for fila in leer_tabla(
+        "listas_busquedas"
+    )}
+    assert filas == {
+        "LT-0001": "\"frase alfa\"",
+        "LT-0002": "frase beta",
+    }
+
+
+def test_inicio_sincronizacion_fallida_no_aborta(temp_db_file: Path) -> None:
+    # best-effort (D71): si la sincronizacion falla, el arranque sigue
+    with patch(
+        "modules.discovery.nodes.inicio.sincronizar_listas_busquedas",
+        side_effect=RuntimeError("db"),
+    ):
+        res = ejecutar_inicio(dict(CONFIG_UNA_FUENTE))
+    assert res.estado == "ok"
+
+
+def test_inicio_ok_deja_tabla_de_listas(temp_db_file: Path) -> None:
+    res = ejecutar_inicio(dict(CONFIG_UNA_FUENTE))
+    assert res.estado == "ok"
+    filas = {fila["id_lista"]: fila["texto"] for fila in leer_tabla("listas_busquedas")}
+    assert filas == {"LT-0001": "Data Engineer"}  # set sin filtros: saltado

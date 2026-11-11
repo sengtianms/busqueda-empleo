@@ -22,7 +22,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from shared.persistence import change_path, leer_tabla, reset_path
 from shared.utilidades import FORMATO_TIMESTAMP
 
-EXENTAS_NO_VACIOS = frozenset({"id_externo", "fecha_ultima_verificacion"})
+EXENTAS_NO_VACIOS = frozenset(
+    {
+        "id_externo",
+        "fecha_ultima_verificacion",
+        # D71: `id_lista` puede quedar sin valor SOLO en las ofertas previas
+        # al cambio (instruccion expresa del usuario: no atribuirlas; sus
+        # apuntes de duplicado llevan origen desconocido). Las nuevas
+        # siempre la traen, asi que cualquier NULL futuro "nuevo" sigue
+        # siendo anomalia detectable por el contador de legado del informe.
+        "id_lista",
+    }
+)
 
 
 def _duracion(inicio: str, fin: str) -> str:

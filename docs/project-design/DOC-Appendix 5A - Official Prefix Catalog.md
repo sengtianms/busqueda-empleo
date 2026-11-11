@@ -104,6 +104,8 @@ Sole official reference for assigning, administering, and interpreting all prefi
 | SES | sesiones | Platform session of the Discovery module (Module 1) |
 | EVT | eventos | Event (error or success) of any module or the transversal orchestrator |
 | BLO | bloqueo | Concurrency lock record (single active run across the whole pipeline — D33) |
+| LT | listas_busquedas | Search-list identity per config position (D71): `LT-0001..LT-0009` = `indice_set` 0..8; `texto` is the full keywords phrase. Deliberately NOT in `secuencia_ids` — the id derives from the config order, never from a counter. |
+| DUP | duplicados_descubiertas | Duplicate encounter of the Discovery dedup (D71): one row per silent `id_externo` re-meet, with the encounter list, the origin list of the original row (unknown only for pre-D71 offers) and the run/link/timestamp. |
 
 ## A.10 Configuration prefixes
 

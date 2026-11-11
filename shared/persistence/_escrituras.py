@@ -239,21 +239,28 @@ def actualizar_corrida(id_corrida: str, campos: dict[str, Any]) -> bool:
 
 def _upsert_ofertas_en(
     conn: sqlite3.Connection, filas: list[dict[str, Any]]
-) -> tuple[list[str], int]:
+) -> tuple[list[str], int, int]:
     """Upserts offers on an existing connection, dedup by `id_externo`.
 
-    Existing rows only refresh `fecha_ultima_verificacion`; new rows get a
-    generated `id` on the same connection. Row-level failures are logged and
-    counted without aborting the remaining rows; the caller commits.
-    Returns (ids_registradas, fallidas). No-empty-field rule (D31): empty
-    values in `descripcion_original`/`fecha_publicacion`/`observaciones`/
-    `empresa_id`/`ubicacion_id`/`ubicacion`/`modalidad`/`empresa`/
-    `resultado_evaluacion_inicial` are persisted as 'N/A'.
+    New rows get a generated `id` on the same connection and carry the
+    caller's `id_lista` (D71). Existing rows only refresh
+    `fecha_ultima_verificacion` (state untouched) AND register a duplicate
+    encounter in `duplicados_descubiertas` (D71): the encounter list comes
+    from the row being processed and the origin list from the original
+    offer's row (NULL only for legacy pre-D71 offers by explicit user
+    exception). Row-level failures are logged and counted without aborting
+    the remaining rows; the caller commits.
+    Returns (ids_registradas, duplicados, fallidas), where `duplicados`
+    counts duplicate encounters, not distinct offers. No-empty-field rule
+    (D31): empty values in `descripcion_original`/`fecha_publicacion`/
+    `observaciones`/`empresa_id`/`ubicacion_id`/`ubicacion`/`modalidad`/
+    `empresa`/`resultado_evaluacion_inicial` are persisted as 'N/A'.
     """
     registradas: list[str] = []
+    duplicados = 0
     fallidas = 0
     if not filas:
-        return registradas, fallidas
+        return registradas, duplicados, fallidas
     preparadas = [_serialize(dict(f)) for f in filas]
     for d in preparadas:
         for campo in (
@@ -270,26 +277,49 @@ def _upsert_ofertas_en(
             if not d.get(campo):
                 d[campo] = "N/A"
     id_externos = [d.get("id_externo") for d in preparadas if d.get("id_externo")]
-    ids_por_id_externo: dict[str, str] = {}
+    filas_por_id_externo: dict[str, tuple[str, str | None]] = {}
     if id_externos:
         marcas = ",".join("?" for _ in id_externos)
         for fila in conn.execute(
-            "SELECT id_externo, id FROM ofertas_descubiertas "
+            "SELECT id_externo, id, id_lista FROM ofertas_descubiertas "
             f"WHERE id_externo IN ({marcas})",
             id_externos,
         ).fetchall():
-            ids_por_id_externo[str(fila["id_externo"])] = str(fila["id"])
+            id_lista_origen = (
+                str(fila["id_lista"]) if fila["id_lista"] is not None else None
+            )
+            filas_por_id_externo[str(fila["id_externo"])] = (
+                str(fila["id"]),
+                id_lista_origen,
+            )
     marca = ahora()
     for d in preparadas:
         try:
             id_externo = d.get("id_externo")
-            if id_externo and id_externo in ids_por_id_externo:
+            if id_externo and id_externo in filas_por_id_externo:
+                id_existente, id_lista_origen = filas_por_id_externo[id_externo]
                 conn.execute(
                     "UPDATE ofertas_descubiertas "
                     "SET fecha_ultima_verificacion = ? WHERE id = ?",
-                    (marca, ids_por_id_externo[id_externo]),
+                    (marca, id_existente),
                 )
-                registradas.append(ids_por_id_externo[id_externo])
+                conn.execute(
+                    "INSERT INTO duplicados_descubiertas (id_duplicado, "
+                    "id_corrida, id_lista, id_externo, enlace, "
+                    "id_lista_origen, fecha_encuentro) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        _generar_id_en(conn, "duplicados_descubiertas"),
+                        str(d.get("id_corrida") or "N/A"),
+                        str(d.get("id_lista") or "N/A"),
+                        str(id_externo),
+                        str(d.get("enlace") or "N/A"),
+                        id_lista_origen,
+                        marca,
+                    ),
+                )
+                duplicados += 1
+                registradas.append(id_existente)
                 continue
             if not d.get("id"):
                 d["id"] = _generar_id_en(conn, "ofertas_descubiertas")
@@ -305,7 +335,10 @@ def _upsert_ofertas_en(
             )
             registradas.append(cast(str, d["id"]))
             if id_externo:
-                ids_por_id_externo[id_externo] = cast(str, d["id"])
+                filas_por_id_externo[id_externo] = (
+                    cast(str, d["id"]),
+                    d.get("id_lista") or None,
+                )
         except Exception as exc:
             logger.error(
                 f"Oferta no registrada en lote | "
@@ -313,24 +346,27 @@ def _upsert_ofertas_en(
                 f"id_corrida={d.get('id_corrida')} | {exc}"
             )
             fallidas += 1
-    return registradas, fallidas
+    return registradas, duplicados, fallidas
 
 
 
-def upsert_lote_ofertas(filas: list[dict[str, Any]]) -> tuple[int, int]:
+def upsert_lote_ofertas(filas: list[dict[str, Any]]) -> tuple[int, int, int]:
     """Inserts or updates a batch of offers in a single connection.
 
     Deduplicates by `id_externo` like `upsert_oferta` but in one
-    transaction. Returns (registradas, fallidas); row-level failures never
-    abort the remaining rows. Connection failures raise.
+    transaction; duplicate encounters are registered in
+    `duplicados_descubiertas` (D71). Returns (registradas, duplicados,
+    fallidas), where `duplicados` counts duplicate encounters, not distinct
+    offers; row-level failures never abort the remaining rows. Connection
+    failures raise.
     """
     if not filas:
-        return 0, 0
+        return 0, 0, 0
     conn = _connection()
     try:
-        ids, fallidas = _upsert_ofertas_en(conn, filas)
+        ids, duplicados, fallidas = _upsert_ofertas_en(conn, filas)
         conn.commit()
-        return len(ids), fallidas
+        return len(ids), duplicados, fallidas
     except Exception:
         conn.rollback()
         raise
@@ -348,7 +384,7 @@ def upsert_oferta(oferta: dict[str, Any]) -> str:
     """
     conn = _connection()
     try:
-        ids, _ = _upsert_ofertas_en(conn, [oferta])
+        ids, _, _ = _upsert_ofertas_en(conn, [oferta])
         if not ids:
             raise PersistenceError(
                 "09",
@@ -363,6 +399,58 @@ def upsert_oferta(oferta: dict[str, Any]) -> str:
     finally:
         conn.close()
 
+
+
+def id_lista_de_indice(indice: int | None) -> str | None:
+    """D71: deterministic search-list id from the configured position.
+
+    `indice_set` 0 -> LT-0001, 1 -> LT-0002, ...; position-keyed so the id
+    never depends on the phrase text and ids stay stable across run rows.
+    `None`/negative returns None (offer without list attribution).
+    Deliberately does NOT consume the `secuencia_ids` counter: the id
+    derives from config order, not from a sequence.
+    """
+    if indice is None or indice < 0:
+        return None
+    return f"LT-{indice + 1:04d}"
+
+
+def sincronizar_listas_busquedas(listas: list[tuple[int, str]]) -> None:
+    """D71: syncs `listas_busquedas` with the configured search lists.
+
+    One call per INICIO after the write probe (VAL-03), before any search
+    set iterates: upserts every configured list keyed by its deterministic
+    position id (`id_lista_de_indice`) — a changed `texto` refreshes the
+    row, a brand-new position creates it, and rows of lists that
+    disappeared from config are KEPT (historical attribution of offers and
+    duplicate encounters must stay readable). Never touches
+    `ofertas_descubiertas` nor `duplicados_descubiertas`. Raises on
+    malformed tuples or database failure: INICIO catches and degrades to a
+    Loguru-only error (best-effort, no new event code, closure metrics
+    untouched).
+    """
+    conn = _connection()
+    try:
+        for indice, texto in listas:
+            if not isinstance(texto, str):
+                raise TypeError(f"texto de lista no es cadena (indice_set={indice})")
+            texto = texto.strip()
+            if not texto:
+                raise ValueError(f"texto de lista vacío (indice_set={indice})")
+            id_lista = id_lista_de_indice(indice)
+            if id_lista is None:
+                raise ValueError(f"indice_set inválido (indice_set={indice})")
+            conn.execute(
+                "INSERT INTO listas_busquedas (id_lista, texto) VALUES (?, ?) "
+                "ON CONFLICT(id_lista) DO UPDATE SET texto = excluded.texto",
+                (id_lista, texto),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def escribir_evento(datos: dict[str, Any]) -> str:

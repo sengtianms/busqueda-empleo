@@ -13,6 +13,7 @@ PREFIXES: dict[str, str] = {
     "sesiones": "SES",
     "eventos": "EVT",
     "bloqueo": "BLO",
+    "duplicados_descubiertas": "DUP",
 }
 
 
@@ -65,6 +66,7 @@ ESQUEMAS: dict[str, str] = {
         "id_corrida TEXT DEFAULT '',"
         "id_sesion TEXT DEFAULT '',"
         "indice_set INTEGER DEFAULT '',"
+        "id_lista TEXT,"
         "id_externo TEXT DEFAULT '',"
         "fecha_ultima_verificacion TEXT DEFAULT '',"
         "id_duplicidad TEXT DEFAULT 'N/A',"
@@ -126,6 +128,33 @@ ESQUEMAS: dict[str, str] = {
         "marca_temporal TEXT NOT NULL"
         ")"
     ),
+    # D71 (2026-11-10): identificador oficial de cada lista de busqueda.
+    # `id_lista` deriva del orden de la configuracion (indice_set 0 -> LT-0001);
+    # `texto` es la frase de busqueda completa sincronizada desde config.
+    # SIN fila en secuencia_ids: el id es determinista, no secuencial.
+    "listas_busquedas": (
+        "CREATE TABLE IF NOT EXISTS listas_busquedas ("
+        "id_lista TEXT PRIMARY KEY,"
+        "texto TEXT NOT NULL"
+        ")"
+    ),
+    # D71 (2026-11-10): libro de encuentros duplicados del descubrimiento.
+    # Un apunte por cada rechazo silencioso del dedup por id_externo: la lista
+    # del encuentro (`id_lista`) y la lista que trajo primero la oferta
+    # (`id_lista_origen`, leida de su fila; NULL canónico solo para ofertas
+    # históricas anteriores a D71 por instrucción expresa del usuario, que
+    # dijo no-atribuir-las; las ofertas nuevas siempre la traen).
+    "duplicados_descubiertas": (
+        "CREATE TABLE IF NOT EXISTS duplicados_descubiertas ("
+        "id_duplicado TEXT PRIMARY KEY,"
+        "id_corrida TEXT NOT NULL,"
+        "id_lista TEXT NOT NULL,"
+        "id_externo TEXT NOT NULL,"
+        "enlace TEXT DEFAULT 'N/A',"
+        "id_lista_origen TEXT,"
+        "fecha_encuentro TEXT NOT NULL"
+        ")"
+    ),
 }
 
 
@@ -135,6 +164,10 @@ _INDICES: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_ofertas_id_corrida "
     "ON ofertas_descubiertas(id_corrida)",
     "CREATE INDEX IF NOT EXISTS idx_eventos_id_corrida ON eventos(id_corrida)",
+    "CREATE INDEX IF NOT EXISTS idx_duplicados_id_lista "
+    "ON duplicados_descubiertas(id_lista)",
+    "CREATE INDEX IF NOT EXISTS idx_duplicados_id_externo "
+    "ON duplicados_descubiertas(id_externo)",
 )
 
 

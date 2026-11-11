@@ -321,6 +321,71 @@ def resumen_ofertas_por_estado() -> dict[str, int]:
         conn.close()
 
 
+def leer_resumen_listas() -> list[dict[str, Any]]:
+    """D71 (solo lectura): resumen de captura por lista de busqueda.
+
+    Una entrada por fila de `listas_busquedas` (orden LT determinista)
+    con: `texto` (frase de busqueda sincronizada), `ofertas` (ofertas con
+    esa atribucion), `duplicados` (encuentros duplicados al recorrer esa
+    lista) y `origenes` (mapa id_lista_origen -> conteo; la clave '' agrupa
+    los encuentros sobre ofertas previas a D71, cuyo origen es
+    desconocido). Lectura agregada de dos tablas, no toca datos.
+    """
+    conn = _connection()
+    try:
+        listas = [
+            (str(fila["id_lista"]), str(fila["texto"]))
+            for fila in conn.execute(
+                "SELECT id_lista, texto FROM listas_busquedas ORDER BY id_lista"
+            ).fetchall()
+        ]
+        ofertas: dict[str, int] = {}
+        for fila in conn.execute(
+            "SELECT COALESCE(id_lista, '') AS lista, COUNT(*) AS n "
+            "FROM ofertas_descubiertas GROUP BY id_lista"
+        ).fetchall():
+            ofertas[str(fila["lista"])] = int(fila["n"])
+        duplicados: dict[str, int] = {}
+        origenes: dict[str, dict[str, int]] = {}
+        for fila in conn.execute(
+            "SELECT id_lista, COALESCE(id_lista_origen, '') AS origen, "
+            "COUNT(*) AS n FROM duplicados_descubiertas "
+            "GROUP BY id_lista, id_lista_origen"
+        ).fetchall():
+            lista = str(fila["id_lista"])
+            duplicados[lista] = duplicados.get(lista, 0) + int(fila["n"])
+            origenes.setdefault(lista, {})[str(fila["origen"])] = int(fila["n"])
+        return [
+            {
+                "id_lista": id_lista,
+                "texto": texto,
+                "ofertas": ofertas.get(id_lista, 0),
+                "duplicados": duplicados.get(id_lista, 0),
+                "origenes": origenes.get(id_lista, {}),
+            }
+            for id_lista, texto in listas
+        ]
+    finally:
+        conn.close()
+
+
+
+def contar_ofertas_sin_lista() -> int:
+    """D71 (solo lectura): ofertas sin atribucion de lista (id_lista NULL).
+
+    Las unicas filas que pueden quedarlas son las de antes de D71 por
+    excepcion expresa del usuario; se exponen en el informe para que ese
+    remanente no quede invisible.
+    """
+    conn = _connection()
+    try:
+        fila = conn.execute(
+            "SELECT COUNT(*) FROM ofertas_descubiertas WHERE id_lista IS NULL"
+        ).fetchone()
+        return int(fila[0]) if fila is not None else 0
+    finally:
+        conn.close()
+
 
 def ids_de_corrida_con_codigos(codigos: Iterable[str]) -> set[str]:
     """Ids de corrida con al menos uno de esos codigos de evento.

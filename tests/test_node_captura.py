@@ -306,7 +306,7 @@ def test_registrar_una_oferta_upsert(
 
     with patch(
         "modules.discovery.nodes.captura.upsert_lote_ofertas",
-        return_value=(1, 0),
+        return_value=(1, 0, 0),
     ) as mock_upsert:
         with patch("modules.discovery.nodes.captura.registrar_evento"):
             res = registrar_ofertas(contexto)
@@ -332,7 +332,7 @@ def test_registrar_oferta_persiste_empresa_de_tarjeta_d41(
 
     with patch(
         "modules.discovery.nodes.captura.upsert_lote_ofertas",
-        return_value=(1, 0),
+        return_value=(1, 0, 0),
     ) as mock_upsert:
         with patch("modules.discovery.nodes.captura.registrar_evento"):
             res = registrar_ofertas(contexto)
@@ -367,7 +367,7 @@ def test_registrar_dedup_id_externo(contexto: RunContext) -> None:
 
     with patch(
         "modules.discovery.nodes.captura.upsert_lote_ofertas",
-        return_value=(1, 0),
+        return_value=(1, 0, 0),
     ) as mock_upsert:
         registrar_ofertas(contexto)
 
@@ -389,7 +389,7 @@ def test_registrar_ofertas_exito_registra_suceso(
 
     with patch(
         "modules.discovery.nodes.captura.upsert_lote_ofertas",
-        return_value=(2, 0),
+        return_value=(2, 0, 0),
     ) as mock_upsert:
         with patch("modules.discovery.nodes.captura.registrar_evento") as mock_evento:
             res = registrar_ofertas(contexto)
@@ -401,7 +401,7 @@ def test_registrar_ofertas_exito_registra_suceso(
     evento = mock_evento.call_args.kwargs
     assert evento["tipo"] == "suceso"
     assert evento["codigo"] == "ofertas_registradas"
-    assert evento["evidencia"] == "ofertas registradas: 2 | total: 2"
+    assert evento["evidencia"] == "ofertas registradas: 2 | duplicados: 0 | total: 2"
     assert evento["id_corrida"] == contexto.id_corrida
     assert evento["id_sesion"] == "SES-9"
     assert evento["fuente_id"] == "LI-01"
@@ -414,7 +414,7 @@ def test_registrar_fallo_parcial(contexto: RunContext) -> None:
 
     with patch(
         "modules.discovery.nodes.captura.upsert_lote_ofertas",
-        side_effect=[RuntimeError("db"), (1, 1)],
+        side_effect=[RuntimeError("db"), (1, 0, 1)],
     ) as mock_upsert:
         with patch("modules.discovery.nodes.captura.registrar_evento") as mock_evento:
             with patch("modules.discovery.nodes.captura.logger"):
@@ -686,3 +686,59 @@ def test_captura_muertes_pendientes_frenan_hoy() -> None:
     assert res.estado == "error"
     assert res.codigo == "ERR-09"
     assert adapter.capture_batch.call_count == 0
+
+
+def test_oferta_a_dict_marca_id_lista_d71(contexto: RunContext) -> None:
+    from modules.discovery.nodes.captura import _oferta_a_dict
+
+    fila = _oferta_a_dict(_oferta(), contexto)
+    assert fila["id_lista"] == "LT-0001"
+
+    oferta_sin_lista = _oferta()
+    oferta_sin_lista.indice_set = None
+    assert _oferta_a_dict(oferta_sin_lista, contexto)["id_lista"] is None
+
+
+def test_registrar_lote_fallos_devuelve_triple_d71(contexto: RunContext) -> None:
+    from modules.discovery.nodes.captura import (
+        _oferta_a_dict,
+        _registrar_lote_con_reintento,
+    )
+
+    filas = [_oferta_a_dict(_oferta(f"https://www.linkedin.com/jobs/view/{n}"),
+                            contexto) for n in range(3)]
+    with patch(
+        "modules.discovery.nodes.captura.upsert_lote_ofertas",
+        side_effect=RuntimeError("db"),
+    ):
+        with patch("modules.discovery.nodes.captura.logger"):
+            registradas, duplicados, fallidas = _registrar_lote_con_reintento(
+                filas
+            )
+    assert (registradas, duplicados, fallidas) == (0, 0, 3)
+
+
+def test_registrar_ofertas_evidencia_incluye_duplicados_d71(
+    contexto: RunContext,
+) -> None:
+    oferta_nueva = _oferta("https://www.linkedin.com/jobs/view/11")
+    oferta_repetida = _oferta("https://www.linkedin.com/jobs/view/22")
+    contexto.capture_batch = CaptureBatch(
+        ofertas=[oferta_nueva, oferta_repetida], indice_set=3
+    )
+
+    with patch(
+        "modules.discovery.nodes.captura.upsert_lote_ofertas",
+        return_value=(2, 1, 0),
+    ):
+        with patch(
+            "modules.discovery.nodes.captura.registrar_evento"
+        ) as mock_evento:
+            res = registrar_ofertas(contexto)
+
+    assert res.estado == "ok"
+    evento = mock_evento.call_args.kwargs
+    assert evento["codigo"] == "ofertas_registradas"
+    assert evento["evidencia"] == (
+        "ofertas registradas: 2 | duplicados: 1 | total: 2"
+    )

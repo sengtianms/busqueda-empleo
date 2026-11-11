@@ -43,7 +43,8 @@ def init_db() -> None:
         _migrate_ofertas_descubiertas(conn)
         tablas = ("secuencia_ids", "empresas", "ubicaciones",
                   "ofertas_descubiertas", "corridas", "eventos",
-                  "sesiones", "bloqueo")
+                  "sesiones", "bloqueo",
+                  "listas_busquedas", "duplicados_descubiertas")
         for nombre_tabla in tablas:
             conn.execute(ESQUEMAS[nombre_tabla])
         _migrate_ubicacion_rename(conn)
@@ -58,6 +59,7 @@ def init_db() -> None:
         _migrate_revertir_enriquecimiento_d40(conn)
         _migrate_normalizacion_nombres_d41(conn)
         _migrate_evaluacion_d48(conn)
+        _migrate_listas_duplicados_d71(conn)
         for sentencia in _INDICES:
             conn.execute(sentencia)
         conn.commit()
@@ -488,6 +490,38 @@ def _migrate_evaluacion_d48(conn: sqlite3.Connection) -> None:
     conn.execute(
         "ALTER TABLE ofertas_descubiertas_nueva RENAME TO ofertas_descubiertas"
     )
+
+
+def _migrate_listas_duplicados_d71(conn: sqlite3.Connection) -> None:
+    """D71 migration: search-list attribution + duplicate-encounters ledger.
+
+    (1) Adds `ofertas_descubiertas`.`id_lista TEXT` when absent. Legacy rows
+    (captured before D71) keep it NULL: the user explicitly decided not to
+    attribute them ("not important, will be deleted in the future"), a
+    standing exception to the no-empty-field rule registered in D71 alongside
+    the `fecha_ultima_verificacion` precedent. New offers always carry it.
+    (2) Creates `listas_busquedas` (deterministic LT-xxxx ids, deliberately
+    OUT of `secuencia_ids`) and `duplicados_descubiertas` (DUP ids) — belt
+    and suspenders: `init_db`'s schema loop already creates both on every
+    start, so this pass only matters if the loop was skipped on a live DB.
+    Idempotent: every step only runs when its target is absent.
+    """
+    columnas = {
+        fila["name"]
+        for fila in conn.execute(
+            "PRAGMA table_info(ofertas_descubiertas)"
+        ).fetchall()
+    }
+    if columnas and "id_lista" not in columnas:
+        conn.execute("ALTER TABLE ofertas_descubiertas ADD COLUMN id_lista TEXT")
+    for tabla in ("listas_busquedas", "duplicados_descubiertas"):
+        presente = conn.execute(
+            "SELECT name FROM sqlite_master "
+            "WHERE type = 'table' AND name = ?",
+            (tabla,),
+        ).fetchone()
+        if presente is None:
+            conn.execute(ESQUEMAS[tabla])
 
 
 def _migrate_ubicacion_rename(conn: sqlite3.Connection) -> None:
