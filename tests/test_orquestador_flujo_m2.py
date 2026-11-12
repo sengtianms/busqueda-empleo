@@ -36,6 +36,8 @@ PREPARACION: dict[str, Any] = {
         "max_wait_seconds": 0,
         "multiplier": 1,
     },
+    "timeout_puerta_segundos": 60,
+    "puertas_alternas": [],
 }
 
 CONFIG: dict[str, Any] = {

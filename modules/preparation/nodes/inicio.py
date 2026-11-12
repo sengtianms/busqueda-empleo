@@ -115,6 +115,28 @@ def _validar_preparacion(seccion: Any) -> str | None:
     multiplicador = reintentos.get("multiplier")
     if not _es_numero(multiplicador) or multiplicador < 1:
         return "retries.multiplier invalido (numerico >= 1)"
+    # Puertas de reserva del clasificador (D75): espejo exacto de la
+    # validación de `evaluacion.puertas_alternas` (shared/evaluacion.py).
+    timeout_puerta = seccion.get("timeout_puerta_segundos")
+    if not _es_numero(timeout_puerta) or timeout_puerta <= 0:
+        return "timeout_puerta_segundos invalido (numerico > 0)"
+    puertas = seccion.get("puertas_alternas")
+    if puertas is None:
+        return "puertas_alternas ausente (lista, vacia hasta la construccion)"
+    if not isinstance(puertas, list):
+        return "puertas_alternas invalida (debe ser lista en orden)"
+    for puerta in puertas:
+        if not isinstance(puerta, dict):
+            return "puertas_alternas invalida (cada puerta debe ser un objeto)"
+        nombre = puerta.get("nombre", "")
+        if not isinstance(nombre, str):
+            return "puertas_alternas invalida (nombre de puerta debe ser texto)"
+        modelo = puerta.get("modelo", "")
+        if not isinstance(modelo, str) or not modelo.strip():
+            return "puertas_alternas invalida (cada puerta requiere 'modelo')"
+        clave_ref = puerta.get("clave_ref", "")
+        if not isinstance(clave_ref, str) or not clave_ref.strip():
+            return "puertas_alternas invalida (cada puerta requiere 'clave_ref')"
     return None
 
 

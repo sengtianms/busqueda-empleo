@@ -23,6 +23,8 @@ CONFIG_OK: dict[str, Any] = {
             "max_wait_seconds": 30,
             "multiplier": 2,
         },
+        "timeout_puerta_segundos": 60,
+        "puertas_alternas": [],
     },
     "concurrencia": {"umbral_obsolescencia_minutos": 120},
     "evaluacion": {

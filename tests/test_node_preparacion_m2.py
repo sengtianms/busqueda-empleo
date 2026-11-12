@@ -39,6 +39,8 @@ CONFIG_RAPIDO: dict[str, Any] = {
         "max_wait_seconds": 0,
         "multiplier": 1,
     },
+    "timeout_puerta_segundos": 60,
+    "puertas_alternas": [],
 }
 
 HTML_COMPLETO = """
@@ -159,7 +161,10 @@ def _instalar_ia(
     llamadas: list[str] = []
 
     def falso_analyze(
-        prompt_id: str, context: dict[str, Any], purpose: str = "preparacion"
+        prompt_id: str,
+        context: dict[str, Any],
+        purpose: str = "preparacion",
+        **kwargs: Any,
     ) -> dict[str, Any]:
         llamadas.append(context["texto_ubicacion"])
         assert prompt_id == preparacion.PROMPT_UBICACION
@@ -714,7 +719,10 @@ def _instalar_ia_por_texto(
     llamadas: list[str] = []
 
     def falso_analyze(
-        prompt_id: str, context: dict[str, Any], purpose: str = "preparacion"
+        prompt_id: str,
+        context: dict[str, Any],
+        purpose: str = "preparacion",
+        **kwargs: Any,
     ) -> dict[str, Any]:
         llamadas.append(context["texto_ubicacion"])
         return dict(respuestas[context["texto_ubicacion"]])
@@ -869,19 +877,27 @@ def test_fallo_ia_no_se_cachea_y_lote_b_lo_resuelve(
 ) -> None:
     _insertar_oferta("OFE-0001", ubicacion="Bogotá, Distrito Capital, Colombia")
     _instalar_servidor(monkeypatch, [[(200, HTML_COMPLETO)]])
-    llamadas = _instalar_ia(monkeypatch, LLMError("001", "down"))
+    # D75: el fallo simulado es una RESPUESTA mal formada (contenido), no un
+    # fallo de puerta — así la principal queda viva y el lote (b) de la MISMA
+    # corrida puede reintentar la pendiente.
+    llamadas = _instalar_ia(
+        monkeypatch, LLMError("003", "Response is not valid JSON | module: ia_service")
+    )
     contexto = _contexto()
 
     primero = ejecutar_preparacion(contexto)
     assert primero.estado == "completada"
     fila = buscar_por_id("ofertas_descubiertas", "OFE-0001")
     assert fila is not None and fila["ubicacion_id"] == "N/A"
+    assert not contexto.puertas_caidas  # la puerta no se silencia
 
     # La IA vuelve: el lote (b) de la MISMA corrida resuelve la pendiente.
     monkeypatch.setattr(
         preparacion,
         "analyze",
-        lambda prompt_id, context, purpose="preparacion": dict(TUPLA_BOGOTA),
+        lambda prompt_id, context, purpose="preparacion", **kwargs: dict(
+            TUPLA_BOGOTA
+        ),
     )
 
     segundo = ejecutar_preparacion(contexto)

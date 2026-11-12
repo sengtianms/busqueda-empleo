@@ -43,12 +43,12 @@ from urllib.parse import urljoin
 import httpx
 from bs4 import BeautifulSoup, Tag
 from loguru import logger
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from rapidfuzz import fuzz
 
 from modules.preparation.nodes.inicio import _validar_preparacion
 from modules.preparation.run_context import RunContext
-from shared.ia_service import analyze
+from shared.ia_service import analyze, analyze_openrouter
 from shared.persistence import (
     actualizar_fila,
     escribir_fila,
@@ -457,9 +457,139 @@ def _resolver_ubicacion_existente(
     return None
 
 
+def _puertas_clasificacion(seccion: dict[str, Any]) -> list[dict[str, str]]:
+    """Puertas ordenadas del clasificador (D75, espejo de la evaluación/D59):
+    principal primero, luego las alternas configuradas en orden.
+
+    Cada puerta lleva su nombre, el modelo en el proveedor y la referencia de
+    su llave; las llaves viven solo en `config/.env`, nunca aquí. Con la
+    lista vacía aprobada solo se intenta la principal.
+    """
+    puertas: list[dict[str, str]] = [
+        {"nombre": "principal", "modelo": "", "clave_ref": ""}
+    ]
+    alternas = seccion.get("puertas_alternas") or []
+    for indice, puerta in enumerate(alternas):
+        nombre = puerta.get("nombre") if isinstance(puerta, dict) else ""
+        modelo = puerta.get("modelo", "") if isinstance(puerta, dict) else ""
+        clave_ref = puerta.get("clave_ref", "") if isinstance(puerta, dict) else ""
+        puertas.append(
+            {
+                "nombre": str(nombre) if nombre else f"alterna-{indice + 1}",
+                "modelo": str(modelo),
+                "clave_ref": str(clave_ref),
+            }
+        )
+    return puertas
+
+
+def _es_respuesta_no_json(exc: Exception) -> bool:
+    """True cuando la puerta respondió pero la respuesta no es JSON válido.
+
+    Taxonomía D75: una respuesta mal formada es contenido, no
+    infraestructura — nunca silencia la puerta para el resto de la corrida
+    (un texto trampa no debe matar una puerta sana); solo los fallos de
+    transporte/cupo/timeout marcan la puerta caída. Cubre el "not valid
+    JSON" del envío y el "expected a dictionary" del servicio cuando la
+    respuesta es JSON válido pero no es un objeto.
+    """
+    texto = str(exc)
+    return "not valid JSON" in texto or "expected a dictionary" in texto
+
+
+def _marcar_puerta_caida(contexto: RunContext, nombre: str, motivo: str) -> None:
+    """D75: recuerda una puerta caída durante el resto de la corrida del
+    módulo (espejo de la evaluación/D59).
+
+    El registro va al log (no a `eventos`) para no alterar las métricas de
+    cierre: `total_errores`/`total_sucesos` cuentan eventos del ciclo de
+    vida de la corrida, no incidencias de infraestructura de la IA.
+    """
+    if nombre in contexto.puertas_caidas:
+        return
+    contexto.puertas_caidas[nombre] = motivo
+    logger.warning(
+        f"D75 | run={contexto.id_corrida} | puerta_descartada | {nombre} | {motivo}"
+    )
+
+
+def _clasificar_con_puertas(
+    contexto: RunContext, texto: str
+) -> ClasificacionUbicacion | None:
+    """Paso 3, subpaso de IA para una ubicación con rotación de puertas
+    (D75, espejo de la maquinaria D59 de la evaluación).
+
+    Orden: principal (ruta local) y luego las reservas configuradas — la
+    primera que responde manda. Un fallo de puerta (cupo, timeout, conexión,
+    llave rechazada) la marca caída para el resto de la corrida y pasa de
+    inmediato a la siguiente; la principal se pide sin reintento por parte
+    del nodo (fallo rápido, D59) aunque conserva el comportamiento interno
+    de su ruta, y las reservas se llaman en un solo intento, acotadas por
+    `timeout_puerta_segundos`. Una respuesta MAL FORMADA (no JSON o con
+    esquema inválido) no rota: la ubicación queda pendiente con ERR-08 tal
+    como hoy y sin cachear (RN-07), para que el lote (b) y la tanda
+    siguiente la reintenten. Con todas las puertas caídas se emite un único
+    ERR-08 con la evidencia agregada y la ubicación queda pendiente.
+    """
+    seccion = contexto.config_preparacion
+    timeout = float(seccion["timeout_puerta_segundos"])
+    detalles: list[str] = []
+    for puerta in _puertas_clasificacion(seccion):
+        nombre = puerta["nombre"]
+        if nombre in contexto.puertas_caidas:
+            continue
+        try:
+            if puerta["clave_ref"]:
+                respuesta = analyze_openrouter(
+                    PROMPT_UBICACION,
+                    {"texto_ubicacion": texto},
+                    puerta["modelo"],
+                    puerta["clave_ref"],
+                    timeout=timeout,
+                )
+            else:
+                respuesta = analyze(
+                    PROMPT_UBICACION,
+                    {"texto_ubicacion": texto},
+                    purpose="preparacion",
+                    timeout=timeout,
+                    reintentar=False,
+                )
+        except Exception as exc:
+            if _es_respuesta_no_json(exc):
+                logger.warning(
+                    f"ERR-08 | run={contexto.id_corrida} | ubicacion_no_clasificada"
+                    f" | respuesta no JSON de {nombre}"
+                )
+                return None
+            detalles.append(f"{nombre}: {exc}")
+            _marcar_puerta_caida(contexto, nombre, str(exc))
+            continue
+        try:
+            return ClasificacionUbicacion.model_validate(respuesta)
+        except ValidationError as exc:
+            logger.warning(
+                f"ERR-08 | run={contexto.id_corrida} | ubicacion_no_clasificada"
+                f" | respuesta invalida de {nombre} | {exc}"
+            )
+            return None
+    if detalles:
+        detalle_final = "; ".join(detalles)
+    else:
+        detalle_final = "; ".join(
+            f"{nombre}: {motivo}"
+            for nombre, motivo in contexto.puertas_caidas.items()
+        ) or "sin puertas disponibles"
+    logger.warning(
+        f"ERR-08 | run={contexto.id_corrida} | ubicacion_no_clasificada"
+        f" | todas las puertas caidas ({detalle_final})"
+    )
+    return None
+
+
 def _diligenciar_ubicacion(contexto: RunContext, texto_crudo: str) -> str:
     """Paso 3: remote → `N/R`; cache → alias/department cheat-sheet
-    (D46/D43) → AI (PRM-006) → tuple → seek/fuse/create.
+    (D46/D43) → AI con rotación de puertas (D75) → tuple → seek/fuse/create.
 
     Only successful classifications enter `cache_ia` (RN-07): failures stay
     uncached so lot (b) of this same pass retries them. Stored tuple
@@ -481,19 +611,9 @@ def _diligenciar_ubicacion(contexto: RunContext, texto_crudo: str) -> str:
         if tupla is not None:
             contexto.cache_ia[texto] = tupla
     if tupla is None:
-        try:
-            respuesta = analyze(
-                PROMPT_UBICACION,
-                {"texto_ubicacion": texto},
-                purpose="preparacion",
-            )
-            clasificacion = ClasificacionUbicacion.model_validate(respuesta)
-        except Exception as exc:  # LLMError, ValidationError, JSON inválido
-            logger.warning(
-                f"ERR-08 | run={contexto.id_corrida} | ubicacion_no_clasificada"
-                f" | {exc}"
-            )
-            return "N/A"  # pendiente: la IA jamás bloquea
+        clasificacion = _clasificar_con_puertas(contexto, texto)
+        if clasificacion is None:
+            return "N/A"  # pendiente: la IA jamás bloquea (ERR-08 ya registrado)
         tupla = (clasificacion.ciudad, clasificacion.region, clasificacion.pais)
         if all(componente == "N/A" for componente in tupla):
             # JSON válido pero sin información geográfica: pendiente (ERR-08),

@@ -126,46 +126,6 @@ Recuerda: decide por lo que el cargo entrega cada día, no por el tema, la indus
 
 ---
 
-## EJEMPLOS DE CALIBRACIÓN (orientan el criterio; no son una lista de cargos)
-
-### Ejemplo 1.
-
-**Cargo:** Científico de Datos en una fintech.
-**Descripción:** desarrollar modelos de riesgo con machine learning y grafos para el ciclo de crédito, Python avanzado, validación de modelos con KS y AUC, 4 a 6 años de experiencia, híbrido en Medellín.
-{"entregable_principal": "Modelos de riesgo de crédito con ML y grafos llevados a producción", "v1": "FAIL", "v2": "FAIL", "v3": "PASS", "v4": "PASS", "v5": "PASS", "decision": "DESCARTADA", "justificacion": "V1: el entregable es un artefacto técnico, 'desarrollar modelos de riesgo robustos' con ML y grafos, y la competencia central es programar y validar modelos. V2: pide '4 a 6 años' como especialista individual, sin liderazgo de equipos ni diseño estructural."}
-
-### Ejemplo 2.
-
-**Cargo:** Supply Chain Planning Manager.
-**Descripción:** liderar un equipo de 6 planeadores, definir el proceso S&OP y los criterios de priorización de abastecimiento, gobernar los KPIs de servicio, 8 años de experiencia, presencial en Bogotá.
-{"entregable_principal": "Proceso S&OP y criterios de priorización de abastecimiento con gobierno de KPIs", "v1": "PASS", "v2": "PASS", "v3": "PASS", "v4": "PASS", "v5": "PASS", "decision": "APROBADA", "justificacion": "Eje de sistemas operacionales y de decisión: el rol debe 'definir el proceso S&OP y los criterios de priorización de abastecimiento' y liderar 6 personas. Viable por modalidad presencial en Bogotá, dentro de Colombia."}
-
-### Ejemplo 3.
-
-**Cargo:** Head of Decision Analytics.
-**Descripción:** definir cómo la compañía prioriza inversiones y capacidad, establecer el gobierno de métricas y las reglas de decisión entre áreas, liderar un equipo de analítica que provee los insumos, 10 años de experiencia, remoto desde Colombia.
-{"entregable_principal": "Reglas de decisión, gobierno de métricas y priorización de inversión entre áreas", "v1": "PASS", "v2": "PASS", "v3": "PASS", "v4": "PASS", "v5": "PASS", "decision": "APROBADA", "justificacion": "Eje de sistemas de decisión e información: el rol debe 'establecer el gobierno de métricas y las reglas de decisión entre áreas', y la analítica es solo insumo. Lidera equipo con 10 años de experiencia. Viable por modalidad remota desde Colombia."}
-
-### Ejemplo 4.
-
-**Cargo:** Senior Data Analyst.
-**Descripción:** construir dashboards y modelos semánticos en Power BI, escribir consultas SQL y DAX avanzadas, atender las solicitudes de reportes de las áreas, 5 o más años de experiencia, remoto desde Colombia.
-{"entregable_principal": "Dashboards, modelos semánticos y consultas para reportes de las áreas", "v1": "FAIL", "v2": "FAIL", "v3": "PASS", "v4": "PASS", "v5": "PASS", "decision": "DESCARTADA", "justificacion": "V1: el entregable son artefactos técnicos, 'dashboards y modelos semánticos en Power BI' y consultas SQL y DAX, no un mecanismo organizacional. V2: es un especialista individual; el título Senior y los '5 o más años' no dan liderazgo real ni autoridad de diseño."}
-
-### Ejemplo 5.
-
-**Cargo:** Gerente de Excelencia Operacional.
-**Descripción:** liderar un equipo de 5 ingenieros de mejora continua, rediseñar los procesos de producción y logística de la planta, definir los estándares de gestión diaria y los indicadores de control, apoyarse en Power BI y Python para el seguimiento, 7 años de experiencia, híbrido en Barranquilla.
-{"entregable_principal": "Rediseño de procesos, estándares de gestión diaria e indicadores de control de la planta", "v1": "PASS", "v2": "PASS", "v3": "PASS", "v4": "PASS", "v5": "PASS", "decision": "APROBADA", "justificacion": "Eje de sistemas operacionales: el rol debe 'rediseñar los procesos de producción y logística de la planta' y 'definir los estándares de gestión diaria'. Power BI y Python son solo apoyo al seguimiento. Lidera 5 personas. Viable por modalidad híbrida en Barranquilla, dentro de Colombia."}
-
-### Ejemplo 6.
-
-**Cargo:** Gerente de Planeación de la Demanda.
-**Descripción:** solo lista requisitos: ingeniería industrial o afín, 8 años de experiencia en planeación, Excel avanzado y ERP, inglés intermedio. No describe responsabilidades ni el objetivo del cargo. Remoto desde Colombia.
-{"entregable_principal": "No determinable: la descripción solo enumera requisitos", "v1": "PASS", "v2": "PASS", "v3": "FAIL", "v4": "PASS", "v5": "PASS", "decision": "DESCARTADA", "justificacion": "V3: la descripción solo enumera requisitos ('ingeniería industrial', '8 años de experiencia', 'ERP', 'inglés intermedio') y no trae ninguna responsabilidad ni problema a resolver."}
-
----
-
 ## SALIDA
 
 Devuelve exclusivamente este JSON, sin markdown, sin texto adicional. El primer carácter de tu respuesta debe ser `{`.

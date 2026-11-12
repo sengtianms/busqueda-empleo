@@ -33,6 +33,14 @@ PREPARACION_VALIDA: dict[str, Any] = {
         "max_wait_seconds": 30,
         "multiplier": 2,
     },
+    "timeout_puerta_segundos": 60,
+    "puertas_alternas": [
+        {
+            "nombre": "openrouter-1",
+            "modelo": "openai/gpt-oss-120b",
+            "clave_ref": "OPENROUTER_API_KEY_1",
+        },
+    ],
 }
 
 CONFIG_BASE: dict[str, Any] = {

@@ -157,6 +157,28 @@ preparacion:
     base_wait_seconds: 2
     max_wait_seconds: 30
     multiplier: 2
+  # Espera máxima por puerta del clasificador (D75, espejo de la evaluación/
+  # D59) para las puertas de reserva; la puerta principal (ruta local) sigue
+  # acotada por su propia espera configurada. Una puerta que no responde en
+  # este tiempo se descarta y se pasa de inmediato a la siguiente; las
+  # puertas caídas no se reintentan durante la corrida.
+  timeout_puerta_segundos: 60
+  # Puertas alternas del clasificador de ubicaciones (D75), en orden (la
+  # primera que responde manda): mismo formato que `evaluacion.puertas_alternas`.
+  # El espejo elige la misma familia del modelo principal — batería del
+  # 2026-11-11 por OpenRouter: gpt-oss-120b 3/5 exactos y honesto ante las
+  # trampas, frente a gemma-4-31b-it 3/5 con JSON inválido. Llaves solo en
+  # config/.env.
+  puertas_alternas:
+    - nombre: "openrouter-1"
+      modelo: "openai/gpt-oss-120b"
+      clave_ref: "OPENROUTER_API_KEY_1"
+    - nombre: "openrouter-2"
+      modelo: "openai/gpt-oss-120b"
+      clave_ref: "OPENROUTER_API_KEY_2"
+    - nombre: "openrouter-3"
+      modelo: "openai/gpt-oss-120b"
+      clave_ref: "OPENROUTER_API_KEY_3"
 
 # --- Concurrency (Module 1, lock) ---
 concurrencia:
