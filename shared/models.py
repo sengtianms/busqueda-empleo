@@ -48,8 +48,8 @@ class Company(BaseModel):
 
 class Location(BaseModel):
     id: str = ""
-    ciudad: str = ""
-    region: str = ""
+    municipio: str = ""
+    departamento: str = ""
     pais: str = ""
     fecha_creacion: str = ""
     fecha_ultima_edicion: str = ""

@@ -65,7 +65,7 @@ def example_company() -> Company:
 
 @pytest.fixture
 def example_location() -> Location:
-    return Location(id="UBI-0001", ciudad="Madrid", region="Madrid", pais="Espana")
+    return Location(id="UBI-0001", municipio="Madrid", departamento="Madrid", pais="Espana")
 
 
 @pytest.fixture

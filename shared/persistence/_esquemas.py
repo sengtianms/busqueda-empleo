@@ -38,8 +38,8 @@ ESQUEMAS: dict[str, str] = {
     "ubicaciones": (
         "CREATE TABLE IF NOT EXISTS ubicaciones ("
         "id TEXT PRIMARY KEY,"
-        "ciudad TEXT DEFAULT 'N/A',"
-        "region TEXT DEFAULT 'N/A',"
+        "municipio TEXT DEFAULT 'N/A',"
+        "departamento TEXT DEFAULT 'N/A',"
         "pais TEXT DEFAULT 'N/A',"
         "fecha_creacion TEXT DEFAULT '',"
         "fecha_ultima_edicion TEXT DEFAULT ''"

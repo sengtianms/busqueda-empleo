@@ -53,8 +53,8 @@ CONFIG_PUERTAS: dict[str, Any] = {
 }
 
 RESPUESTA_BOGOTA = {
-    "ciudad": "Bogotá",
-    "region": "Distrito Capital",
+    "municipio": "Bogotá",
+    "departamento": "Distrito Capital",
     "pais": "Colombia",
 }
 
@@ -112,7 +112,7 @@ def test_fallo_de_principal_rota_a_reserva_y_clasifica(
     resultado = _clasificar_con_puertas(contexto, "Bogotá")
 
     assert resultado is not None
-    assert (resultado.ciudad, resultado.region, resultado.pais) == (
+    assert (resultado.municipio, resultado.departamento, resultado.pais) == (
         "Bogotá",
         "Distrito Capital",
         "Colombia",
@@ -236,7 +236,7 @@ def test_respuesta_invalida_de_esquema_no_rota_ni_marca_puerta(
     conteo = {"reservas": 0}
 
     def falso_analyze(*args: Any, **kwargs: Any) -> dict[str, Any]:
-        return {"ciudad": 123, "region": "Distrito", "pais": "Colombia"}
+        return {"municipio": 123, "departamento": "Distrito", "pais": "Colombia"}
 
     def falso_reserva(*args: Any, **kwargs: Any) -> dict[str, Any]:
         conteo["reservas"] += 1
@@ -276,7 +276,7 @@ def test_diligenciar_ubicacion_usa_reserva_y_cachea_el_exito(
     fila = buscar_por_id("ubicaciones", "UBI-0001")
     assert fila is not None
     # VAL-04: la fila guarda los componentes normalizados.
-    assert fila["ciudad"] == "bogota"
+    assert fila["municipio"] == "bogota"
     # RN-07: solo los éxitos se cachean; aquí hubo éxito por la reserva.
     assert contexto.cache_ia["Bogotá"] == ("Bogotá", "Distrito Capital", "Colombia")
 

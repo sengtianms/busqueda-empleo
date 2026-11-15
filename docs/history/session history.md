@@ -5,6 +5,7 @@ Unless noted, decisions from previous sessions remain in effect.
 ## Sessions index
 | № | Date | Session ID | Summary |
 |---|---|---|---|
+| 54 | 15/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Location catalog column rename (ciudad → municipio, region → departamento) aligned with Colombian administrative terminology across schema, models, preparation node, prompt, tests and docs; idempotent migration added for existing databases; the ubicaciones catalog then populated with all 1,103 Colombian municipalities from user-provided lists, sequence counter updated to 1,103 |
 | 53 | 10/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Two criterion decisions registered documents-only, closing two more post-V1 backlog items: the naming criterion for the future stages was fixed before their design (Spanish continuity, the user's choice — the future Modules 4–5 follow the same Spanish-identifier rule already approved three times, with the unchanged public module entry), and the naming drift of the operations layer was regularized by extending the exception rather than renaming (the operator-facing pieces — narration voice, commands, live board, watchdog, notifier, reports, wrappers, unit names and their tests — are now an approved Spanish exception, closed to that layer, with zero renames and the live deployment untouched); both changes verified by the docs reviewer as CONFORME with minors resolved; the doc reviewer also re-confirmed that the already-implemented chair-cut backlog item (4.3) was closed in the previous stretch |
 | 52 | 10/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Exact chair cut by process number shipped per the approved plan: the run chair now records the holder's OS process number on every way it can be taken, and the operator stop/wipe commands cut that exact holder first — with the name-pattern method kept only as a safety net for missing, dead, lying or own-chain clues; a strict clue judge (alive, born after the last system boot, own system identity, never an ancestor) protects innocent bystanders; live database migrated with backup on a verified-at-zero machine and a three-scenario live rehearsal on copies; both official closing reviewers ran (quota recovered) and returned CONFORME with all minors resolved; 817 tests |
 | 51 | 10/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Search-list attribution and a duplicate-encounters ledger shipped per the approved plan: every captured offer carries the list that brought it (position-keyed ids, full search phrase stored per list, catalog self-fed at every run start with retired lists kept readable), and every silent re-encounter of an already-registered offer is recorded with the scanned list and the originating one while the dedup behavior stays untouched; a read-only per-list report answers which lists harvest most and which duplicate most; the live database migrated with backup leaving the 129 historical offers unattributed by user order; official closing reviewers blocked again by the reviewer model quota, manual closing review applied; 806 tests |
@@ -47,6 +48,31 @@ Unless noted, decisions from previous sessions remain in effect.
 | 14 | 09/08/2026 | `ses_01bcc78adffemcqFEiZxT52Eli` | Sub-fase 4.4: capture/registration nodes implemented, audited, and post-audit fixes applied (FK-free schema, name columns, upsert tests) |
 | 13 | 08/08/2026 | `ses_01be77680ffeuyoKct4Qrfx1GG` | Repo sync to `fase-4`; new `/save` section with general git commit and push guidance |
 | 12 | 08/08/2026 | `ses_01c089ce2ffe9MvQT4F1pC0MJN` | Sub-fase 4.2 deep audit + post-audit fixes (credentials mapping, playwright lifecycle) |
+
+## Session 54 — 15/11/2026
+`ses_f4af1b961ffe5t8xNspW5U761x` · `ajuste-final-v1`
+
+**Topics**
+- Column names in the `ubicaciones` table renamed to match Colombian administrative terminology: `ciudad` → `municipio` and `region` → `departamento`
+- The change propagates through the entire stack: database schema DDL, Pydantic `Location` model, the Preparation node's location classification logic and Pydantic validator, the PRM-006 location prompt (keys and examples), and all affected tests
+- An idempotent migration (`_migrate_ubicaciones_columnas`) was added to rename the columns in existing databases on the next startup — fresh databases create the new names directly from the schema
+- The live database was migrated in place with no data loss (the table was empty at the time)
+- After the rename, the `ubicaciones` catalog was populated with all 1,103 Colombian municipalities from user-provided lists, with normalized lowercase names, country "colombia", and the configured timestamp format
+- The sequence counter for `ubicaciones` IDs was updated to 1,103, ready for the next entry (UBI-1104)
+- Documentation updated: DOC-13A (entity attributes), database-tables.md (column list), and the Preparation module ficha (as-built note on the tuple naming)
+- This is a data-layer and catalog change only — no new functionality, no behavior change to the preparation flow
+
+**Decisions**
+- User requested `ciudad`/`region` column names be changed to `municipio`/`departamento` to align with Colombian administrative terminology; no other changes requested for the rename
+- User provided the complete list of Colombian municipalities to be loaded into the catalog in batches
+- Decisions from previous sessions remain in effect
+
+**Status**
+- Column rename and migration implemented across 10 files (schema, models, preparation node, prompt, migrations, 6 test files)
+- Documentation aligned: DOC-13A, database-tables.md, Preparation ficha, decision log, tracker, AGENTS.md, README, MVP Execution Plan, transversal orchestrator ficha, evaluation flow diagram
+- Live database migrated successfully, 1,103 municipalities loaded and verified
+- Validations green: lint, type check, 829 tests passing
+- Active branch: `ajuste-final-v1`
 
 ## Session 53 — 10/11/2026
 `ses_f4af1b961ffe5t8xNspW5U761x` · `ajuste-final-v1`

@@ -1131,8 +1131,8 @@ def _crear_esquema_ingles(path: Path) -> None:
         );
         CREATE TABLE ubicaciones (
             id TEXT PRIMARY KEY,
-            ciudad TEXT DEFAULT '',
-            region TEXT DEFAULT '',
+            municipio TEXT DEFAULT '',
+            departamento TEXT DEFAULT '',
             pais TEXT DEFAULT '',
             modalidad TEXT DEFAULT '',
             creation_date TEXT DEFAULT '',
@@ -1432,8 +1432,8 @@ def _crear_bd_legado_pre_d33(path: Path) -> None:
     conn.execute(
         "CREATE TABLE ubicaciones ("
         "id TEXT PRIMARY KEY,"
-        "ciudad TEXT DEFAULT '',"
-        "region TEXT DEFAULT '',"
+        "municipio TEXT DEFAULT '',"
+        "departamento TEXT DEFAULT '',"
         "pais TEXT DEFAULT '',"
         "modalidad TEXT DEFAULT '',"
         "fecha_creacion TEXT DEFAULT '',"
@@ -1441,7 +1441,7 @@ def _crear_bd_legado_pre_d33(path: Path) -> None:
         ")"
     )
     conn.execute(
-        "INSERT INTO ubicaciones (id, ciudad, pais, modalidad) "
+        "INSERT INTO ubicaciones (id, municipio, pais, modalidad) "
         "VALUES ('UBI-0001', 'Madrid', 'Espana', 'remoto')"
     )
     conn.execute(
@@ -1575,7 +1575,7 @@ def test_migracion_d33_desde_esquema_legado(tmp_path: Path) -> None:
 
         ubis = leer_tabla("ubicaciones")
         assert len(ubis) == 1
-        assert ubis[0]["ciudad"] == "Madrid"
+        assert ubis[0]["municipio"] == "Madrid"
 
         evs = leer_tabla("eventos")
         assert len(evs) == 1

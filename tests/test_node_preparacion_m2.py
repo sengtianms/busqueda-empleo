@@ -177,7 +177,7 @@ def _instalar_ia(
     return llamadas
 
 
-TUPLA_BOGOTA = {"ciudad": "Bogotá", "region": "Distrito Capital", "pais": "Colombia"}
+TUPLA_BOGOTA = {"municipio": "Bogotá", "departamento": "Distrito Capital", "pais": "Colombia"}
 
 
 # ----------------------------------------------------------------- Captura ok
@@ -559,7 +559,7 @@ def test_remoto_no_crea_fila_ni_invoca_ia(
     assert llamadas == []
 
 
-def test_ciudad_completa_crea_tupla_normalizada(
+def test_municipio_completo_crea_tupla_normalizada(
     temp_db_file: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _insertar_oferta("OFE-0001", ubicacion="Bogotá, Distrito Capital, Colombia")
@@ -570,8 +570,8 @@ def test_ciudad_completa_crea_tupla_normalizada(
 
     ubicaciones = leer_tabla("ubicaciones", {})
     assert len(ubicaciones) == 1  # VAL-04: componentes normalizados
-    assert ubicaciones[0]["ciudad"] == "bogota"
-    assert ubicaciones[0]["region"] == "distrito capital"
+    assert ubicaciones[0]["municipio"] == "bogota"
+    assert ubicaciones[0]["departamento"] == "distrito capital"
     assert ubicaciones[0]["pais"] == "colombia"
 
 
@@ -602,7 +602,7 @@ def test_pais_solo_genera_fila_compartida(
     _insertar_oferta("OFE-0001", ubicacion="Colombia")
     _instalar_servidor(monkeypatch, [[(200, HTML_COMPLETO)]])
     _instalar_ia(
-        monkeypatch, {"ciudad": "N/A", "region": "N/A", "pais": "Colombia"}
+        monkeypatch, {"municipio": "N/A", "departamento": "N/A", "pais": "Colombia"}
     )
 
     ejecutar_preparacion(_contexto())
@@ -610,8 +610,8 @@ def test_pais_solo_genera_fila_compartida(
     ubicaciones = leer_tabla("ubicaciones", {})
     assert len(ubicaciones) == 1
     assert (
-        ubicaciones[0]["ciudad"],
-        ubicaciones[0]["region"],
+        ubicaciones[0]["municipio"],
+        ubicaciones[0]["departamento"],
         ubicaciones[0]["pais"],
     ) == ("N/A", "N/A", "colombia")
 
@@ -661,8 +661,8 @@ def test_departamento_en_mayusculas_resuelve_sin_ia(
     ubicaciones = leer_tabla("ubicaciones", {})
     assert len(ubicaciones) == 1
     assert (
-        ubicaciones[0]["ciudad"],
-        ubicaciones[0]["region"],
+        ubicaciones[0]["municipio"],
+        ubicaciones[0]["departamento"],
         ubicaciones[0]["pais"],
     ) == ("N/A", "cauca", "colombia")
     assert fila["ubicacion_id"] == ubicaciones[0]["id"]
@@ -671,18 +671,18 @@ def test_departamento_en_mayusculas_resuelve_sin_ia(
 def test_guarda_alias_casos_directos(temp_db_file: Path) -> None:
     """D46: reglas de la resolución exacta+fusión en una sola lectura."""
     escribir_fila(
-        "ubicaciones", {"ciudad": "bogota", "region": "distrito capital",
+        "ubicaciones", {"municipio": "bogota", "departamento": "distrito capital",
                         "pais": "colombia"}
     )
     escribir_fila(
-        "ubicaciones", {"ciudad": "gachala", "region": "boyaca",
+        "ubicaciones", {"municipio": "gachala", "departamento": "boyaca",
                         "pais": "colombia"}
     )
     resolver = preparacion._resolver_ubicacion_existente
     contexto = _contexto()
-    id_bogota = [r["id"] for r in leer_tabla("ubicaciones", {"ciudad": "bogota"})][0]
+    id_bogota = [r["id"] for r in leer_tabla("ubicaciones", {"municipio": "bogota"})][0]
     id_gachala = [
-        r["id"] for r in leer_tabla("ubicaciones", {"ciudad": "gachala"})
+        r["id"] for r in leer_tabla("ubicaciones", {"municipio": "gachala"})
     ][0]
 
     # Igualdad exacta gana siempre (aun con umbral 0)
@@ -746,8 +746,8 @@ def test_variante_bogota_dc_se_fusiona_con_fila_existente(
         {
             "Bogotá": TUPLA_BOGOTA,
             "Bogota DC": {
-                "ciudad": "Bogotá D.C.",
-                "region": "N/A",
+                "municipio": "Bogotá D.C.",
+                "departamento": "N/A",
                 "pais": "Colombia",
             },
         },
@@ -779,8 +779,8 @@ def test_alias_desactivado_crea_fila_distinta(
         {
             "Bogotá": TUPLA_BOGOTA,
             "Bogota DC": {
-                "ciudad": "Bogotá D.C.",
-                "region": "N/A",
+                "municipio": "Bogotá D.C.",
+                "departamento": "N/A",
                 "pais": "Colombia",
             },
         },
@@ -837,7 +837,7 @@ def test_lote_b_resuelve_sin_http(
     )
     _, peticiones = _instalar_servidor(monkeypatch, [[]])
     _instalar_ia(
-        monkeypatch, {"ciudad": "Medellín", "region": "Antioquia", "pais": "Colombia"}
+        monkeypatch, {"municipio": "Medellín", "departamento": "Antioquia", "pais": "Colombia"}
     )
 
     resultado = ejecutar_preparacion(_contexto())
@@ -941,7 +941,7 @@ def test_lote_b_corrupcion_al_persistir_aborta_err09(
     _instalar_servidor(monkeypatch, [[]])
     _instalar_ia(
         monkeypatch,
-        {"ciudad": "Medellín", "region": "Antioquia", "pais": "Colombia"},
+        {"municipio": "Medellín", "departamento": "Antioquia", "pais": "Colombia"},
     )
 
     def estalla(_tabla: str, _id: str, _campos: dict[str, Any]) -> bool:
@@ -967,7 +967,7 @@ def test_actualizacion_respeta_d31_sin_vacios(
 ) -> None:
     _insertar_oferta("OFE-0001")
     _instalar_servidor(monkeypatch, [[(200, HTML_SIN_EMPRESA)]])
-    _instalar_ia(monkeypatch, {"ciudad": "N/A", "region": "N/A", "pais": "Chile"})
+    _instalar_ia(monkeypatch, {"municipio": "N/A", "departamento": "N/A", "pais": "Chile"})
 
     ejecutar_preparacion(_contexto())
 

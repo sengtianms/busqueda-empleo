@@ -61,6 +61,7 @@ def init_db() -> None:
         _migrate_evaluacion_d48(conn)
         _migrate_listas_duplicados_d71(conn)
         _migrate_silla_proceso_d72(conn)
+        _migrate_ubicaciones_columnas(conn)
         for sentencia in _INDICES:
             conn.execute(sentencia)
         conn.commit()
@@ -543,6 +544,30 @@ def _migrate_silla_proceso_d72(conn: sqlite3.Connection) -> None:
     }
     if columnas and "proceso" not in columnas:
         conn.execute("ALTER TABLE bloqueo ADD COLUMN proceso INTEGER DEFAULT ''")
+
+
+def _migrate_ubicaciones_columnas(conn: sqlite3.Connection) -> None:
+    """Renames `ubicaciones.ciudad` → `municipio` and `ubicaciones.region` →
+    `departamento`.
+
+    User-requested naming alignment with Colombian administrative terminology.
+    Runs after the schema loop so a live DB with the old column names gets
+    them renamed; fresh DBs already create the new names from ESQUEMAS and
+    skip. Idempotent: only runs when the old column exists and the new
+    doesn't.
+    """
+    columnas = {
+        fila["name"]
+        for fila in conn.execute("PRAGMA table_info(ubicaciones)").fetchall()
+    }
+    if columnas and "ciudad" in columnas and "municipio" not in columnas:
+        conn.execute(
+            "ALTER TABLE ubicaciones RENAME COLUMN ciudad TO municipio"
+        )
+    if columnas and "region" in columnas and "departamento" not in columnas:
+        conn.execute(
+            "ALTER TABLE ubicaciones RENAME COLUMN region TO departamento"
+        )
 
 
 def _migrate_ubicacion_rename(conn: sqlite3.Connection) -> None:

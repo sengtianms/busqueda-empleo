@@ -83,10 +83,10 @@ MARCADORES_AUTHWALL = (
 
 
 class ClasificacionUbicacion(BaseModel):
-    """Validated `{ciudad, region, pais}` JSON returned by PRM-006."""
+    """Validated `{municipio, departamento, pais}` JSON returned by PRM-006."""
 
-    ciudad: str = "N/A"
-    region: str = "N/A"
+    municipio: str = "N/A"
+    departamento: str = "N/A"
     pais: str = "N/A"
 
 
@@ -392,17 +392,17 @@ REGIONES_COLOMBIA: dict[str, str] = {
 def _clasificar_departamento(texto: str) -> tuple[str, str, str] | None:
     """Resuelve textos con variante conocida ANTES de la IA (D46/D43):
     primero alias de tupla completa (p. ej. 'Bogotá D.C.'), luego textos
-    que SOLO nombran un departamento (D43, tupla con ciudad N/A).
+    que SOLO nombran un departamento (D43, tupla con municipio N/A).
     Devuelve None si nada aplica, dejando el camino normal cache → IA.
     """
     clave = normalizar_texto(texto).removesuffix(" colombia").strip()
     alias = ALIAS_UBICACIONES.get(clave)
     if alias is not None:
         return alias
-    region = REGIONES_COLOMBIA.get(clave)
-    if region is None:
+    departamento = REGIONES_COLOMBIA.get(clave)
+    if departamento is None:
         return None
-    return ("N/A", region, "colombia")
+    return ("N/A", departamento, "colombia")
 
 
 # Alias deterministas de lugares con variantes de nombre conocidas (D46):
@@ -417,7 +417,7 @@ ALIAS_UBICACIONES: dict[str, tuple[str, str, str]] = {
 def _veredicto_componente(
     candidato: str, existente: str, umbral: float
 ) -> str:
-    """Clasifica un par ciudad/región: `coincide` (iguales o similitud >=
+    """Clasifica un par municipio/departamento: `coincide` (iguales o similitud >=
     umbral), `desconocido` (alguno es centinela N/A) o `conflicto`."""
     if candidato == "N/A" or existente == "N/A":
         return "desconocido"
@@ -439,19 +439,19 @@ def _resolver_ubicacion_existente(
     Las filas solo-país nunca se crean por vía difusa. Devuelve
     `(id, fusionada_por_alias)` o None.
     """
-    ciudad_c, region_c, pais_c = clave_tupla
+    municipio_c, departamento_c, pais_c = clave_tupla
     umbral = float(contexto.config_preparacion.get("umbral_alias_ubicacion", 90))
-    alias_posible = umbral > 0 and not (ciudad_c == "N/A" and region_c == "N/A")
+    alias_posible = umbral > 0 and not (municipio_c == "N/A" and departamento_c == "N/A")
     for fila in leer_tabla("ubicaciones", {"pais": pais_c}):
-        ciudad_e = str(fila["ciudad"])
-        region_e = str(fila["region"])
-        if (ciudad_e, region_e) == (ciudad_c, region_c):
+        municipio_e = str(fila["municipio"])
+        departamento_e = str(fila["departamento"])
+        if (municipio_e, departamento_e) == (municipio_c, departamento_c):
             return str(fila["id"]), False
         if alias_posible:
-            ver_ciudad = _veredicto_componente(ciudad_c, ciudad_e, umbral)
-            ver_region = _veredicto_componente(region_c, region_e, umbral)
-            if "conflicto" not in (ver_ciudad, ver_region) and (
-                "coincide" in (ver_ciudad, ver_region)
+            ver_municipio = _veredicto_componente(municipio_c, municipio_e, umbral)
+            ver_departamento = _veredicto_componente(departamento_c, departamento_e, umbral)
+            if "conflicto" not in (ver_municipio, ver_departamento) and (
+                "coincide" in (ver_municipio, ver_departamento)
             ):
                 return str(fila["id"]), True
     return None
@@ -614,7 +614,7 @@ def _diligenciar_ubicacion(contexto: RunContext, texto_crudo: str) -> str:
         clasificacion = _clasificar_con_puertas(contexto, texto)
         if clasificacion is None:
             return "N/A"  # pendiente: la IA jamás bloquea (ERR-08 ya registrado)
-        tupla = (clasificacion.ciudad, clasificacion.region, clasificacion.pais)
+        tupla = (clasificacion.municipio, clasificacion.departamento, clasificacion.pais)
         if all(componente == "N/A" for componente in tupla):
             # JSON válido pero sin información geográfica: pendiente (ERR-08),
             # sin crear una fila de catálogo inútil ni cachear el vacío.
@@ -644,8 +644,8 @@ def _diligenciar_ubicacion(contexto: RunContext, texto_crudo: str) -> str:
         ubicacion_id = escribir_fila(
             "ubicaciones",
             {
-                "ciudad": clave_tupla[0],
-                "region": clave_tupla[1],
+                "municipio": clave_tupla[0],
+                "departamento": clave_tupla[1],
                 "pais": clave_tupla[2],
             },
         )
