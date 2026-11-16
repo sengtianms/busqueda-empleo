@@ -5,7 +5,7 @@ Unless noted, decisions from previous sessions remain in effect.
 ## Sessions index
 | № | Date | Session ID | Summary |
 |---|---|---|---|
-| 54 | 15/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Location catalog column rename (ciudad → municipio, region → departamento) aligned with Colombian administrative terminology across schema, models, preparation node, prompt, tests and docs; idempotent migration added for existing databases; the ubicaciones catalog then populated with all 1,103 Colombian municipalities from user-provided lists, sequence counter updated to 1,103 |
+| 54 | 15/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Location catalog column rename (ciudad → municipio, region → departamento) aligned with Colombian administrative terminology across schema, models, preparation node, prompt, tests and docs; idempotent migration added for existing databases; the ubicaciones catalog then populated with all 1,103 Colombian municipalities from user-provided lists, sequence counter updated to 1,103; Module 3 then redesigned as two AI-free processes (decision D76 in log v1.55) — the scheduled batch exports prepared offers into chat-readable lots and a one-line manual command imports the chat's answer under strict whole-line validation, retiring the answering-door chain (D49/D50/D59 superseded for this module only) with no schema change; sheet rewritten to version 2.0 and nine official documents aligned, documentation reviewer approved with one minor corrected; construction pending approval |
 | 53 | 10/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Two criterion decisions registered documents-only, closing two more post-V1 backlog items: the naming criterion for the future stages was fixed before their design (Spanish continuity, the user's choice — the future Modules 4–5 follow the same Spanish-identifier rule already approved three times, with the unchanged public module entry), and the naming drift of the operations layer was regularized by extending the exception rather than renaming (the operator-facing pieces — narration voice, commands, live board, watchdog, notifier, reports, wrappers, unit names and their tests — are now an approved Spanish exception, closed to that layer, with zero renames and the live deployment untouched); both changes verified by the docs reviewer as CONFORME with minors resolved; the doc reviewer also re-confirmed that the already-implemented chair-cut backlog item (4.3) was closed in the previous stretch |
 | 52 | 10/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Exact chair cut by process number shipped per the approved plan: the run chair now records the holder's OS process number on every way it can be taken, and the operator stop/wipe commands cut that exact holder first — with the name-pattern method kept only as a safety net for missing, dead, lying or own-chain clues; a strict clue judge (alive, born after the last system boot, own system identity, never an ancestor) protects innocent bystanders; live database migrated with backup on a verified-at-zero machine and a three-scenario live rehearsal on copies; both official closing reviewers ran (quota recovered) and returned CONFORME with all minors resolved; 817 tests |
 | 51 | 10/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Search-list attribution and a duplicate-encounters ledger shipped per the approved plan: every captured offer carries the list that brought it (position-keyed ids, full search phrase stored per list, catalog self-fed at every run start with retired lists kept readable), and every silent re-encounter of an already-registered offer is recorded with the scanned list and the originating one while the dedup behavior stays untouched; a read-only per-list report answers which lists harvest most and which duplicate most; the live database migrated with backup leaving the 129 historical offers unattributed by user order; official closing reviewers blocked again by the reviewer model quota, manual closing review applied; 806 tests |
@@ -61,18 +61,31 @@ Unless noted, decisions from previous sessions remain in effect.
 - The sequence counter for `ubicaciones` IDs was updated to 1,103, ready for the next entry (UBI-1104)
 - Documentation updated: DOC-13A (entity attributes), database-tables.md (column list), and the Preparation module ficha (as-built note on the tuple naming)
 - This is a data-layer and catalog change only — no new functionality, no behavior change to the preparation flow
+- Second stretch: Module 3 (initial evaluation) redesigned after measuring the clean-database run — evaluation consumed roughly 44 of 75 minutes (~59% of the batch) and depended entirely on free cloud providers whose quota kept running out
+- Two independent processes replace the single AI flow: the scheduled batch exports the prepared offers, the operator evaluates them in a chat at no cost, and a one-line manual command imports the answer; the wait between both is real time, never a step of the system
+- Lots of 30 offers named with the run number: one text file to upload to the chat plus an internal control sheet with the expected ids; the chat instruction is derived from the official prompt and is never hand-edited
+- Lot guard: no new lots while an existing lot still holds unevaluated offers; resolved lots are removed and a lot with missing offers is kept and completed with the same answer
+- Strict import: each line is validated whole (existing pending offer, five vetoes, coherent decision, real justification and deliverable); an invalid line rejects only itself and leaves its offer pending — nothing is completed, corrected or guessed
+- Answers matching no lot are set aside in a rejected folder, reported once and never reprocessed
+- Single exception to the non-empty rule: the deliverable may be stored as not-applicable when the offer carries no description and is discarded by the description veto
+- New closure motives (pending evaluation, no results) and six new events; the quota-exhausted motive is retired
+- No database change: the stored result keeps its shape and the field naming the answering door becomes the evaluator declared in configuration
+- Nine official documents aligned in one batch and verified by the documentation reviewer; its one minor (stale prompt version in the data model) was corrected before closing
+- Construction deliberately left for a separate, later approval: zero code, configuration, prompt, data or deployment changes in this stretch
 
 **Decisions**
 - User requested `ciudad`/`region` column names be changed to `municipio`/`departamento` to align with Colombian administrative terminology; no other changes requested for the rename
 - User provided the complete list of Colombian municipalities to be loaded into the catalog in batches
+- D76 (decision log v1.55): Module 3 redesigned as two AI-free processes — batch export of chat-readable lots plus manual import with strict validation; supersedes D49/D50/D59 for this module only, D75's classifier doors and D52's veto rules untouched; construction pending approval
 - Decisions from previous sessions remain in effect
 
 **Status**
 - Column rename and migration implemented across 10 files (schema, models, preparation node, prompt, migrations, 6 test files)
-- Documentation aligned: DOC-13A, database-tables.md, Preparation ficha, decision log, tracker, AGENTS.md, README, MVP Execution Plan, transversal orchestrator ficha, evaluation flow diagram
+- Validations green for the rename: lint, type check, 829 tests passing
 - Live database migrated successfully, 1,103 municipalities loaded and verified
-- Validations green: lint, type check, 829 tests passing
-- Active branch: `ajuste-final-v1`
+- Module 3 documentation closed: sheet rewritten in place to version 2.0 (two four-node flows), decision log, tracker status row, plan criteria, data model, tables reference, transversal orchestrator sheet, README and operating contract aligned; documentation reviewer approved
+- The Module 3 stretch is documents-only: lint, typecheck and tests not required (suite stays at 829)
+- Module 3 construction pending approval; active branch: `ajuste-final-v1`
 
 ## Session 53 — 10/11/2026
 `ses_f4af1b961ffe5t8xNspW5U761x` · `ajuste-final-v1`
