@@ -1,22 +1,24 @@
 # Especificación canónica densificada — Módulo 2: Preparación de ofertas
 
-**Base de decisiones:** `docs/plans/Plan funcional fase 5.md` (decisiones globales D1-D5, análisis aprobado: 3 correcciones, huecos H1-H7 y 6 optimizaciones). Estructura espejo de la ficha del Módulo 1.
+**Versión del documento**: 2.0 (2026-11-15)
+
+**Base de decisiones:** `docs/plans/Plan funcional fase 5.md` (decisiones globales D1-D5, análisis aprobado: 3 correcciones, huecos H1-H7 y 6 optimizaciones). Estructura espejo de la ficha del Módulo 1. Rediseño de ubicación por catálogo maestro aprobado el 2026-11-15; número de decisión pendiente de registro.
 
 ## Convenciones comunes
 
-- **Alcance del módulo**: leer las ofertas en `descubierta` de `ofertas_descubiertas`, capturar la página de cada oferta (sin login), poblar los catálogos `empresas` y `ubicaciones` (la IA clasifica únicamente la ubicación), verificar duplicidad en dos etapas y cerrar la corrida con métricas propias. No interpreta, clasifica, puntúa ni decide adecuación.
+- **Alcance del módulo**: leer las ofertas en `descubierta` de `ofertas_descubiertas`, capturar la página de cada oferta (sin login), poblar el catálogo `empresas` y enlazar la ubicación desde el catálogo maestro de municipios y departamentos (nunca crea filas de ubicaciones), verificar duplicidad en dos etapas y cerrar la corrida con métricas propias. No interpreta, clasifica, puntúa ni decide adecuación.
 - **Contexto de ejecución**: única estructura/objeto transmitida a todos los nodos. Ningún nodo posterior reinicializa conexiones ni estado, salvo responsabilidad asignada.
 - **Trazabilidad**: todo registro incluye `id_corrida`; los eventos de oferta incluyen `id_oferta` (éxito y fallo). `fuente_id = 'N/A'` en este módulo (sin fuentes; respeta no-vacíos D31).
 - **Registro**: en `"errores o sucesos"` (`eventos`); si no está disponible, registro crítico local (consola/archivo documentado). Todo evento incluye `id_corrida`, marca_temporal, tipo y descripción; los eventos de oferta incluyen `id_oferta`.
 - **Aborto**: terminación inmediata en `"Finalizar Proceso"` con estado `abortada` y motivo `error_critico`/`aborto`.
 - **Terminación controlada/normal**: cierre sin trabajo (`sin_pendientes`) o con trabajo (`corrida_completada`); lo registra `"Finalizar Proceso"`.
-- **Reintentos**: máximo global configurable (`retries`, sección `preparacion:`); solo son reintentables los códigos declarados en cada nodo. Credenciales, tokens y cookies nunca se registran, evidencian ni persisten. La IA nunca bloquea la captura (best-effort).
+- **Reintentos**: máximo global configurable (`retries`, sección `preparacion:`); solo son reintentables los códigos declarados en cada nodo. Credenciales, tokens y cookies nunca se registran, evidencian ni persisten.
 - **Regla de datos (D31)**: ningún campo vacío — `N/A`/`N/R` cuando no aplica; exenciones: `id_externo` (dedup) y `fecha_ultima_verificacion` (marcador del Nodo 3).
 
 ---
 
 ## Nodo proceso: INICIO — Arranque de la corrida e inicialización del contexto de ejecución
-**Versión**: 1.0 (aprobada)
+**Versión**: 1.1 (revisada en la versión 2.0 del documento)
 
 ### Posición
 Punto de entrada único del módulo; precede toda decisión y acción de negocio. Ninguna decisión posterior puede ejecutarse sin el contexto producido aquí.
@@ -27,7 +29,7 @@ Instanciar la corrida de preparación (corrida propia del módulo, decisión D3)
 ### Descripción funcional
 Al recibir disparador:
 1. Crea instancia de corrida con `id_corrida` único y `fecha_inicio`.
-2. Carga configuración y valida nivel global: **toda** la sección `preparacion:` — `umbral_titulo`, `umbral_descripcion`, `max_pasadas`, `pausa_entre_ofertas_segundos`, `limite_vida_sesion`, reintentos *(as-built D40: sin claves de enriquecimiento)*.
+2. Carga configuración y valida nivel global: **toda** la sección `preparacion:` — `umbral_titulo`, `umbral_descripcion`, `max_pasadas`, `pausa_entre_ofertas_segundos`, `pausa_jitter_segundos`, `limite_vida_sesion`, reintentos *(as-built D40: sin claves de enriquecimiento)*.
 3. Verifica disponibilidad y permisos de escritura de la BD del módulo (prueba de escritura con rollback).
 4. Valida concurrencia mediante bloqueo persistente **global compartido** con el Módulo 1.
 5. Carga ofertas candidatas: SELECT de `ofertas_descubiertas` con estado `descubierta`, orden FIFO (`fecha_descubrimiento ASC, id ASC`).
@@ -63,7 +65,7 @@ Error fatal de inicialización o concurrencia activa producen terminación contr
 
 ### Validaciones
 - **VAL-01**: `id_corrida` único y no nulo.
-- **VAL-02**: configuración global: sección `preparacion:` completa y con rangos válidos (`0 ≤ umbral ≤ 100`, `max_pasadas ≥ 1`, pausas ≥ 0, `limite_vida_sesion ≥ 1`, `profundidad ≥ 0`, reintentos coherentes).
+- **VAL-02**: configuración global: sección `preparacion:` completa y con rangos válidos (`0 ≤ umbral ≤ 100`, `max_pasadas ≥ 1`, pausas ≥ 0, `limite_vida_sesion ≥ 1`, reintentos coherentes).
 - **VAL-03**: BD: conexión abierta y prueba de escritura exitosa con rollback.
 - **VAL-04**: bloqueo legible; obsolescencia por marca_temporal contra umbral configurable; marcas temporales coherentes.
 - **VAL-05**: contexto completo antes de entregar control (`hubo_candidatas` presente).
@@ -184,7 +186,7 @@ Contexto de INICIO: lista de candidatas, `hubo_candidatas`, `id_corrida`, conexi
 ---
 
 ## Nodo proceso: “Preparación de ofertas”
-**Versión**: 1.0 (aprobada)
+**Versión**: 2.0 (2026-11-15)
 
 ### Posición
 Entre:
@@ -194,9 +196,7 @@ Entre:
 Sucesor: `"Verificación de duplicidad"`. Nodo re-entrante por pasada.
 
 ### Objetivo
-Para cada oferta en `descubierta` (FIFO): capturar la página de la oferta (sin login), poblar los catálogos `empresas` y `ubicaciones` (IA solo para clasificar la ubicación), actualizar la oferta y escribir el evento. No verifica duplicidad (eso corresponde al nodo siguiente, en dos etapas según D5).
-
-**Dos lotes por pasada (H1):** (a) `descubierta` — captura completa (pasos 1-5); (b) `preparada` con `ubicacion_id = 'N/A'` (ubicaciones pendientes por IA caída) — solo pasos 3-5 (clasificar, buscar/crear, actualizar), sin re-capturar la página (el texto crudo ya está en `ubicacion`). El lote (b) corre después del (a): las ofertas recién preparadas con IA caída se gestionan en la misma pasada.
+Para cada oferta en `descubierta` (FIFO): capturar la página de la oferta (sin login), poblar el catálogo `empresas`, enlazar la ubicación desde el catálogo maestro de municipios y departamentos, actualizar la oferta y escribir el evento. No verifica duplicidad (eso corresponde al nodo siguiente, en dos etapas según D5).
 
 ### Descripción funcional
 Flujo por oferta (orden obligatorio, por dependencia natural):
@@ -205,33 +205,32 @@ Flujo por oferta (orden obligatorio, por dependencia natural):
 |---|---|---|---|
 | 1 | **Capturar la página** | HTTP directo (httpx): extraer título (sobrescribe el de la tarjeta **solo si existe `<h1>`**), descripción completa con su estructura visible (párrafos/listas/saltos, D41) y empresa (nombre + link de perfil). La ubicación cruda y la modalidad ya vienen escritas por el Módulo 1 desde la tarjeta (traspaso D45 — este nodo ya no las extrae) | Página de la oferta (`/jobs/view/N`) |
 | 2 | **Diligenciar empresa** | Upsert en `empresas` (dedup por `nombre_normalizado`, sin IA) → `empresa_id` (o `N/A` si la página no la muestra) | Paso 1 |
-| 3 | **Diligenciar ubicación (con IA)** | Clasificar texto crudo → tupla `{ciudad, región, país}` (JSON validado) → buscar/crear en `ubicaciones` → `ubicacion_id` (o `N/R` si remoto) | Texto almacenado en `ubicacion` (Módulo 1) |
+| 3 | **Enlazar ubicación** | Normalizar el texto almacenado en `ubicacion` → buscar la fila del catálogo maestro `ubicaciones` → guardar su identificador; sin fila cuando es remoto; pendiente cuando no hay coincidencia | Texto almacenado en `ubicacion` (Módulo 1) |
 | 4 | **Actualizar la oferta** | Guardar `titulo` (si `<h1>`), `descripcion_original`, `empresa_id`, `ubicacion_id`. **NO toca `fecha_ultima_verificacion`** (marcador exclusivo del nodo de Verificación), ni `ubicacion`/`modalidad` (proiedad del Módulo 1, D45) | Pasos 2-3 |
 | 5 | **Escribir evento** | `oferta_preparada` (suceso) con `id_oferta` | Paso 4 |
 
 En fallo del paso 1: evento `preparacion_fallida` (error) con `id_oferta` + reintento configurable; si persiste, la oferta permanece en `descubierta` para la siguiente pasada/corrida. **Todos los eventos de oferta llevan `id_oferta`, éxito y fallo.**
 
 ### Entradas
-- Contexto: candidatas, `id_corrida`, configuración `preparacion:` (`pausa_entre_ofertas_segundos`, `limite_vida_sesion`, reintentos), sesión HTTP de invitado, cachés de corrida (empresas, ubicaciones, IA por texto). *(As-built D40: sin claves ni cachés de enriquecimiento.)*
+- Contexto: candidatas, `id_corrida`, configuración `preparacion:` (`pausa_entre_ofertas_segundos`, `limite_vida_sesion`, reintentos), sesión HTTP de invitado, cachés de corrida (empresas por nombre normalizado, ubicaciones por texto normalizado). *(As-built D40: sin claves ni cachés de enriquecimiento.)*
 - BD: `ofertas_descubiertas`, `empresas`, `ubicaciones`.
-- Servicio de IA (bajo demanda, solo ubicación; best-effort).
 
 ### Salidas
 - Ofertas en `preparada` con título fiel, descripción, `empresa_id`, `ubicacion_id` (ID, `N/R` o `N/A` pendiente) y `modalidad`.
-- Catálogos `empresas`/`ubicaciones` poblados (upserts idempotentes).
+- Catálogo `empresas` poblado con upsert idempotente; catálogo `ubicaciones` solo se lee y nunca se modifica.
 - Eventos `oferta_preparada`/`preparacion_fallida`.
 - Control único a `"Verificación de duplicidad"`.
 - Aborto → `"Finalizar Proceso"` con `abortada`.
 
 ### Reglas de negocio
-- **RN-01**: dos lotes por pasada: (a) `descubierta` (pasos 1-5), (b) `preparada` con `ubicacion_id = 'N/A'` (pasos 3-5); el lote (b) después del (a).
+- **RN-01**: una pasada tiene un solo lote: todas las ofertas en `descubierta`, en orden FIFO; no existe un segundo lote; una ubicación pendiente no se reintenta en pasadas posteriores.
 - **RN-02**: cada pasada re-consulta su lote en la BD (no usa el iterador congelado de INICIO).
 - **RN-03**: sesión HTTP reutilizada para todas las ofertas; **límite de vida configurable** (renovar cada N ofertas, p. ej. 50); **fallback authwall** → nueva sesión de invitado y se reintenta la oferta; **pausa entre ofertas** configurable (`pausa_entre_ofertas_segundos`, prudencia anti-bloqueo — se detectó `uc=scraping` en la investigación).
 - **RN-04**: reintento por oferta configurable; si persiste → oferta queda en `descubierta` (siguiente pasada/corrida).
 - **RN-05**: empresa — upsert por `nombre_normalizado` (sin IA); **caché en memoria de la corrida** (empresa → `empresa_id`). **As-built D40 (2026-08-25):** el enriquecimiento de perfiles introducido por D39 fue retirado — el nodo ya no visita perfiles de empresa; el catálogo `empresas` guarda solo identidad (`id`, `nombre`, `nombre_normalizado`, `perfil_linkedin`) y fechas de auditoría. **As-built D41 (2026-08-25):** la clave del upsert usa `normalizar_nombre_empresa` — minúsculas y espacios simples **conservando todos los caracteres** (tildes, ñ, puntuación, `&`, `.`, paréntesis); ubicaciones y títulos de duplicidad mantienen la regla estricta (`normalizar_texto`). La extracción de la descripción preserva la estructura visible del anuncio: cada párrafo/bloque en su línea, `<br>` como salto y viñetas `<li>` con guion (`- `); aplica a preparaciones posteriores a D41.
-- **RN-06**: ubicaciones — dedup por **tupla completa `(ciudad, región, país)` normalizada**; la IA completa país/región solo por conocimiento seguro; "Colombia" solo → `(N/A, N/A, Colombia)` con ID compartido; "Remoto" → **no se crea ubicación**; `ubicacion_id = 'N/R'`; la **modalidad es dato de la oferta** (la IA no la toca).
-- **RN-07**: IA — solo clasifica texto (recibe prompt, devuelve `{ciudad, región, país}` JSON validado con Pydantic); no selecciona ofertas, no lee la BD, no escribe, no tiene memoria del catálogo; **caché por texto distinto en el contexto de la corrida** (la IA se invoca una vez por texto de ubicación distinto); si la IA falla u Ollama está caído → la oferta se captura igual y queda `ubicacion_id = 'N/A'` (pendiente). **La IA jamás bloquea la captura.**
-- **RN-08**: tres estados de `ubicacion_id`: `N/A` (pendiente — la IA aún no la gestionó), `N/R` (gestionada — remoto/no reportada), `UBI-xxxx` (gestionada — identificada).
+- **RN-06**: ubicaciones — enlace contra el catálogo maestro `ubicaciones`: se normaliza el texto con `normalizar_texto` y se busca la fila por municipio; si el nombre del municipio se repite en varios departamentos, decide el departamento que traiga el texto, y si el texto no lo trae la oferta queda pendiente; si el texto solo nombra un departamento o solo el país, se busca la fila de municipio `N/A` correspondiente; "Remoto" no tiene fila y el enlace queda como no reportado; el módulo nunca crea, corrige ni modifica filas del catálogo; la modalidad es dato de la oferta y no interviene.
+- **RN-07**: resolución determinista y local: normalización con `normalizar_texto`, coincidencia exacta contra el catálogo, sin aproximaciones, sin IA y sin llamadas de red; caché de la corrida por texto normalizado que conserva también los resultados pendientes y los remotos para no repetir la búsqueda.
+- **RN-08**: tres estados de `ubicacion_id`: `N/A` (pendiente — el texto no resuelve contra el catálogo; no se reintenta en pasadas posteriores ni bloquea el flujo), `N/R` (remoto o no reportado en la página), identificador (fila encontrada en el catálogo).
 - **RN-09**: todos los eventos de oferta llevan `id_oferta` (éxito y fallo).
 - **RN-10**: `titulo` se sobrescribe solo si el `<h1>` existe (best-effort; nunca deja el campo vacío — D31).
 - **RN-11**: este nodo no verifica duplicidad (nodo siguiente) ni toca `fecha_ultima_verificacion` (marcador del nodo siguiente).
@@ -239,14 +238,14 @@ En fallo del paso 1: evento `preparacion_fallida` (error) con `id_oferta` + rein
 
 ### Validaciones
 - **VAL-01**: insumos presentes (contexto, configuración, sesión).
-- **VAL-02**: lote (a) FIFO; lote (b) solo `preparada` con `ubicacion_id = 'N/A'`.
+- **VAL-02**: un solo lote `descubierta` en orden FIFO; no existe un segundo lote.
 - **VAL-03**: política de reintentos cumplida; pausa aplicada entre ofertas.
-- **VAL-04**: oferta actualizada respeta D31 (sin vacíos); tupla de ubicación normalizada antes de buscar.
+- **VAL-04**: oferta actualizada respeta D31 (sin vacíos); texto de ubicación normalizado antes de buscar.
 - **VAL-05**: evento escrito con `id_oferta`; evidencia acotada.
-- **VAL-06**: cachés coherentes (empresa → `empresa_id`, texto → tupla).
+- **VAL-06**: cachés coherentes (empresa → identificador, texto normalizado → fila o estado).
 
 ### Condiciones
-- **Normal**: ofertas procesadas (éxito o fallo individual), catálogos actualizados.
+- **Normal**: ofertas procesadas (éxito o fallo individual), catálogo de empresas actualizado; el de ubicaciones solo se lee.
 - **Fallo de oferta**: no aborta; oferta queda `descubierta` o `preparada` según el paso fallido.
 - **Aborto**: insumos ausentes/corruptos; corrupción de contexto.
 
@@ -265,7 +264,7 @@ En fallo del paso 1: evento `preparacion_fallida` (error) con `id_oferta` + rein
 | ERR-05 | `respuesta_invalida` (HTML no interpretable) | No | Paso 1 | `preparacion_fallida`; oferta queda `descubierta` | fallo de oferta |
 | ERR-06 | `error_interno_captura` | No | Paso 1 | Ídem ERR-05 | fallo de oferta |
 | ERR-07 | `empresa_no_disponible` (página sin empresa) | No | Paso 2 | `empresa_id = 'N/A'`; continúa | continúa |
-| ERR-08 | `ubicacion_no_clasificada` (IA caída/Ollama) | No | Paso 3 | `ubicacion_id = 'N/A'` (pendiente); continúa — la IA jamás bloquea | continúa |
+| ERR-08 | `ubicacion_no_clasificada` (texto no coincide con el catálogo) | No | Paso 3 | `ubicacion_id = 'N/A'` (pendiente); continúa | continúa |
 | ERR-09 | Corrupción del contexto al guardar | No | Paso 4-5 | Evento crítico; aborto | `abortada` |
 | EVT-01 | `oferta_preparada` | No | Paso 5 | Suceso con `id_oferta`; evidencia acotada | continúa |
 | EVT-02 | `preparacion_fallida` | No | Paso 1 | Error con `id_oferta`; oferta queda `descubierta` | fallo de oferta |
@@ -275,10 +274,12 @@ En fallo del paso 1: evento `preparacion_fallida` (error) con `id_oferta` + rein
 ### Escenarios límite
 - Muro de login (authwall) en una oferta → ERR-04 con renovación de sesión.
 - Página borrada / 404 permanente → ERR-02; oferta queda `descubierta`; el bucle la reintenta hasta `max_pasadas` y luego queda para la próxima corrida.
-- IA caída u Ollama inactivo → ERR-08; oferta `preparada` con `ubicacion_id = 'N/A'`; el lote (b) de la misma corrida o la siguiente corrida la gestiona.
+- Texto sin coincidencia en el catálogo → ERR-08; oferta `preparada` con `ubicacion_id = 'N/A'` (pendiente); no se reintenta en pasadas posteriores.
 - Página sin empresa → ERR-07; `empresa_id = 'N/A'` (D31).
-- "Remoto" → sin creación de ubicación; `ubicacion_id = 'N/R'`.
-- "Colombia" solo → `(N/A, N/A, Colombia)` compartido entre ofertas.
+- "Remoto" → no hay fila en el catálogo; el enlace queda como no reportado; `ubicacion_id = 'N/R'`.
+- "Colombia" solo → se busca la fila de municipio `N/A`, departamento `N/A`, país Colombia.
+- Texto que solo nombra un departamento → se busca la fila de municipio `N/A` con ese departamento.
+- Nombre de municipio repetido en varios departamentos sin departamento en el texto → oferta queda pendiente; `ubicacion_id = 'N/A'`.
 - Título sin `<h1>` → se conserva el de la tarjeta (RN-10).
 - Límite de vida de sesión agotado → renovar entre ofertas (sin afectar las procesadas).
 
@@ -287,7 +288,7 @@ En fallo del paso 1: evento `preparacion_fallida` (error) con `id_oferta` + rein
 - **Sucesor normal**: `"Verificación de duplicidad"`.
 - **Sucesor de aborto**: `"Finalizar Proceso"`.
 - **Contratos consumidos**: candidatas FIFO; configuración `preparacion:`; contexto de corrida.
-- **Contratos entregados**: ofertas `preparada` con título fiel, descripción, `empresa_id`, `ubicacion_id` y `modalidad`; catálogos poblados; eventos con `id_oferta`.
+- **Contratos entregados**: ofertas `preparada` con título fiel, descripción, `empresa_id`, `ubicacion_id` y `modalidad`; catálogo `empresas` poblado con upsert idempotente y catálogo `ubicaciones` solo leído; eventos con `id_oferta`.
 - **Impactos aprobados**:
   - `"Verificación de duplicidad"` consume `titulo`, `empresa_id` y `descripcion_original` (la descripción la captura este nodo; el Módulo 1 no la captura — D28/D29).
   - `"¿Quedan ofertas en 'descubierta'?"` consulta lo que quede sin procesar.
@@ -295,29 +296,27 @@ En fallo del paso 1: evento `preparacion_fallida` (error) con `id_oferta` + rein
 
 ### Notas de implementación
 - httpx con sesión de invitado y headers de navegador; sin Playwright en el camino crítico (D4).
-- `normalizar_texto` (nueva utilidad en `shared/utilidades.py`): minúsculas, sin acentos, sin puntuación, espacios simples — usada para `empresas.nombre_normalizado` y para la tupla de ubicación.
-- Prompt de clasificación de ubicación en `prompts/` (separado del código); propósito de ruteo `ai_routing.preparacion` en `config.yaml`.
-- Cachés en el contexto de la corrida: empresas, ubicaciones (por tupla) e IA (por texto distinto) — perduran entre pasadas del bucle.
-- Validación Pydantic de la tupla `{ciudad, región, país}` en el nodo; la IA devuelve JSON.
+- `normalizar_texto` (utilidad en `shared/utilidades.py`): minúsculas, sin acentos, sin puntuación, espacios simples — usada para el texto de ubicación y para los títulos de duplicidad; las empresas usan `normalizar_nombre_empresa` (D41).
+- Cachés en el contexto de la corrida: empresas por nombre normalizado y ubicaciones por texto normalizado (fila encontrada, pendiente o no reportado) — perduran entre pasadas del bucle.
+- Paso 3 determinista y local: una sola lectura del catálogo por texto nuevo; sin IA, sin red y sin escrituras en `ubicaciones`.
 - No escribir `fecha_ultima_verificacion`; no sobrescribir `id_corrida` de la oferta.
 - Texto crudo de ubicación en `ubicacion` — propiedad del Módulo 1 desde el traspaso aprobado (2026-08-25; registrado como D45): este nodo ya no lo extrae de la página.
 - Sin valores fijos: sesión, pausas, reintentos y límite de vida desde configuración.
-- **Nota as-built 2026-08-25 (decisión D43):** el paso 3 resuelve de forma determinista los textos que SOLO nombran un departamento colombiano (`REGIONES_COLOMBIA`, forma `normalizar_texto`; sufijo opcional "colombia") ANTES de invocar la IA — p. ej. "CAUCA" → `(N/A, cauca, colombia)`; los aciertos se cachean como éxitos (RN-07). Los textos con ciudad no cubiertos por los alias (p. ej. direcciones completas como "Bogotá, Distrito Capital, Colombia") siguen su camino normal hacia PRM-006 v3. Las filas legadas pendientes (`preparada`+`N/A`) se auto-reparan por el lote (b) sin HTTP.
-- **Nota as-built 2026-08-25 (decisión D44):** la ruta local de clasificación usa `gpt-oss:120b-cloud` (swap desde gpt-oss:20b-cloud tras experimento comparado — igual calidad, ~3x más rápido). PRM-006 v3: guía de reconocimiento confiado (formato inusual — mayúsculas, sin tildes, abreviaturas, sin país — jamás justifica N/A por sí solo), contrato de salida estricto (primer carácter `{`), y cuatro ejemplos resueltos (CAUCA, ESTADO DE MEXICO, Medellín, solo-país) orientados a la expansión América. La chuleta D43 sigue activa como vía rápida.
-- **Nota as-built 2026-08-26 (decisión D46):** el paso 3 resuelve la fila de catálogo con UNA sola lectura (filtro por país): igualdad exacta primero y, con `umbral_alias_ubicacion` > 0 (default 90; 0 desactiva), fusión por similitud RapidFuzz para variantes del mismo lugar — sin conflictos de componente y al menos una coincidencia real; un N/A jamás fusiona por sí solo; las filas solo-país nunca se crean por vía difusa. Alias deterministas de tupla COMPLETA (`ALIAS_UBICACIONES`: "Bogotá D.C." → bogota/distrito capital/colombia) se consultan antes de la tabla departamental D43; cada fusión queda registrada en el log (`alias_ubicacion_fusionado`).
-- **Nota as-built 2026-08-26 (decisión D45, traspaso registrado):** la columna se llama `ubicacion` (renombrada desde `ubicacion_nombre`) y su escritor es el Módulo 1 desde la tarjeta del listado, junto con `modalidad` — este nodo ya no las extrae de la página ni las sobrescribe; PRM-006 clasifica el texto almacenado. La métrica `total_ofertas` del Finalizar es la unión DISTINCT de ofertas únicas entre `oferta_preparada` y `oferta_duplicada` (sustituye la suma literal).
-- **Nota as-built 2026-11-11 (decisión D75):** el subpaso de IA del paso 3 rota por PUERTAS DE RESERVA (espejo de la evaluación/D59): primero la puerta principal (la ruta habitual de preparación, con su propia espera de ruta) y luego las alternas configuradas en `preparacion.puertas_alternas` (3 puertas OpenRouter `openai/gpt-oss-120b`, llaves solo en `config/.env`), acotadas por `preparacion.timeout_puerta_segundos` (60) — la primera que responde manda, llamada única sin reintentos internos. Los fallos de transporte/cupo/timeout/llave marcan la puerta caída para el resto de la corrida del módulo (memoria en el contexto; línea de registro `D75 | puerta_descartada`, nunca eventos, para no alterar las métricas de cierre) y se salta sin llamarla; una RESPUESTA mal formada (no JSON o esquema inválido) jamás silencia una puerta — es contenido: la ubicación queda pendiente con el ERR-08 específico y sin cachear (RN-07) para el lote (b)/la tanda siguiente; con todas las puertas caídas, un único ERR-08 agregado sin llamar a ninguna. La chuleta D43, los alias D46 y el caché por texto siguen adelante de la IA. Elección del modelo espejo por batería en vivo (2026-11-11, prompt oficial PRM-006 v3): gpt-oss-120b 3/5 exactos y honesto ante trampas frente a gemma-4-31b-it 3/5 con JSON inválido. Sin cambio de contrato: mismo ERR-08, mismos cachés, sin migración ni dependencias nuevas; VAL-02 valida las dos claves nuevas como espejo exacto de `shared/evaluacion.py`.
+- **Nota as-built 2026-08-25 (decisión D43) — HISTÓRICA, superada por el rediseño de ubicación por catálogo maestro (2026-11-15):** el paso 3 resuelve de forma determinista los textos que SOLO nombran un departamento colombiano (`REGIONES_COLOMBIA`, forma `normalizar_texto`; sufijo opcional "colombia") ANTES de invocar la IA — p. ej. "CAUCA" → `(N/A, cauca, colombia)`; los aciertos se cachean como éxitos (RN-07). Los textos con ciudad no cubiertos por los alias (p. ej. direcciones completas como "Bogotá, Distrito Capital, Colombia") siguen su camino normal hacia PRM-006 v3. Las filas legadas pendientes (`preparada`+`N/A`) se auto-reparan por el lote (b) sin HTTP.
+- **Nota as-built 2026-08-25 (decisión D44) — HISTÓRICA, superada por el rediseño de ubicación por catálogo maestro (2026-11-15):** la ruta local de clasificación usa `gpt-oss:120b-cloud` (swap desde gpt-oss:20b-cloud tras experimento comparado — igual calidad, ~3x más rápido). PRM-006 v3: guía de reconocimiento confiado (formato inusual — mayúsculas, sin tildes, abreviaturas, sin país — jamás justifica N/A por sí solo), contrato de salida estricto (primer carácter `{`), y cuatro ejemplos resueltos (CAUCA, ESTADO DE MEXICO, Medellín, solo-país) orientados a la expansión América. La chuleta D43 sigue activa como vía rápida.
+- **Nota as-built 2026-08-26 (decisión D46) — HISTÓRICA, superada por el rediseño de ubicación por catálogo maestro (2026-11-15):** el paso 3 resuelve la fila de catálogo con UNA sola lectura (filtro por país): igualdad exacta primero y, con `umbral_alias_ubicacion` > 0 (default 90; 0 desactiva), fusión por similitud RapidFuzz para variantes del mismo lugar — sin conflictos de componente y al menos una coincidencia real; un N/A jamás fusiona por sí solo; las filas solo-país nunca se crean por vía difusa. Alias deterministas de tupla COMPLETA (`ALIAS_UBICACIONES`: "Bogotá D.C." → bogota/distrito capital/colombia) se consultan antes de la tabla departamental D43; cada fusión queda registrada en el log (`alias_ubicacion_fusionado`).
+- **Nota as-built 2026-08-26 (decisión D45, traspaso registrado):** la columna se llama `ubicacion` (renombrada desde `ubicacion_nombre`) y su escritor es el Módulo 1 desde la tarjeta del listado, junto con `modalidad` — este nodo ya no las extrae de la página ni las sobrescribe; el catálogo maestro resuelve el texto almacenado. La métrica `total_ofertas` del Finalizar es la unión DISTINCT de ofertas únicas entre `oferta_preparada` y `oferta_duplicada` (sustituye la suma literal).
+- **Nota as-built 2026-11-11 (decisión D75) — HISTÓRICA, superada por el rediseño de ubicación por catálogo maestro (2026-11-15):** el subpaso de IA del paso 3 rota por PUERTAS DE RESERVA (espejo de la evaluación/D59): primero la puerta principal (la ruta habitual de preparación, con su propia espera de ruta) y luego las alternas configuradas en `preparacion.puertas_alternas` (3 puertas OpenRouter `openai/gpt-oss-120b`, llaves solo en `config/.env`), acotadas por `preparacion.timeout_puerta_segundos` (60) — la primera que responde manda, llamada única sin reintentos internos. Los fallos de transporte/cupo/timeout/llave marcan la puerta caída para el resto de la corrida del módulo (memoria en el contexto; línea de registro `D75 | puerta_descartada`, nunca eventos, para no alterar las métricas de cierre) y se salta sin llamarla; una RESPUESTA mal formada (no JSON o esquema inválido) jamás silencia una puerta — es contenido: la ubicación queda pendiente con el ERR-08 específico y sin cachear (RN-07) para el lote (b)/la tanda siguiente; con todas las puertas caídas, un único ERR-08 agregado sin llamar a ninguna. La chuleta D43, los alias D46 y el caché por texto siguen adelante de la IA. Elección del modelo espejo por batería en vivo (2026-11-11, prompt oficial PRM-006 v3): gpt-oss-120b 3/5 exactos y honesto ante trampas frente a gemma-4-31b-it 3/5 con JSON inválido. Sin cambio de contrato: mismo ERR-08, mismos cachés, sin migración ni dependencias nuevas; VAL-02 valida las dos claves nuevas como espejo exacto de `shared/evaluacion.py`.
 
 ### Pasos funcionales
 1. **Leer insumos**. Entrada: contexto, configuración, sesión HTTP, cachés. Proceso: acceder desde contexto; resolver parámetros efectivos. Salida: insumos. Val: VAL-01. Err: ERR-01.
-2. **Determinar lotes**. Entrada: BD. Proceso: re-consultar (a) `descubierta` FIFO y (b) `preparada` con `ubicacion_id = 'N/A'`. Salida: lotes. Val: VAL-02. Err: ERR-05.
-3. **Capturar página (lote a, paso 1)**. Entrada: oferta, sesión, reintentos. Proceso: GET a `/jobs/view/N`; authwall → renovar sesión y reintentar; extraer título (`<h1>` si existe), descripción y empresa (la ubicación cruda y la modalidad las escribió el Módulo 1 desde la tarjeta — traspaso D45); pausa entre ofertas. Salida: datos crudos o `preparacion_fallida`. Val: VAL-03. Err: ERR-02..ERR-06, EVT-02.
+2. **Determinar el lote**. Entrada: BD. Proceso: re-consultar `descubierta` en orden FIFO; no existe un segundo lote. Salida: lote. Val: VAL-02. Err: ERR-05.
+3. **Capturar página (paso 1)**. Entrada: oferta, sesión, reintentos. Proceso: GET a `/jobs/view/N`; authwall → renovar sesión y reintentar; extraer título (`<h1>` si existe), descripción y empresa (la ubicación cruda y la modalidad las escribió el Módulo 1 desde la tarjeta — traspaso D45); pausa entre ofertas. Salida: datos crudos o `preparacion_fallida`. Val: VAL-03. Err: ERR-02..ERR-06, EVT-02.
 4. **Diligenciar empresa (paso 2)**. Entrada: nombre + perfil. Proceso: caché → normalizar → upsert por `nombre_normalizado` → `empresa_id` (o `N/A`). Salida: `empresa_id`. Val: VAL-06. Err: ERR-07.
-5. **Diligenciar ubicación (paso 3)**. Entrada: texto crudo. Proceso: caché por texto → si nuevo, IA (JSON validado) → tupla → buscar/crear en `ubicaciones` → `ubicacion_id`; remoto → `N/R`; fallo IA → `N/A`. Salida: `ubicacion_id`. Val: VAL-06. Err: ERR-08.
+5. **Enlazar ubicación (paso 3)**. Entrada: texto almacenado en `ubicacion`. Proceso: caché por texto normalizado → si es nuevo, `normalizar_texto` y búsqueda exacta en `ubicaciones` por municipio, con desambiguación por departamento cuando el nombre se repite → `ubicacion_id`; remoto → `N/R`; sin coincidencia → `N/A` (pendiente, ERR-08). Salida: `ubicacion_id`. Val: VAL-06. Err: ERR-08.
 6. **Actualizar oferta (paso 4)**. Entrada: datos crudos, `empresa_id`, `ubicacion_id`. Proceso: actualizar `titulo` (si `<h1>`), `descripcion_original`, `empresa_id`, `ubicacion_id`; sin tocar `fecha_ultima_verificacion`, `ubicacion` ni `modalidad`. Salida: oferta actualizada. Val: VAL-04. Err: ERR-09.
 7. **Escribir evento (paso 5)**. Entrada: oferta, `id_corrida`. Proceso: `oferta_preparada` con `id_oferta`. Salida: evento. Val: VAL-05. Err: ERR-09.
-8. **Lote (b)**. Entrada: pendientes de ubicación. Proceso: pasos 3-5 sin captura (texto crudo de `ubicacion`). Salida: `ubicacion_id` resuelto o `N/A`. Val: VAL-02. Err: ERR-08, ERR-09.
-9. **Entregar control**. Entrada: contexto. Proceso: cerrar nodo. Salida: flujo a `"Verificación de duplicidad"`. Err: ninguna.
+8. **Entregar control**. Entrada: contexto. Proceso: cerrar nodo. Salida: flujo a `"Verificación de duplicidad"`. Err: ninguna.
 
 ---
 
@@ -415,8 +414,8 @@ Detectar, entre las ofertas ya preparadas, cuáles son la misma oferta publicada
   - `"Finalizar Proceso"` cuenta métricas por eventos (`oferta_preparada`/`oferta_duplicada`).
 
 ### Notas de implementación
-- RapidFuzz ya está en el proyecto (`shared/decision_engine.py`).
-- `normalizar_texto` compartida con Preparación (Nodo 2 → `empresas.nombre_normalizado`; este nodo → títulos).
+- RapidFuzz ya es dependencia del proyecto; lo usa la verificación de duplicidad en `modules/preparation/nodes/verificacion.py`.
+- `normalizar_texto` compartida con Preparación (allí para el texto de ubicación; aquí para los títulos); los nombres de empresa usan `normalizar_nombre_empresa` (D41).
 - Umbrales desde configuración; sin valores fijos.
 - Reintentos vía `ejecutar_con_reintento` (`shared/retry.py`).
 - `shared/models.py`: `OfferState.DUPLICADA`; `shared/state_machine.py`: transición `preparada → duplicada` (la transición `descubierta → preparada` ya existe).
@@ -629,7 +628,7 @@ No se sobrescribe `ofertas_descubiertas.id_corrida` (sigue siendo la corrida de 
 - **As-built D40 (2026-08-25):** el enriquecimiento fue eliminado del proyecto — el antiguo paso 6 H2 había sido retirado por D39 (movido al paso 2) y su sucesor inline fue revertido por D40 tras medirse como cuello de botella (~96% de una corrida completa); el nodo termina tras liberar el bloqueo.
 
 ### Estado del módulo
-Con este nodo queda completo el conjunto de nodos del Módulo 2 (INICIO, "¿Quedan ofertas por preparar…?", Preparación de ofertas, Verificación de duplicidad, "¿Quedan ofertas en 'descubierta'?", Finalizar Proceso). Pendientes de implementación: todos — este documento es la base autoritativa de construcción, derivada del `Plan funcional fase 5` (decisiones D1-D5, correcciones, H1-H7 y optimizaciones aprobadas). El orquestador transversal (`modules/orchestrator/`, capa separada de este módulo) se construirá al cierre del Módulo 2 con prueba real de corrida secuencial 1→2 — especificado en su propia ficha técnica: `docs/diagrams/Ficha técnica - Diagrama de flujo (Orquestador transversal).md`.
+Con este nodo queda completo el conjunto de nodos del Módulo 2 (INICIO, la decisión de candidatas, Preparación de ofertas, Verificación de duplicidad, la decisión de bucle y Finalizar Proceso). El módulo está construido y en operación desde el cierre de la fase 5. Esta versión 2.0 describe el rediseño de ubicación por catálogo maestro (2026-11-15), que aún no está implementado en el programa: hasta que se construya, el módulo sigue resolviendo la ubicación con el procedimiento anterior. El orquestador transversal (`modules/orchestrator/`, capa separada de este módulo) ya está construido y ejecuta la cadena de módulos en secuencia — especificado en su propia ficha técnica: `docs/diagrams/Ficha técnica - Diagrama de flujo (Orquestador transversal).md`.
 
 ---
 
@@ -640,9 +639,9 @@ Con este nodo queda completo el conjunto de nodos del Módulo 2 (INICIO, "¿Qued
 3. `ofertas_descubiertas`: añadir columnas `ubicacion_nombre` y `modalidad` (reversión parcial de D29, documentada). *(As-built D45: la columna se renombró a `ubicacion` y su captura se trasladó al Módulo 1.)*
 4. `corridas`: añadir columnas `total_preparadas` y `total_duplicadas` (D3).
 5. `eventos`: re-añadir columna `id_oferta` (`N/A` en eventos de módulo; respeta D31).
-6. `ubicaciones`: eliminar `nombre`, `nombre_normalizado`, `modalidad`; conservar `ciudad`, `region`, `pais` (rediseño aprobado).
+6. `ubicaciones`: conservar `municipio`, `departamento`, `pais`; las columnas `nombre`, `nombre_normalizado` y `modalidad` ya no existen; la tabla llega cargada con los 1.103 municipios de Colombia y el módulo solo la lee.
 7. `shared/models.py`: `OfferState.DUPLICADA`, `EstadoCorrida.SIN_PENDIENTES`, `Corrida` con `total_preparadas`/`total_duplicadas`, `EventoAlmacen` con `id_oferta`, `Location` sin `modalidad`.
 8. `shared/state_machine.py`: transición `preparada → duplicada` (`descubierta → preparada` ya existe).
 9. `shared/utilidades.py`: nueva función `normalizar_texto`.
-10. `config/config.yaml`: sección nueva `preparacion:` (`umbral_titulo: 90`, `umbral_descripcion: 85`, `max_pasadas: 2`, `pausa_entre_ofertas_segundos`, `limite_vida_sesion`, reintentos) y `ai_routing.preparacion`. *(As-built D40: las claves de enriquecimiento `profundidad_catalogo_empresa` y `pausa_entre_empresas_segundos` fueron retiradas.)*
-11. `prompts/`: prompt de clasificación de ubicación (`prompts/preparacion/ubicacion.md`).
+10. `config/config.yaml`: sección nueva `preparacion:` (`umbral_titulo`, `umbral_descripcion`, `max_pasadas`, `pausa_entre_ofertas_segundos`, `pausa_jitter_segundos`, `limite_vida_sesion`, reintentos). La ruta de IA y las claves de puertas alternas, espera por puerta y umbral de alias difuso quedan retiradas. *(As-built D40: las claves de enriquecimiento `profundidad_catalogo_empresa` y `pausa_entre_empresas_segundos` fueron retiradas.)*
+11. No hay prompt de ubicación porque la clasificación por IA fue retirada.

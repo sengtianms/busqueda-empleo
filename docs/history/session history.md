@@ -5,6 +5,7 @@ Unless noted, decisions from previous sessions remain in effect.
 ## Sessions index
 | № | Date | Session ID | Summary |
 |---|---|---|---|
+| 55 | 15/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Module 2 sheet rewritten to version 2.0: the location is linked from the preloaded master catalogue of 1,103 Colombian municipalities instead of being classified by AI, the AI route, prompt, keys and reserve doors are retired, the second lot and the retry of pending locations are eliminated, department-only and country-only texts resolve against operator-maintained not-applicable rows, and the module is documented as never creating or correcting catalogue rows; historical notes kept and marked as superseded, one of them restored after an accidental deletion caught by the acceptance checks; configuration, schema and status sections aligned and two stale technical references fixed; documents-only, implementation pending approval and decision number still unregistered |
 | 54 | 15/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Location catalog column rename (ciudad → municipio, region → departamento) aligned with Colombian administrative terminology across schema, models, preparation node, prompt, tests and docs; idempotent migration added for existing databases; the ubicaciones catalog then populated with all 1,103 Colombian municipalities from user-provided lists, sequence counter updated to 1,103; Module 3 then redesigned as two AI-free processes (decision D76 in log v1.55) — the scheduled batch exports prepared offers into chat-readable lots and a one-line manual command imports the chat's answer under strict whole-line validation, retiring the answering-door chain (D49/D50/D59 superseded for this module only) with no schema change; sheet rewritten to version 2.0 and nine official documents aligned, documentation reviewer approved with one minor corrected; construction pending approval |
 | 53 | 10/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Two criterion decisions registered documents-only, closing two more post-V1 backlog items: the naming criterion for the future stages was fixed before their design (Spanish continuity, the user's choice — the future Modules 4–5 follow the same Spanish-identifier rule already approved three times, with the unchanged public module entry), and the naming drift of the operations layer was regularized by extending the exception rather than renaming (the operator-facing pieces — narration voice, commands, live board, watchdog, notifier, reports, wrappers, unit names and their tests — are now an approved Spanish exception, closed to that layer, with zero renames and the live deployment untouched); both changes verified by the docs reviewer as CONFORME with minors resolved; the doc reviewer also re-confirmed that the already-implemented chair-cut backlog item (4.3) was closed in the previous stretch |
 | 52 | 10/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Exact chair cut by process number shipped per the approved plan: the run chair now records the holder's OS process number on every way it can be taken, and the operator stop/wipe commands cut that exact holder first — with the name-pattern method kept only as a safety net for missing, dead, lying or own-chain clues; a strict clue judge (alive, born after the last system boot, own system identity, never an ancestor) protects innocent bystanders; live database migrated with backup on a verified-at-zero machine and a three-scenario live rehearsal on copies; both official closing reviewers ran (quota recovered) and returned CONFORME with all minors resolved; 817 tests |
@@ -48,6 +49,32 @@ Unless noted, decisions from previous sessions remain in effect.
 | 14 | 09/08/2026 | `ses_01bcc78adffemcqFEiZxT52Eli` | Sub-fase 4.4: capture/registration nodes implemented, audited, and post-audit fixes applied (FK-free schema, name columns, upsert tests) |
 | 13 | 08/08/2026 | `ses_01be77680ffeuyoKct4Qrfx1GG` | Repo sync to `fase-4`; new `/save` section with general git commit and push guidance |
 | 12 | 08/08/2026 | `ses_01c089ce2ffe9MvQT4F1pC0MJN` | Sub-fase 4.2 deep audit + post-audit fixes (credentials mapping, playwright lifecycle) |
+
+## Session 55 — 15/11/2026
+`ses_f4af1b961ffe5t8xNspW5U761x` · `ajuste-final-v1`
+
+**Topics**
+- Module 2 sheet rewritten to version 2.0: the location stops being classified by an AI and becomes a link to the preloaded master catalogue of 1,103 Colombian municipalities
+- AI fully retired from the location step: routing, prompt, model doors and their keys; the module never creates, corrects or fills catalogue rows
+- One lot per pass: the second lot that retried pending locations is gone; a pending location is not retried and never blocks the flow
+- Resolution rules: exact match on the normalized municipality name, disambiguation by department when the name repeats, department-only and country-only texts resolved against rows whose municipality is the not-applicable marker, remote without a row, no approximations
+- Existing as-built notes kept and marked as superseded instead of deleted; one of them was lost during an edit, caught by a bullet-count check and restored with its single stale clause corrected
+- Configuration, schema and status sections aligned: seven documented preparation keys, catalogue columns, preloaded catalogue, retired keys and prompt, module declared built and operating with the new design explicitly not yet implemented
+- Two long-standing false statements fixed: a retired evaluation component cited as a dependency, and the company-name normalization rule attributed to the wrong function
+- Work delivered in four verified passes by an external editor; every pass re-checked against the real file because the editor's reports diverged from it three times
+
+**Decisions**
+- User approved: only the Module 2 sheet — no decision log row, no code, configuration, schema, prompt, data or deployment changes
+- AI removed completely from the location; no fallback model kept
+- Department-only, country-only and Bogotá rows are the user's own data work; the module only reads the catalogue
+- The second lot is eliminated outright
+- The sheet declares itself version 2.0 dated 2026-11-15 and cites the redesign by date; the decision number stays unregistered
+- No new decision was registered this session; decisions from previous sessions remain in effect
+
+**Status**
+- Module 2 sheet closed as v2.0 and verified end to end; one file changed, 46 lines added and 47 removed
+- Documentation-only session: lint, typecheck and tests not required (suite stays at 829)
+- Implementation of the catalog-based location pending approval; decision registration pending; active branch `ajuste-final-v1`
 
 ## Session 54 — 15/11/2026
 `ses_f4af1b961ffe5t8xNspW5U761x` · `ajuste-final-v1`
