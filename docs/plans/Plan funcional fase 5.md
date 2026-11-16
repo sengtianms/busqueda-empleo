@@ -1,5 +1,7 @@
 # Plan funcional fase 5
 
+> **Documento histórico.** Conservado como registro del diseño con el que se construyó la fase 5. Superado por la ficha técnica del Módulo 2 v2.0 y por la decisión D77 (2026-11-15): la ubicación ya no se clasifica con inteligencia artificial y el módulo no crea ni corrige filas del catálogo.
+
 ## Orquestador de automatización (capa transversal)
 
 Decisiones tomadas para construir el orquestador que lanza los módulos en orden y supervisa su terminación. Se construye al cierre del Módulo 2.

@@ -377,7 +377,7 @@
 
 ## Rediseño de ubicación del Módulo 2 — catálogo maestro (2026-11-15)
 
-> Diseño aprobado por el usuario el 2026-11-15: la ubicación deja de clasificarse con un modelo y se enlaza contra el catálogo maestro de los 1.103 municipios de Colombia, que llega cargado y solo se lee. El número de decisión aún no está registrado en el libro. **Este tramo solo actualizó la ficha técnica**; la construcción está pendiente de aprobación.
+> Diseño aprobado por el usuario el 2026-11-15: la ubicación deja de clasificarse con un modelo y se enlaza contra el catálogo maestro de los 1.103 municipios de Colombia, que llega cargado y solo se lee. Decisión D77 registrada en el libro (versión 1.56). **Este tramo actualizó solo la documentación**; la construcción está pendiente de aprobación.
 
 | # | Cambio | Estado | Notas |
 |---|--------|--------|-------|
@@ -385,8 +385,9 @@
 | 2 | Retiro efectivo de la clasificación por IA | ⬜ | La ficha ya da por retiradas la ruta, el prompt, las puertas alternas, la espera por puerta y el umbral de alias difuso. El programa todavía las usa: hasta que se construya, el módulo sigue clasificando la ubicación como antes. |
 | 3 | Enlace por catálogo | ⬜ | Pendiente de construcción: normalización del texto, coincidencia exacta por municipio, desambiguación por departamento, filas de municipio `N/A` para textos de solo departamento o solo país, remoto sin fila, pendiente sin coincidencia, lectura única y caché por texto. |
 | 4 | Datos de catálogo del operador | ⬜ | El usuario agregará las filas de solo departamento y solo país (municipio `N/A`) y gestionará el caso de Bogotá; mientras no existan, esas ofertas quedan pendientes. |
-| 5 | Registro de la decisión | ⬜ | La ficha cita el rediseño por fecha y deja constancia de que el número está pendiente de registro. |
+| 5 | Registro de la decisión | ✅ | Decisión D77 registrada en el libro (versión 1.56, 2026-11-15) y en el plan del MVP como sub-fase 5.8. |
 | 6 | Afirmaciones desactualizadas corregidas | ✅ | Estado del módulo (construido y en operación, con el rediseño marcado como no implementado) y dos notas del nodo de duplicidad (componente retirado y regla de normalización de empresas). |
+| 7 | Alineación documental de D77 | ✅ | Diez documentos oficiales alineados: libro de decisiones (versión 1.56), modelo de datos, referencia de tablas, catálogo de prefijos, plan del MVP (sub-fase 5.8 y nota de superación), fichas de los Módulos 1 y 2, contrato operativo, tracker y plan funcional de la fase 5 marcado como histórico. |
 
 ---
 

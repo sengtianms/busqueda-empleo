@@ -5,6 +5,7 @@ Unless noted, decisions from previous sessions remain in effect.
 ## Sessions index
 | № | Date | Session ID | Summary |
 |---|---|---|---|
+| 56 | 15/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Decision D77 registered in the official log (version 1.56) and the whole official documentation aligned with it in ten files: the location stops being classified by a model and is linked against the preloaded master catalogue of 1,103 Colombian municipalities that the module only reads; data model, tables reference, prefix catalogue, both module sheets, MVP plan (new sub-phase 5.8 plus a supersession note), operating contract, tracker and the phase-5 functional plan now marked historical; a false "decision number pending" statement repeated in three documents eliminated and the construction sheet made to cite the number; documents-only, zero code, configuration, database, prompt or deployment changes, construction pending approval |
 | 55 | 15/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Module 2 sheet rewritten to version 2.0: the location is linked from the preloaded master catalogue of 1,103 Colombian municipalities instead of being classified by AI, the AI route, prompt, keys and reserve doors are retired, the second lot and the retry of pending locations are eliminated, department-only and country-only texts resolve against operator-maintained not-applicable rows, and the module is documented as never creating or correcting catalogue rows; historical notes kept and marked as superseded, one of them restored after an accidental deletion caught by the acceptance checks; configuration, schema and status sections aligned and two stale technical references fixed; documents-only, implementation pending approval and decision number still unregistered |
 | 54 | 15/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Location catalog column rename (ciudad → municipio, region → departamento) aligned with Colombian administrative terminology across schema, models, preparation node, prompt, tests and docs; idempotent migration added for existing databases; the ubicaciones catalog then populated with all 1,103 Colombian municipalities from user-provided lists, sequence counter updated to 1,103; Module 3 then redesigned as two AI-free processes (decision D76 in log v1.55) — the scheduled batch exports prepared offers into chat-readable lots and a one-line manual command imports the chat's answer under strict whole-line validation, retiring the answering-door chain (D49/D50/D59 superseded for this module only) with no schema change; sheet rewritten to version 2.0 and nine official documents aligned, documentation reviewer approved with one minor corrected; construction pending approval |
 | 53 | 10/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Two criterion decisions registered documents-only, closing two more post-V1 backlog items: the naming criterion for the future stages was fixed before their design (Spanish continuity, the user's choice — the future Modules 4–5 follow the same Spanish-identifier rule already approved three times, with the unchanged public module entry), and the naming drift of the operations layer was regularized by extending the exception rather than renaming (the operator-facing pieces — narration voice, commands, live board, watchdog, notifier, reports, wrappers, unit names and their tests — are now an approved Spanish exception, closed to that layer, with zero renames and the live deployment untouched); both changes verified by the docs reviewer as CONFORME with minors resolved; the doc reviewer also re-confirmed that the already-implemented chair-cut backlog item (4.3) was closed in the previous stretch |
@@ -49,6 +50,36 @@ Unless noted, decisions from previous sessions remain in effect.
 | 14 | 09/08/2026 | `ses_01bcc78adffemcqFEiZxT52Eli` | Sub-fase 4.4: capture/registration nodes implemented, audited, and post-audit fixes applied (FK-free schema, name columns, upsert tests) |
 | 13 | 08/08/2026 | `ses_01be77680ffeuyoKct4Qrfx1GG` | Repo sync to `fase-4`; new `/save` section with general git commit and push guidance |
 | 12 | 08/08/2026 | `ses_01c089ce2ffe9MvQT4F1pC0MJN` | Sub-fase 4.2 deep audit + post-audit fixes (credentials mapping, playwright lifecycle) |
+
+## Session 56 — 15/11/2026
+`ses_f4af1b961ffe5t8xNspW5U761x` · `ajuste-final-v1`
+
+**Topics**
+- Decision D77 registered in the official log (version 1.56): the location of an offer is linked against the preloaded master catalogue of Colombian municipalities instead of being classified by a model
+- Scope of the decision stated explicitly: it supersedes the preparation foundations' AI clause, the routed model, the fixed Colombian-department shortcut, the model swap, the alias fusion and the reserve doors — for location only, nothing else
+- Ten official documents aligned one by one, each through its own self-contained instruction and each verified against the real file rather than the editor's report
+- Data model brought in line: the location entity loses the old column names, gains the preloaded-catalogue identity and the operator-maintained not-applicable rows; the offer keeps the raw text and gains a deterministic link; a new history row records the decision
+- Tables reference now describes the catalogue as operator data the module only reads, with the real counts (1,103 rows, 1,021 distinct municipality names) instead of the old empty five-row picture
+- Prefix catalogue row for locations rewritten; the company row deliberately untouched
+- Module 1 sheet note corrected: it no longer credits the prompt being retired with resolving the location
+- MVP plan gains sub-phase 5.8 (build the catalogue link, retire the AI machinery) plus a note declaring the AI description of the earlier sub-phases superseded
+- Module 2 sheet, the construction document, now cites the decision number in its header, its four superseded notes and its module-status paragraph
+- A false statement repeated in three documents — that the decision number was still unregistered — was found and eliminated once the decision existed
+- Phase-5 functional plan kept as a historical record with a warning at the top instead of being rewritten
+- Every report re-checked against the file; three of my own expected counts were wrong rather than the documents
+
+**Decisions**
+- D77 (log version 1.56, 2026-11-15): location linked from the preloaded catalogue, AI retired for location, one lot per pass, a pending location neither retried nor blocking, the module read-only on the catalogue; supersedes D33's AI clause, D35, D43, D44, D46 and D75 for this matter
+- The column rename is recorded as an as-built note dated 2026-11-15 without a decision number, because it never had one
+- The phase-5 functional plan is not rewritten: it stays as the record of what was designed and built, marked historical
+- The location prompt retires when the redesign is built, not now
+- The construction sheet carries the decision number, approved as a small traceability change
+- Decisions from previous sessions remain in effect
+
+**Status**
+- Documentation-only session: ten files changed, zero code, configuration, database, prompt or deployment changes
+- Lint, typecheck and tests not required (suite stays at 829)
+- Construction of sub-phase 5.8 pending approval; operator data still missing (department-only, country-only and Bogotá rows); active branch `ajuste-final-v1`
 
 ## Session 55 — 15/11/2026
 `ses_f4af1b961ffe5t8xNspW5U761x` · `ajuste-final-v1`
