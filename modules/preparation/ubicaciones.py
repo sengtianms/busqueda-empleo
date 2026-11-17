@@ -12,7 +12,6 @@ from loguru import logger
 from shared.utilidades import normalizar_texto
 
 PENDIENTE = "N/A"
-NO_REPORTADO = "N/R"
 REMOTOS = frozenset({"remoto", "trabajo remoto", "remote"})
 EQUIVALENCIAS = {"distrito capital": "bogota"}
 
@@ -22,9 +21,10 @@ class CatalogoUbicaciones:
 
     def __init__(self, filas: Iterable[Mapping[str, Any]]) -> None:
         self.esta_vacio = True
+        self.fila_no_aplica_id: str | None = None
+        self.fila_pais_id: str | None = None
         self._municipios: dict[str, list[tuple[str, str]]] = defaultdict(list)
         self._departamentos: dict[str, str | None] = {}
-        self._fila_pais: str | None = None
         self._nombres_departamento: set[str] = set()
 
         filas_lista = list(filas)
@@ -34,6 +34,7 @@ class CatalogoUbicaciones:
         dept_sentinel_ids: dict[str, str] = {}
         dept_count = 0
         mun_count = 0
+        fila_no_aplica_id: str | None = None
 
         for fila in filas_lista:
             fila_id = fila.get("id", "")
@@ -43,6 +44,10 @@ class CatalogoUbicaciones:
             dept_raw = fila.get("departamento", "")
 
             if mun_raw == "N/A" and dept_raw == "N/A":
+                pais_raw = fila.get("pais", "")
+                if pais_raw == "N/A":
+                    fila_no_aplica_id = fila_id
+                    continue
                 conte_pais += 1
                 if conte_pais == 1:
                     fila_pais_id = fila_id
@@ -68,7 +73,8 @@ class CatalogoUbicaciones:
                 self._departamentos[dept_key] = dept_sentinel_ids.get(dept_key)
             self._nombres_departamento.add(dept_key)
 
-        self._fila_pais = fila_pais_id if conte_pais == 1 else None
+        self.fila_pais_id = fila_pais_id if conte_pais == 1 else None
+        self.fila_no_aplica_id = fila_no_aplica_id
 
         if mun_count == 0 and dept_count == 0 and conte_pais == 0:
             self.esta_vacio = True
@@ -89,14 +95,13 @@ class CatalogoUbicaciones:
         else:
             clave = None
 
-        # 2. Vacío o centinela
+        # 2. Vacío, centinela o remoto → fila "no aplica" o PENDIENTE
         texto_stripped = texto_crudo.strip()
         if not texto_stripped or texto_stripped in ("N/A", "N/R"):
-            return NO_REPORTADO
+            return self._guardar(memoria, clave, self._no_aplica_o_pendiente())
 
-        # 3. Remoto
         if normalizar_texto(texto_stripped) in REMOTOS:
-            return NO_REPORTADO
+            return self._guardar(memoria, clave, self._no_aplica_o_pendiente())
 
         if self.esta_vacio:
             return PENDIENTE
@@ -110,16 +115,11 @@ class CatalogoUbicaciones:
             n = normalizar_texto(s)
             if not n:
                 continue
-            if n.endswith(" d c"):
-                n = n[:-4]
-            elif n.endswith(" dc"):
-                n = n[:-3]
-            if n in EQUIVALENCIAS:
-                n = EQUIVALENCIAS[n]
+            n = self.limpiar_municipio(n)
             segmentos.append(n)
 
         if not segmentos:
-            return NO_REPORTADO
+            return self._guardar(memoria, clave, self._no_aplica_o_pendiente())
 
         # 6. Clasificar
         paises, dept_cand, mun_cand, desconocidos = [], [], [], []
@@ -180,10 +180,90 @@ class CatalogoUbicaciones:
 
         # 12. Solo país
         if paises and not dept_cand and not mun_cand:
-            res = self._fila_pais if self._fila_pais is not None else PENDIENTE
+            res = self.fila_pais_id if self.fila_pais_id is not None else PENDIENTE
             return self._guardar(memoria, clave, res)
 
         return self._guardar(memoria, clave, PENDIENTE)
+
+    def _no_aplica_o_pendiente(self) -> str:
+        """Return the 'no aplica' row id, or the pending sentinel if absent."""
+        return self.fila_no_aplica_id if self.fila_no_aplica_id is not None else PENDIENTE
+
+    @staticmethod
+    def limpiar_municipio(municipio_normalizado: str) -> str:
+        """Clean municipality name: remove trailing D.C./dc suffix, apply equivalences."""
+        n = municipio_normalizado
+        if n.endswith(" d c"):
+            n = n[:-4]
+        elif n.endswith(" dc"):
+            n = n[:-3]
+        if n in EQUIVALENCIAS:
+            n = EQUIVALENCIAS[n]
+        return n
+
+    def buscar_por_componentes(
+        self, municipio: str, departamento: str, pais: str
+    ) -> str | None:
+        """Search by components for AI-driven linking without creating duplicates.
+
+        Returns the catalogue id or ``None`` when the municipality is unknown
+        or ambiguous.  The country parameter is ignored.
+        """
+        mun_norm = self.limpiar_municipio(normalizar_texto(municipio))
+        dept_norm = normalizar_texto(departamento) if departamento not in ("", "N/A", "N/R") else ""
+
+        if not mun_norm:
+            return None
+
+        filas = self._municipios.get(mun_norm)
+        if filas is None:
+            return None
+
+        if len(filas) == 1:
+            return filas[0][0]
+
+        # Varios: necesita departamento para desambiguar
+        if not dept_norm:
+            return None
+        coinc = [f for f in filas if f[1] == dept_norm]
+        if len(coinc) == 1:
+            return coinc[0][0]
+        return None
+
+    def municipio_conocido(self, municipio: str) -> bool:
+        """True if at least one catalogue row has this municipality (after cleaning)."""
+        mun_norm = self.limpiar_municipio(normalizar_texto(municipio))
+        if not mun_norm:
+            return False
+        return mun_norm in self._municipios
+
+    def departamento_en_texto(self, texto: str) -> str | None:
+        """Find a department id within free-form text, ignoring equivalences.
+
+        Splits by comma, normalizes each part, and matches against known
+        department names.  Returns the department row id when exactly one
+        unambiguous department is found; otherwise ``None``.
+        """
+        dept_cand: list[str] = []
+        for s in texto.split(","):
+            s = s.strip()
+            if not s:
+                continue
+            n = normalizar_texto(s)
+            if not n:
+                continue
+            # No equivalencias aquí: se busca departamento, no municipio
+            if n in self._nombres_departamento and n not in self._municipios:
+                dept_cand.append(n)
+            elif n in self._nombres_departamento and n in self._municipios:
+                # Homónimo: se prefiere como municipio, no como departamento
+                continue
+
+        if len(dept_cand) != 1:
+            return None
+
+        dept_id = self._departamentos.get(dept_cand[0])
+        return dept_id
 
     @staticmethod
     def _guardar(

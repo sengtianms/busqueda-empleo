@@ -5,6 +5,7 @@ Unless noted, decisions from previous sessions remain in effect.
 ## Sessions index
 | № | Date | Session ID | Summary |
 |---|---|---|---|
+| 58 | 17/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Location redesign advanced in four verified steps: the preparation node was wired to the deterministic engine with a single lot per pass and the catalogue read once per run; the catalogue gained a marker for who created each row and an all-not-applicable system row, with the live database migrated in place and the previous rows proven identical against the backup; the engine learned the special-row identifiers, component search tolerant of the capital's name variants, department lookup inside free text, and the "not reported" state was retired. The AI then returned as an exception only — Gemma 4 31B through a single OpenRouter door with the local route switched off and the key kept in the unversioned secrets file — completing the cascade: catalogue, one AI question per text, component lookup, creation only for truly unknown municipalities, named department, country row, and a stop when the special rows are missing. Verified end to end on a database copy and against the live model, 868 tests, lint and types clean, live data untouched |
 | 57 | 17/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Construction of the location redesign started one verified step at a time: the master catalogue gained the 33 operator rows (32 department-only plus one country-only) on top of the 1,103 municipalities through the project's persistence API, with a backup and the original rows proven identical; then the AI-free linking engine was built and verified with 21 tests — strict exact matching after normalization, department disambiguation for repeated municipality names, department reading for the eight homonyms, fixed equivalences for Bogotá D.C. and Distrito Capital, honest pending for metropolitan-area variants and unknown names, run memory by text and a read-only catalogue; two corrective rounds removed identifiers that only existed in code and an order-dependent tolerance; repository-wide lint restored and the empty-catalogue warning pinned by its test; 850 tests, types and lint clean, and a replay of 129 archived offers links 123 with zero invented identifiers; runtime behavior unchanged until node integration |
 | 56 | 15/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Decision D77 registered in the official log (version 1.56) and the whole official documentation aligned with it in ten files: the location stops being classified by a model and is linked against the preloaded master catalogue of 1,103 Colombian municipalities that the module only reads; data model, tables reference, prefix catalogue, both module sheets, MVP plan (new sub-phase 5.8 plus a supersession note), operating contract, tracker and the phase-5 functional plan now marked historical; a false "decision number pending" statement repeated in three documents eliminated and the construction sheet made to cite the number; documents-only, zero code, configuration, database, prompt or deployment changes, construction pending approval |
 | 55 | 15/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Module 2 sheet rewritten to version 2.0: the location is linked from the preloaded master catalogue of 1,103 Colombian municipalities instead of being classified by AI, the AI route, prompt, keys and reserve doors are retired, the second lot and the retry of pending locations are eliminated, department-only and country-only texts resolve against operator-maintained not-applicable rows, and the module is documented as never creating or correcting catalogue rows; historical notes kept and marked as superseded, one of them restored after an accidental deletion caught by the acceptance checks; configuration, schema and status sections aligned and two stale technical references fixed; documents-only, implementation pending approval and decision number still unregistered |
@@ -51,6 +52,35 @@ Unless noted, decisions from previous sessions remain in effect.
 | 14 | 09/08/2026 | `ses_01bcc78adffemcqFEiZxT52Eli` | Sub-fase 4.4: capture/registration nodes implemented, audited, and post-audit fixes applied (FK-free schema, name columns, upsert tests) |
 | 13 | 08/08/2026 | `ses_01be77680ffeuyoKct4Qrfx1GG` | Repo sync to `fase-4`; new `/save` section with general git commit and push guidance |
 | 12 | 08/08/2026 | `ses_01c089ce2ffe9MvQT4F1pC0MJN` | Sub-fase 4.2 deep audit + post-audit fixes (credentials mapping, playwright lifecycle) |
+
+## Session 58 — 17/11/2026
+`ses_f4af1b961ffe5t8xNspW5U761x` · `rediseno-ubicacion`
+
+**Topics**
+- Preparation node wired to the deterministic engine: single lot per pass, catalogue read once per run, AI disconnected and the old two-lot retry removed
+- Location catalogue gained a marker distinguishing operator rows from system rows plus one all-not-applicable system row; live database migrated in place with a backup taken first and the previous rows proven identical afterwards
+- Engine extended: identifiers for both special rows, component search tolerant of the capital's name variants, department lookup inside free text, and the "not reported" state retired in favour of the not-applicable row
+- AI reconnected as an exception only: Gemma 4 31B through a single OpenRouter door, the local route switched off by configuration, and the key kept solely in the unversioned secrets file
+- Full cascade implemented in the preparation node: catalogue first, one AI question per distinct text, component lookup, creation only for truly unknown municipalities, department named in the text, then the country row; missing special rows stop the run
+- Created rows carry normalized components and the system marker, and a repeated municipality reuses the row created earlier in the same run without another AI call
+- Three corrective rounds: the sequential identifier generator reused instead of rebuilt, normalization/caching/dead code fixed, and the cache type plus the no-empty-field guard corrected
+- End-to-end verification on a database copy and against the live model: unknown place created and reused, remote and empty text to the not-applicable row, known place linked to its operator row
+- Model behaviour observed: invented or non-place texts come back as invalid JSON, so the cascade answers with the country row instead of inventing a place
+- Operational finding: the live database is held open by the viewer, so the file on disk is stale and plain file copies lose recent data — the official copy method is required
+
+**Decisions**
+- The master catalogue keeps three special rows (32 department-only, one country-only, one all-not-applicable) and an origin marker separating operator rows from system rows
+- Cascade order fixed as implemented: exact catalogue, one AI question, component lookup, creation only when the municipality truly does not exist, department named in the text, country row; modality is never evaluated
+- The AI is not retired but kept as an exception, served by a single Gemma route with the local door switched off; this supersedes the "no AI / no row creation" clauses of D77, whose replacement decision is still pending registration
+- Created rows never duplicate: a repeated municipality reuses the row created in the same run
+- These refinements are pending registration in the official decision log at the redesign's closure
+- Decisions from previous sessions remain in effect
+
+**Status**
+- Steps 0–3c built and verified: 868 tests, lint and types clean, live database untouched (1,137 locations, zero offers)
+- End-to-end behaviour proven on a copy with the real model: one AI call per distinct text, unknown place created with the system marker and reused, remote and empty text to the not-applicable row
+- Pending: real run, replacement decision that supersedes D77's AI and creation clauses, sheet and tracker alignment, and cleanup of stale texts plus the unused alias threshold
+- Active branch `rediseno-ubicacion`
 
 ## Session 57 — 17/11/2026
 `ses_f4af1b961ffe5t8xNspW5U761x` · `rediseno-ubicacion`

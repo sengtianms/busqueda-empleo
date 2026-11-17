@@ -1,9 +1,10 @@
-"""Unit tests for the location-classifier reserve doors (decision D75).
+"""Unit tests for the location-classifier doors (decision D75).
 
 Mirror of the evaluation's door-rotation tests (D59): a failed door is
 marked down for the run and the next one answers at once; a malformed
-ANSWER never silences a door; with every door down the location stays
-pending with one aggregated ERR-08. AI is mocked by patching
+ANSWER never silences a door; with every door down the cascade falls back
+to department or country row. The `puerta_principal_activa` switch controls
+whether the local door is included. AI is mocked by patching
 `analyze`/`analyze_openrouter`; SQLite via the `temp_db_file` fixture.
 """
 
@@ -17,13 +18,9 @@ import pytest
 
 import modules.preparation.nodes.preparacion as preparacion
 from modules.preparation.nodes.inicio import _validar_preparacion
-from modules.preparation.nodes.preparacion import (
-    _clasificar_con_puertas,
-    _diligenciar_ubicacion,
-)
+from modules.preparation.nodes.preparacion import _clasificar_con_puertas
 from modules.preparation.run_context import RunContext
 from shared.errors import LLMError
-from shared.persistence import buscar_por_id
 
 CONFIG_PUERTAS: dict[str, Any] = {
     "umbral_titulo": 90,
@@ -38,6 +35,7 @@ CONFIG_PUERTAS: dict[str, Any] = {
         "multiplier": 1,
     },
     "timeout_puerta_segundos": 60,
+    "puerta_principal_activa": True,
     "puertas_alternas": [
         {
             "nombre": "openrouter-1",
@@ -253,58 +251,6 @@ def test_respuesta_invalida_de_esquema_no_rota_ni_marca_puerta(
     )
 
 
-# ------------------------------------------------------------ Flujo completo
-
-
-def test_diligenciar_ubicacion_usa_reserva_y_cachea_el_exito(
-    temp_db_file: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    contexto = _contexto()
-
-    def falso_analyze(*args: Any, **kwargs: Any) -> dict[str, Any]:
-        raise LLMError("003", "local Ollama responded with code 402")
-
-    def falso_reserva(*args: Any, **kwargs: Any) -> dict[str, Any]:
-        return dict(RESPUESTA_BOGOTA)
-
-    monkeypatch.setattr(preparacion, "analyze", falso_analyze)
-    monkeypatch.setattr(preparacion, "analyze_openrouter", falso_reserva)
-
-    resultado = _diligenciar_ubicacion(contexto, "Bogotá")
-
-    assert resultado == "UBI-0001"  # primera fila del catálogo
-    fila = buscar_por_id("ubicaciones", "UBI-0001")
-    assert fila is not None
-    # VAL-04: la fila guarda los componentes normalizados.
-    assert fila["municipio"] == "bogota"
-    # RN-07: solo los éxitos se cachean; aquí hubo éxito por la reserva.
-    assert contexto.cache_ia["Bogotá"] == ("Bogotá", "Distrito Capital", "Colombia")
-
-
-def test_diligenciar_ubicacion_pendiente_no_se_cachea(
-    temp_db_file: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    contexto = _contexto()
-
-    def falso_analyze(*args: Any, **kwargs: Any) -> dict[str, Any]:
-        raise LLMError("003", "local Ollama responded with code 402")
-
-    def falso_reserva(*args: Any, **kwargs: Any) -> dict[str, Any]:
-        raise LLMError("003", "openrouter-1 rejected the key (401)")
-
-    monkeypatch.setattr(preparacion, "analyze", falso_analyze)
-    monkeypatch.setattr(preparacion, "analyze_openrouter", falso_reserva)
-
-    assert _diligenciar_ubicacion(contexto, "Bogotá") == "N/A"
-    # RN-07: los fallos no se cachean; el lote (b)/la tanda siguiente reintenta.
-    assert "Bogotá" not in contexto.cache_ia
-    assert set(contexto.puertas_caidas) == {
-        "principal",
-        "openrouter-1",
-        "openrouter-2",
-    }
-
-
 # --------------------------------------------------------- Validación (VAL-02)
 
 
@@ -336,3 +282,118 @@ def test_validacion_acepta_lista_vacia_solo_principal() -> None:
     seccion = dict(CONFIG_PUERTAS)
     seccion["puertas_alternas"] = []
     assert _validar_preparacion(seccion) is None
+
+
+# ------------------------------------------------ Interruptor puerta principal
+
+
+def test_puertas_con_interruptor_apagado_solo_alternas() -> None:
+    """When puerta_principal_activa is False, only alternate doors are returned."""
+    from modules.preparation.nodes.preparacion import _puertas_clasificacion
+
+    seccion = dict(CONFIG_PUERTAS)
+    seccion["puerta_principal_activa"] = False
+    puertas = _puertas_clasificacion(seccion)
+    nombres = [p["nombre"] for p in puertas]
+    assert "principal" not in nombres
+    assert "openrouter-1" in nombres
+
+
+def test_validacion_rechaza_puerta_principal_no_booleana() -> None:
+    """puerta_principal_activa must be boolean if present."""
+    seccion = dict(CONFIG_PUERTAS)
+    seccion["puerta_principal_activa"] = "false"
+    assert _validar_preparacion(seccion) == (
+        "puerta_principal_activa debe ser booleano (true/false)"
+    )
+
+
+def test_validacion_rechaza_principal_apagada_con_alternas_vacias() -> None:
+    """puerta_principal_activa false requires at least one alternate door."""
+    seccion = dict(CONFIG_PUERTAS)
+    seccion["puerta_principal_activa"] = False
+    seccion["puertas_alternas"] = []
+    assert _validar_preparacion(seccion) == (
+        "puerta_principal_activa false requiere al menos una puerta alterna"
+    )
+
+
+def test_validacion_acepta_principal_apagada_con_una_alternas() -> None:
+    """puerta_principal_activa false with one alternate door is valid."""
+    seccion = dict(CONFIG_PUERTAS)
+    seccion["puerta_principal_activa"] = False
+    seccion["puertas_alternas"] = [
+        {
+            "nombre": "openrouter-1",
+            "modelo": "google/gemma-4-31b-it",
+            "clave_ref": "OPENROUTER_API_KEY_1",
+        }
+    ]
+    assert _validar_preparacion(seccion) is None
+
+
+def test_reserva_crea_fila_con_componentes_normalizados(
+    monkeypatch: pytest.MonkeyPatch, temp_db_file: Path
+) -> None:
+    """Reserve door creates a row with normalized components; second call caches."""
+    from modules.preparation.nodes.preparacion import _diligenciar_ubicacion
+    from modules.preparation.run_context import RunContext
+    from modules.preparation.ubicaciones import CatalogoUbicaciones
+    from shared.persistence import (
+        change_path,
+        escribir_fila,
+        init_db,
+        leer_tabla,
+    )
+
+    change_path(temp_db_file)
+    init_db()
+    escribir_fila(
+        "ubicaciones",
+        {"municipio": "N/A", "departamento": "N/A", "pais": "Colombia"},
+    )
+    escribir_fila(
+        "ubicaciones",
+        {"municipio": "N/A", "departamento": "N/A", "pais": "N/A"},
+    )
+
+    filas = leer_tabla("ubicaciones")
+    catalogo = CatalogoUbicaciones(filas)
+
+    seccion = dict(CONFIG_PUERTAS)
+    seccion["puerta_principal_activa"] = False
+    contexto = RunContext(
+        config_preparacion=seccion, candidatas=[], id_corrida="COR-NORM"
+    )
+    contexto.catalogo_ubicaciones = catalogo
+
+    llamadas_ia = {"count": 0}
+
+    def falso_analyze(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        raise LLMError("003", "local Ollama responded with code 402")
+
+    def falso_reserva(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        llamadas_ia["count"] += 1
+        return {
+            "municipio": "Cota",
+            "departamento": "Cundinamarca",
+            "pais": "Colombia",
+        }
+
+    monkeypatch.setattr(preparacion, "analyze", falso_analyze)
+    monkeypatch.setattr(preparacion, "analyze_openrouter", falso_reserva)
+
+    texto = "Cota, Cundinamarca, Colombia"
+    id_primero = _diligenciar_ubicacion(contexto, texto)
+    id_segundo = _diligenciar_ubicacion(contexto, texto)
+
+    assert id_primero == id_segundo
+    assert llamadas_ia["count"] == 1
+    assert contexto.cache_ia[texto] == ("Cota", "Cundinamarca", "Colombia")
+
+    fila = leer_tabla("ubicaciones", {"id": id_primero})
+    assert len(fila) == 1
+    assert fila[0]["municipio"] == "cota"
+    assert fila[0]["departamento"] == "cundinamarca"
+    assert fila[0]["pais"] == "colombia"
+    assert fila[0]["origen"] == "sistema"

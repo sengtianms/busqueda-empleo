@@ -2,7 +2,10 @@
 
 import sqlite3
 
+from shared.utilidades import ahora
+
 from ._conexion import _connection
+from ._escrituras import _generar_id_en
 from ._esquemas import (
     _ADICIONES_EVALUACION,
     _ADICIONES_PREPARACION,
@@ -62,6 +65,7 @@ def init_db() -> None:
         _migrate_listas_duplicados_d71(conn)
         _migrate_silla_proceso_d72(conn)
         _migrate_ubicaciones_columnas(conn)
+        _migrate_ubicaciones_d77(conn)
         for sentencia in _INDICES:
             conn.execute(sentencia)
         conn.commit()
@@ -617,3 +621,52 @@ def _migrate_corridas_finalizacion(conn: sqlite3.Connection) -> None:
         nombre_columna = definicion.split(" ")[0]
         if nombre_columna not in columnas:
             conn.execute(f"ALTER TABLE corridas ADD COLUMN {definicion}")
+
+
+def _migrate_ubicaciones_d77(conn: sqlite3.Connection) -> None:
+    """Add `origen` column to `ubicaciones` and seed the triple-N/A row.
+
+    The row represents job offers that report no location. It must be
+    distinguished from the country row (which has a country name other
+    than ``N/A``).  Because the system creates it, the origin is
+    ``sistema``.  The sequential id generator handles the identifier
+    and counter; no manual format or maximum calculation is needed.
+    Idempotent: safe to run on every init (D77).
+    """
+    columnas = {
+        f["name"] for f in conn.execute(
+            "PRAGMA table_info(ubicaciones)"
+        ).fetchall()
+    }
+    if columnas and "origen" not in columnas:
+        conn.execute(
+            "ALTER TABLE ubicaciones ADD COLUMN origen TEXT DEFAULT 'operador'"
+        )
+    if conn.execute(
+        "SELECT COUNT(*) FROM ubicaciones "
+        "WHERE municipio='N/A' AND departamento='N/A' AND pais='N/A'"
+    ).fetchone()[0] == 0:
+        _sync_secuencia_ubicaciones(conn)
+        fid = _generar_id_en(conn, "ubicaciones")
+        ts = ahora()
+        conn.execute(
+            "INSERT INTO ubicaciones "
+            "(id, municipio, departamento, pais, origen, "
+            "fecha_creacion, fecha_ultima_edicion) "
+            "VALUES (?, 'N/A', 'N/A', 'N/A', 'sistema', ?, ?)",
+            (fid, ts, ts),
+        )
+
+
+def _sync_secuencia_ubicaciones(conn: sqlite3.Connection) -> None:
+    """Ensure secuencia_ids for ubicaciones matches the highest existing ID."""
+    conn.execute(
+        "INSERT INTO secuencia_ids (tabla_nombre, prefijo, ultimo_numero) "
+        "VALUES ('ubicaciones', 'UBI', "
+        "(SELECT COALESCE(MAX(CAST(SUBSTR(id, 5) AS INTEGER)), 0) "
+        "FROM ubicaciones WHERE id LIKE 'UBI-%')) "
+        "ON CONFLICT(tabla_nombre) DO UPDATE SET "
+        "ultimo_numero = MAX(ultimo_numero, "
+        "(SELECT COALESCE(MAX(CAST(SUBSTR(id, 5) AS INTEGER)), 0) "
+        "FROM ubicaciones WHERE id LIKE 'UBI-%'))"
+    )

@@ -1,31 +1,17 @@
-"""Preparación de ofertas node of the Preparation flow (ficha M2 v1.0).
+"""Preparación de ofertas node of the Preparation flow (ficha M2 v2.1).
 
-Process node, re-entrant per pass (sheet pasos funcionales 1-9). For every
+Process node, single lot per pass (sheet pasos funcionales 1-9). For every
 offer in `descubierta` (FIFO): capture the offer page without login (guest
 httpx session with browser headers, no Playwright on the critical path —
 D4), populate the `empresas` catalog (dedup by `nombre_normalizado`, no AI)
-and the `ubicaciones` catalog (AI classifies the raw location text only —
-PRM-006, purpose routing `ai_routing.preparacion`), update the offer and
+and link the location against the master `ubicaciones` catalogue read once
+per run. When the deterministic engine does not recognize the text, Gemma
+via OpenRouter resolves; the offer is always linked to a real catalogue row,
+creating it (marked as sistema) only when the municipality does not exist.
+No writes to `ubicaciones` from the deterministic path. Update the offer and
 write the per-offer event with `id_oferta` (RN-09). Duplication is NOT
 verified here (next node) and `fecha_ultima_verificacion` is never touched
 (RN-11).
-
-Traspaso aprobado (2026-08-25): the raw location (`ubicacion`) and the
-modality are captured by Module 1 from the SDUi card and live on the offer
-row; this node no longer extracts them from the page HTML — it only
-classifies the stored text via PRM-006 and links `ubicacion_id`.
-
-Two lots per pass (H1, RN-01): (a) `descubierta` — full capture steps 1-5;
-(b) `preparada` with `ubicacion_id = 'N/A'` — only classify / seek-create /
-update, without re-capturing the page (the raw text is already stored in
-`ubicacion`). Lot (b) is re-queried AFTER lot (a) so offers whose AI
-classification failed in this same pass are retried immediately (RN-02:
-every pass re-queries the database; the INICIO iterator is never reused).
-
-AI never blocks the capture (RN-07): on failure or Ollama down the offer is
-still prepared with `ubicacion_id = 'N/A'` (pending, ERR-08) and only
-successful classifications are cached per distinct raw text — caching
-failures would neutralize lot (b).
 
 Interpretation note: the sheet's functional-step table maps the lot
 determination failure to ERR-05, but ERR-05 in this node's error table is
@@ -44,10 +30,10 @@ import httpx
 from bs4 import BeautifulSoup, Tag
 from loguru import logger
 from pydantic import BaseModel, ValidationError
-from rapidfuzz import fuzz
 
 from modules.preparation.nodes.inicio import _validar_preparacion
 from modules.preparation.run_context import RunContext
+from modules.preparation.ubicaciones import PENDIENTE, CatalogoUbicaciones
 from shared.ia_service import analyze, analyze_openrouter
 from shared.persistence import (
     actualizar_fila,
@@ -61,7 +47,6 @@ from shared.utilidades import normalizar_nombre_empresa, normalizar_texto
 
 # Technical capture constants (module-level like Module 1 selector constants;
 # business parameters — pauses, retries, session lifetime — come from config).
-PROMPT_UBICACION = "preparacion/ubicacion"
 BASE_LINKEDIN = "https://www.linkedin.com"
 TIMEOUT_CAPTURA_SEGUNDOS = 15.0
 HEADERS_NAVEGADOR = {
@@ -80,6 +65,7 @@ MARCADORES_AUTHWALL = (
     "join linkedin",
     "iniciar sesion para continuar",
 )
+PROMPT_UBICACION = "preparacion/ubicacion"
 
 
 class ClasificacionUbicacion(BaseModel):
@@ -342,132 +328,111 @@ def _diligenciar_empresa(
     return empresa_id
 
 
-def _normalizar_componente(componente: str) -> str:
-    """Normalize one tuple component, preserving the `N/A` sentinel (D31)."""
-    if componente == "N/A":
-        return "N/A"
-    return normalizar_texto(componente) or "N/A"
+def _diligenciar_ubicacion(contexto: RunContext, texto_crudo: str) -> str:
+    """Paso 3: cascade — deterministic engine, then AI, then fallbacks.
 
-
-# Chuleta determinista de departamentos de Colombia (D43): claves y valores
-# ya en forma `normalizar_texto`. Bogotá D.C. mapea a su región oficial.
-REGIONES_COLOMBIA: dict[str, str] = {
-    "amazonas": "amazonas",
-    "antioquia": "antioquia",
-    "arauca": "arauca",
-    "atlantico": "atlantico",
-    "bolivar": "bolivar",
-    "boyaca": "boyaca",
-    "distrito capital": "distrito capital",
-    "caldas": "caldas",
-    "caqueta": "caqueta",
-    "casanare": "casanare",
-    "cauca": "cauca",
-    "cesar": "cesar",
-    "choco": "choco",
-    "cordoba": "cordoba",
-    "cundinamarca": "cundinamarca",
-    "guainia": "guainia",
-    "guaviare": "guaviare",
-    "huila": "huila",
-    "la guajira": "la guajira",
-    "magdalena": "magdalena",
-    "meta": "meta",
-    "narino": "narino",
-    "norte de santander": "norte de santander",
-    "putumayo": "putumayo",
-    "quindio": "quindio",
-    "risaralda": "risaralda",
-    "san andres y providencia": "san andres y providencia",
-    "san andres": "san andres y providencia",
-    "santander": "santander",
-    "sucre": "sucre",
-    "tolima": "tolima",
-    "valle del cauca": "valle del cauca",
-    "vaupes": "vaupes",
-    "vichada": "vichada",
-}
-
-
-def _clasificar_departamento(texto: str) -> tuple[str, str, str] | None:
-    """Resuelve textos con variante conocida ANTES de la IA (D46/D43):
-    primero alias de tupla completa (p. ej. 'Bogotá D.C.'), luego textos
-    que SOLO nombran un departamento (D43, tupla con municipio N/A).
-    Devuelve None si nada aplica, dejando el camino normal cache → IA.
+    Without catalogue loaded, returns the pending sentinel with ERR-08.
+    Step 1: resolver with text cache. Step 2: AI components via
+    _clasificar_con_puertas (cached in cache_ia by truncated text),
+    buscar_por_componentes, create if unknown with normalized components.
+    Step 3: departamento_en_texto. Step 4: country row. Step 5: sentinel.
     """
-    clave = normalizar_texto(texto).removesuffix(" colombia").strip()
-    alias = ALIAS_UBICACIONES.get(clave)
-    if alias is not None:
-        return alias
-    departamento = REGIONES_COLOMBIA.get(clave)
-    if departamento is None:
-        return None
-    return ("N/A", departamento, "colombia")
+    catalogo = contexto.catalogo_ubicaciones
+    if catalogo is None:
+        logger.warning(
+            f"ERR-08 | run={contexto.id_corrida} | ubicacion_no_clasificada"
+            f" | catalogo no cargado"
+        )
+        return PENDIENTE
 
+    # Paso 1: resolver determinista
+    resultado = catalogo.resolver(texto_crudo, contexto.cache_ubicaciones)
+    if resultado != PENDIENTE:
+        return resultado
 
-# Alias deterministas de lugares con variantes de nombre conocidas (D46):
-# claves y valores ya en forma `normalizar_texto`; la tupla es COMPLETA para
-# no perder información (razón por la que D43 los excluyó originalmente).
-ALIAS_UBICACIONES: dict[str, tuple[str, str, str]] = {
-    "bogota d c": ("bogota", "distrito capital", "colombia"),
-    "area metropolitana de bogota d c": ("bogota", "distrito capital", "colombia"),
-}
+    # Paso 2: IA resuelve componentes (cache_ia evita repetir por texto)
+    texto_clave = texto_crudo.strip()
+    tupla_ia = contexto.cache_ia.get(texto_clave)
+    if tupla_ia is None:
+        clasificacion = _clasificar_con_puertas(contexto, texto_crudo)
+        if clasificacion is not None:
+            tupla_ia = (
+                clasificacion.municipio,
+                clasificacion.departamento,
+                clasificacion.pais,
+            )
+    if tupla_ia is not None:
+        mun, dept_raw, pais_raw = tupla_ia
+        if not mun or mun in ("N/A", "N/R"):
+            # Municipio sin valor útil: saltar a paso 3
+            pass
+        else:
+            mun_limpiado = CatalogoUbicaciones.limpiar_municipio(
+                normalizar_texto(mun)
+            )
+            if not mun_limpiado:
+                # Municipio vacío tras normalización: saltar a paso 3
+                pass
+            else:
+                contexto.cache_ia[texto_clave] = tupla_ia
+                fila_id = catalogo.buscar_por_componentes(mun, dept_raw, pais_raw)
+                if fila_id is not None:
+                    return fila_id
+                if not catalogo.municipio_conocido(mun):
+                    # Municipio desconocido: crear o reutilizar
+                    if mun_limpiado in contexto.cache_creadas:
+                        return contexto.cache_creadas[mun_limpiado]
+                    dept_norm = (
+                        normalizar_texto(dept_raw)
+                        if dept_raw and dept_raw not in ("", "N/A", "N/R")
+                        else "N/A"
+                    )
+                    if not dept_norm:
+                        dept_norm = "N/A"
+                    pais_norm = (
+                        normalizar_texto(pais_raw)
+                        if pais_raw and pais_raw not in ("", "N/A", "N/R")
+                        else "N/A"
+                    )
+                    if not pais_norm:
+                        pais_norm = "N/A"
+                    nueva_id = escribir_fila(
+                        "ubicaciones",
+                        {
+                            "municipio": mun_limpiado,
+                            "departamento": dept_norm,
+                            "pais": pais_norm,
+                            "origen": "sistema",
+                        },
+                    )
+                    contexto.cache_creadas[mun_limpiado] = nueva_id
+                    return nueva_id
 
+    # Paso 3: departamento en texto
+    dept_id = catalogo.departamento_en_texto(texto_crudo)
+    if dept_id is not None:
+        return dept_id
 
-def _veredicto_componente(
-    candidato: str, existente: str, umbral: float
-) -> str:
-    """Clasifica un par municipio/departamento: `coincide` (iguales o similitud >=
-    umbral), `desconocido` (alguno es centinela N/A) o `conflicto`."""
-    if candidato == "N/A" or existente == "N/A":
-        return "desconocido"
-    if candidato == existente:
-        return "coincide"
-    if fuzz.token_set_ratio(candidato, existente) >= umbral:
-        return "coincide"
-    return "conflicto"
+    # Paso 4: fila de país
+    if catalogo.fila_pais_id is not None:
+        return catalogo.fila_pais_id
 
-
-def _resolver_ubicacion_existente(
-    contexto: RunContext, clave_tupla: tuple[str, str, str]
-) -> tuple[str, bool] | None:
-    """Busca una fila de `ubicaciones` para la tupla candidata con UNA sola
-    lectura del catálogo (filtro por país): igualdad exacta primero (D33);
-    sin éxito y con `umbral_alias_ubicacion` > 0, fusión por similitud
-    (D46) — sin conflictos de componente y al menos una coincidencia real;
-    un centinela N/A cuenta como desconocido y jamás fusiona por sí solo.
-    Las filas solo-país nunca se crean por vía difusa. Devuelve
-    `(id, fusionada_por_alias)` o None.
-    """
-    municipio_c, departamento_c, pais_c = clave_tupla
-    umbral = float(contexto.config_preparacion.get("umbral_alias_ubicacion", 90))
-    alias_posible = umbral > 0 and not (municipio_c == "N/A" and departamento_c == "N/A")
-    for fila in leer_tabla("ubicaciones", {"pais": pais_c}):
-        municipio_e = str(fila["municipio"])
-        departamento_e = str(fila["departamento"])
-        if (municipio_e, departamento_e) == (municipio_c, departamento_c):
-            return str(fila["id"]), False
-        if alias_posible:
-            ver_municipio = _veredicto_componente(municipio_c, municipio_e, umbral)
-            ver_departamento = _veredicto_componente(departamento_c, departamento_e, umbral)
-            if "conflicto" not in (ver_municipio, ver_departamento) and (
-                "coincide" in (ver_municipio, ver_departamento)
-            ):
-                return str(fila["id"]), True
-    return None
+    # Paso 5: centinela
+    return PENDIENTE
 
 
 def _puertas_clasificacion(seccion: dict[str, Any]) -> list[dict[str, str]]:
-    """Puertas ordenadas del clasificador (D75, espejo de la evaluación/D59):
-    principal primero, luego las alternas configuradas en orden.
+    """Puertas ordenadas del clasificador con interruptor de puerta principal.
 
-    Cada puerta lleva su nombre, el modelo en el proveedor y la referencia de
-    su llave; las llaves viven solo en `config/.env`, nunca aquí. Con la
-    lista vacía aprobada solo se intenta la principal.
+    Si `puerta_principal_activa` está ausente o es True, la puerta local
+    va primero. Si es False, solo se devuelven las alternas en orden.
     """
-    puertas: list[dict[str, str]] = [
-        {"nombre": "principal", "modelo": "", "clave_ref": ""}
-    ]
+    principal_activa = seccion.get("puerta_principal_activa", True)
+    puertas: list[dict[str, str]] = []
+    if principal_activa is not False:
+        puertas.append(
+            {"nombre": "principal", "modelo": "", "clave_ref": ""}
+        )
     alternas = seccion.get("puertas_alternas") or []
     for indice, puerta in enumerate(alternas):
         nombre = puerta.get("nombre") if isinstance(puerta, dict) else ""
@@ -484,27 +449,13 @@ def _puertas_clasificacion(seccion: dict[str, Any]) -> list[dict[str, str]]:
 
 
 def _es_respuesta_no_json(exc: Exception) -> bool:
-    """True cuando la puerta respondió pero la respuesta no es JSON válido.
-
-    Taxonomía D75: una respuesta mal formada es contenido, no
-    infraestructura — nunca silencia la puerta para el resto de la corrida
-    (un texto trampa no debe matar una puerta sana); solo los fallos de
-    transporte/cupo/timeout marcan la puerta caída. Cubre el "not valid
-    JSON" del envío y el "expected a dictionary" del servicio cuando la
-    respuesta es JSON válido pero no es un objeto.
-    """
+    """True cuando la puerta respondió pero la respuesta no es JSON válido."""
     texto = str(exc)
     return "not valid JSON" in texto or "expected a dictionary" in texto
 
 
 def _marcar_puerta_caida(contexto: RunContext, nombre: str, motivo: str) -> None:
-    """D75: recuerda una puerta caída durante el resto de la corrida del
-    módulo (espejo de la evaluación/D59).
-
-    El registro va al log (no a `eventos`) para no alterar las métricas de
-    cierre: `total_errores`/`total_sucesos` cuentan eventos del ciclo de
-    vida de la corrida, no incidencias de infraestructura de la IA.
-    """
+    """D75: recuerda una puerta caída durante el resto de la corrida del módulo."""
     if nombre in contexto.puertas_caidas:
         return
     contexto.puertas_caidas[nombre] = motivo
@@ -516,21 +467,7 @@ def _marcar_puerta_caida(contexto: RunContext, nombre: str, motivo: str) -> None
 def _clasificar_con_puertas(
     contexto: RunContext, texto: str
 ) -> ClasificacionUbicacion | None:
-    """Paso 3, subpaso de IA para una ubicación con rotación de puertas
-    (D75, espejo de la maquinaria D59 de la evaluación).
-
-    Orden: principal (ruta local) y luego las reservas configuradas — la
-    primera que responde manda. Un fallo de puerta (cupo, timeout, conexión,
-    llave rechazada) la marca caída para el resto de la corrida y pasa de
-    inmediato a la siguiente; la principal se pide sin reintento por parte
-    del nodo (fallo rápido, D59) aunque conserva el comportamiento interno
-    de su ruta, y las reservas se llaman en un solo intento, acotadas por
-    `timeout_puerta_segundos`. Una respuesta MAL FORMADA (no JSON o con
-    esquema inválido) no rota: la ubicación queda pendiente con ERR-08 tal
-    como hoy y sin cachear (RN-07), para que el lote (b) y la tanda
-    siguiente la reintenten. Con todas las puertas caídas se emite un único
-    ERR-08 con la evidencia agregada y la ubicación queda pendiente.
-    """
+    """Paso 3, subpaso de IA para una ubicación con rotación de puertas (D75)."""
     seccion = contexto.config_preparacion
     timeout = float(seccion["timeout_puerta_segundos"])
     detalles: list[str] = []
@@ -558,7 +495,7 @@ def _clasificar_con_puertas(
         except Exception as exc:
             if _es_respuesta_no_json(exc):
                 logger.warning(
-                    f"ERR-08 | run={contexto.id_corrida} | ubicacion_no_clasificada"
+                    f"ubicacion_ia_no_disponible | run={contexto.id_corrida}"
                     f" | respuesta no JSON de {nombre}"
                 )
                 return None
@@ -569,7 +506,7 @@ def _clasificar_con_puertas(
             return ClasificacionUbicacion.model_validate(respuesta)
         except ValidationError as exc:
             logger.warning(
-                f"ERR-08 | run={contexto.id_corrida} | ubicacion_no_clasificada"
+                f"ubicacion_ia_no_disponible | run={contexto.id_corrida}"
                 f" | respuesta invalida de {nombre} | {exc}"
             )
             return None
@@ -581,76 +518,10 @@ def _clasificar_con_puertas(
             for nombre, motivo in contexto.puertas_caidas.items()
         ) or "sin puertas disponibles"
     logger.warning(
-        f"ERR-08 | run={contexto.id_corrida} | ubicacion_no_clasificada"
+        f"ubicacion_ia_no_disponible | run={contexto.id_corrida}"
         f" | todas las puertas caidas ({detalle_final})"
     )
     return None
-
-
-def _diligenciar_ubicacion(contexto: RunContext, texto_crudo: str) -> str:
-    """Paso 3: remote → `N/R`; cache → alias/department cheat-sheet
-    (D46/D43) → AI con rotación de puertas (D75) → tuple → seek/fuse/create.
-
-    Only successful classifications enter `cache_ia` (RN-07): failures stay
-    uncached so lot (b) of this same pass retries them. Stored tuple
-    components are normalized (VAL-04) so SQL equality dedups across casing
-    variants; `Remoto` never creates a catalog row (RN-06).
-    """
-    texto = (texto_crudo or "").strip()
-    if not texto or texto in {"N/R", "N/A"}:
-        # Sin texto crudo utilizable: no reportada → gestionada terminal
-        # (RN-08); nunca se invoca la IA con centinelas.
-        return "N/R"
-    if normalizar_texto(texto) in {"remoto", "trabajo remoto", "remote"}:
-        return "N/R"
-    tupla = contexto.cache_ia.get(texto)
-    if tupla is None:
-        # Chuleta departamental (D43): acierto determinista previo a la IA,
-        # cacheable como cualquier otro éxito (RN-07).
-        tupla = _clasificar_departamento(texto)
-        if tupla is not None:
-            contexto.cache_ia[texto] = tupla
-    if tupla is None:
-        clasificacion = _clasificar_con_puertas(contexto, texto)
-        if clasificacion is None:
-            return "N/A"  # pendiente: la IA jamás bloquea (ERR-08 ya registrado)
-        tupla = (clasificacion.municipio, clasificacion.departamento, clasificacion.pais)
-        if all(componente == "N/A" for componente in tupla):
-            # JSON válido pero sin información geográfica: pendiente (ERR-08),
-            # sin crear una fila de catálogo inútil ni cachear el vacío.
-            logger.warning(
-                f"ERR-08 | run={contexto.id_corrida} | ubicacion_no_clasificada"
-                " | la IA no determino ningun componente"
-            )
-            return "N/A"
-        contexto.cache_ia[texto] = tupla
-    clave_tupla: tuple[str, str, str] = (
-        _normalizar_componente(tupla[0]),
-        _normalizar_componente(tupla[1]),
-        _normalizar_componente(tupla[2]),
-    )
-    en_cache = contexto.cache_ubicaciones.get(clave_tupla)
-    if en_cache:
-        return en_cache
-    resuelta = _resolver_ubicacion_existente(contexto, clave_tupla)
-    if resuelta is not None:
-        ubicacion_id, fusionada = resuelta
-        if fusionada:
-            logger.info(
-                f"D46 | run={contexto.id_corrida} | alias_ubicacion_fusionado"
-                f" | {clave_tupla} -> {ubicacion_id}"
-            )
-    else:
-        ubicacion_id = escribir_fila(
-            "ubicaciones",
-            {
-                "municipio": clave_tupla[0],
-                "departamento": clave_tupla[1],
-                "pais": clave_tupla[2],
-            },
-        )
-    contexto.cache_ubicaciones[clave_tupla] = ubicacion_id
-    return ubicacion_id
 
 
 def _actualizar_oferta(
@@ -701,8 +572,8 @@ def _registrar_evento(
     )
 
 
-def _procesar_lote_a(contexto: RunContext, lote: list[dict[str, Any]]) -> bool:
-    """Lots (a) steps 1-5 per offer; returns False on ERR-09 (abort)."""
+def _procesar_lote(contexto: RunContext, lote: list[dict[str, Any]]) -> bool:
+    """Single lot steps 1-5 per offer; returns False on ERR-09 (abort)."""
     pausa = float(contexto.config_preparacion["pausa_entre_ofertas_segundos"])
     jitter = float(contexto.config_preparacion.get("pausa_jitter_segundos", 0))
     total = len(lote)
@@ -758,37 +629,6 @@ def _procesar_lote_a(contexto: RunContext, lote: list[dict[str, Any]]) -> bool:
     return True
 
 
-def _procesar_lote_b(contexto: RunContext, lote: list[dict[str, Any]]) -> bool:
-    """Lot (b) steps 3-5 without capture; returns False on ERR-09 (abort)."""
-    for oferta in lote:
-        id_oferta = str(oferta["id"])
-        texto_crudo = str(oferta.get("ubicacion", "") or "")
-        try:
-            ubicacion_id = _diligenciar_ubicacion(contexto, texto_crudo)
-            if ubicacion_id == "N/A":
-                continue  # la IA sigue caída: pendiente para la próxima pasada
-            actualizar_fila(
-                "ofertas_descubiertas", id_oferta, {"ubicacion_id": ubicacion_id}
-            )
-            _registrar_evento(
-                contexto.id_corrida,
-                "suceso",
-                "oferta_preparada",
-                f"ubicacion resuelta en lote (b): {ubicacion_id}",
-                id_oferta,
-            )
-        except Exception as error:
-            _registrar_evento(
-                contexto.id_corrida,
-                "error",
-                "ERR-09",
-                f"corrupcion al persistir la oferta: {error}",
-                id_oferta,
-            )
-            return False
-    return True
-
-
 def ejecutar_preparacion(contexto: RunContext | None) -> ResultadoPreparacion:
     """Run the Preparación de ofertas node (sheet pasos funcionales 1-9)."""
     if contexto is None or not isinstance(contexto, RunContext):
@@ -816,9 +656,45 @@ def ejecutar_preparacion(contexto: RunContext | None) -> ResultadoPreparacion:
             descripcion=f"insumos ausentes o corruptos: {problema}",
         )
 
-    # Paso 2 (lote a) — re-consulta FIFO (RN-02).
+    # Cargar catálogo de ubicaciones una sola vez por corrida (D77).
     try:
-        lote_a = leer_candidatas_descubiertas()
+        filas_ubicaciones = leer_tabla("ubicaciones")
+    except Exception as error:
+        _registrar_evento(
+            id_corrida, "error", "ERR-09",
+            f"fallo al leer catálogo de ubicaciones: {error}", "N/A",
+        )
+        return ResultadoPreparacion(
+            estado="abortada",
+            contexto=contexto,
+            codigo="ERR-09",
+            descripcion="database failure reading locations catalogue",
+        )
+    contexto.catalogo_ubicaciones = CatalogoUbicaciones(filas_ubicaciones)
+
+    # Validar catálogo incompleto: si falta la fila "no aplica" o la de país,
+    # la corrida termina abortada sin procesar ninguna oferta.
+    if (
+        contexto.catalogo_ubicaciones.fila_no_aplica_id is None
+        or contexto.catalogo_ubicaciones.fila_pais_id is None
+    ):
+        _registrar_evento(
+            id_corrida,
+            "error",
+            "ERR-09",
+            "catalogo_ubicaciones_incompleto: faltan filas sistema o país",
+            "N/A",
+        )
+        return ResultadoPreparacion(
+            estado="abortada",
+            contexto=contexto,
+            codigo="ERR-09",
+            descripcion="locations catalogue incomplete (missing system or country row)",
+        )
+
+    # Paso 2 — re-consulta FIFO (RN-02).
+    try:
+        lote = leer_candidatas_descubiertas()
     except Exception as error:
         _registrar_evento(
             id_corrida, "error", "ERR-09", f"fallo al determinar lotes: {error}",
@@ -831,38 +707,13 @@ def ejecutar_preparacion(contexto: RunContext | None) -> ResultadoPreparacion:
             descripcion="database failure determining lots",
         )
 
-    # Pasos 3-7 — lote (a): captura completa.
-    if not _procesar_lote_a(contexto, lote_a):
+    # Pasos 3-7 — lote único: captura completa.
+    if not _procesar_lote(contexto, lote):
         return ResultadoPreparacion(
             estado="abortada",
             contexto=contexto,
             codigo="ERR-09",
-            descripcion="persistence corruption processing lot (a)",
-        )
-
-    # Paso 8 — lote (b): re-consultado DESPUÉS del (a) (H1: las ofertas
-    # recién preparadas con IA caída se gestionan en la misma pasada).
-    try:
-        lote_b = leer_tabla(
-            "ofertas_descubiertas", {"estado": "preparada", "ubicacion_id": "N/A"}
-        )
-    except Exception as error:
-        _registrar_evento(
-            id_corrida, "error", "ERR-09", f"fallo al consultar el lote b: {error}",
-            "N/A",
-        )
-        return ResultadoPreparacion(
-            estado="abortada",
-            contexto=contexto,
-            codigo="ERR-09",
-            descripcion="database failure reading pending-location lot",
-        )
-    if not _procesar_lote_b(contexto, lote_b):
-        return ResultadoPreparacion(
-            estado="abortada",
-            contexto=contexto,
-            codigo="ERR-09",
-            descripcion="persistence corruption processing lot (b)",
+            descripcion="persistence corruption processing lot",
         )
 
     # Paso 9 — entregar control a "Verificación de duplicidad".

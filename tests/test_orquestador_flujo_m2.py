@@ -73,6 +73,11 @@ def flujo(monkeypatch: pytest.MonkeyPatch) -> None:
     Capture derives a genuinely different title per offer (low similarity,
     below `umbral_titulo`) so generic scenarios produce no duplicates.
     """
+    # Seed the country row so the catalogue-incomplete check passes.
+    escribir_fila(
+        "ubicaciones",
+        {"municipio": "N/A", "departamento": "N/A", "pais": "Colombia"},
+    )
 
     def captura_variable(ctx: Any, enlace: str) -> DatosCaptura:
         digitos = int("".join(c for c in str(enlace) if c.isdigit()) or 0)
@@ -93,6 +98,10 @@ def flujo(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.fixture
 def flujo_duplicado(monkeypatch: pytest.MonkeyPatch) -> None:
     """Same as `flujo` but with an IDENTICAL capture for every offer."""
+    escribir_fila(
+        "ubicaciones",
+        {"municipio": "N/A", "departamento": "N/A", "pais": "Colombia"},
+    )
     monkeypatch.setattr(
         preparacion_mod,
         "_capturar_pagina",

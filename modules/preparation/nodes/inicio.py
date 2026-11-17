@@ -137,6 +137,12 @@ def _validar_preparacion(seccion: Any) -> str | None:
         clave_ref = puerta.get("clave_ref", "")
         if not isinstance(clave_ref, str) or not clave_ref.strip():
             return "puertas_alternas invalida (cada puerta requiere 'clave_ref')"
+    # Interruptor de puerta principal: debe ser booleano si existe.
+    ppa = seccion.get("puerta_principal_activa")
+    if ppa is not None and not isinstance(ppa, bool):
+        return "puerta_principal_activa debe ser booleano (true/false)"
+    if ppa is False and len(puertas) == 0:
+        return "puerta_principal_activa false requiere al menos una puerta alterna"
     return None
 
 

@@ -418,6 +418,10 @@ def test_flujo_real_de_preparacion_como_modulo(
 ) -> None:
     """The real Preparation orchestrator runs inside a scheduled execution."""
     escribir_fila(
+        "ubicaciones",
+        {"municipio": "N/A", "departamento": "N/A", "pais": "Colombia"},
+    )
+    escribir_fila(
         "ofertas_descubiertas",
         {
             "id": "OFE-0001",

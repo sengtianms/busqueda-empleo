@@ -5,7 +5,6 @@ from typing import MutableMapping
 import pytest
 
 from modules.preparation.ubicaciones import (
-    NO_REPORTADO,
     PENDIENTE,
     CatalogoUbicaciones,
 )
@@ -13,7 +12,7 @@ from modules.preparation.ubicaciones import (
 
 @pytest.fixture
 def catalogo() -> CatalogoUbicaciones:
-    """Catálogo de prueba con 24 filas representativas."""
+    """Catálogo de prueba con 25 filas representativas (incluye fila "no aplica")."""
     filas = [
         {"id": "UBI-0109", "municipio": "bogotá", "departamento": "cundinamarca"},
         {"id": "UBI-0249", "municipio": "córdoba", "departamento": "quindío"},
@@ -41,26 +40,32 @@ def catalogo() -> CatalogoUbicaciones:
         {"id": "UBI-1131", "municipio": "N/A", "departamento": "sucre"},
         {"id": "UBI-1133", "municipio": "N/A", "departamento": "valle del cauca"},
         {"id": "UBI-1136", "municipio": "N/A", "departamento": "N/A"},
+        {"id": "UBI-1137", "municipio": "N/A", "departamento": "N/A", "pais": "N/A"},
     ]
     return CatalogoUbicaciones(filas)
 
 
-def test_texto_vacio_o_centinela_queda_no_reportado(
+def test_texto_no_informado_enlaza_fila_no_aplica(
     catalogo: CatalogoUbicaciones,
 ) -> None:
-    assert catalogo.resolver("") == NO_REPORTADO
-    assert catalogo.resolver("   ") == NO_REPORTADO
-    assert catalogo.resolver("N/A") == NO_REPORTADO
-    assert catalogo.resolver("N/R") == NO_REPORTADO
+    """Empty, separators-only, N/A, N/R, and remote texts link to the 'no aplica' row."""
+    assert catalogo.resolver("") == "UBI-1137"
+    assert catalogo.resolver("   ") == "UBI-1137"
+    assert catalogo.resolver("N/A") == "UBI-1137"
+    assert catalogo.resolver("N/R") == "UBI-1137"
+    assert catalogo.resolver("Remoto") == "UBI-1137"
+    assert catalogo.resolver("Trabajo remoto") == "UBI-1137"
+    assert catalogo.resolver("Remote") == "UBI-1137"
 
 
-def test_texto_remoto_queda_no_reportado(
-    catalogo: CatalogoUbicaciones,
-) -> None:
-    assert catalogo.resolver("Remoto") == NO_REPORTADO
-    assert catalogo.resolver("Trabajo remoto") == NO_REPORTADO
-    assert catalogo.resolver("Remote") == NO_REPORTADO
-    assert catalogo.resolver("REMOTO") == NO_REPORTADO
+def test_texto_no_informado_sin_fila_no_aplica_queda_pendiente() -> None:
+    """Without the 'no aplica' row, unreported texts return the pending sentinel."""
+    cat = CatalogoUbicaciones([
+        {"id": "UBI-0669", "municipio": "pereira", "departamento": "risaralda"},
+    ])
+    assert cat.resolver("") == PENDIENTE
+    assert cat.resolver("N/A") == PENDIENTE
+    assert cat.resolver("Remoto") == PENDIENTE
 
 
 def test_municipio_unico_enlaza_su_fila(
@@ -218,3 +223,127 @@ def test_filas_duplicadas_en_el_catalogo_quedan_pendientes() -> None:
     cat = CatalogoUbicaciones(filas)
     assert cat.resolver("Granada, Antioquia") == PENDIENTE
     assert cat.resolver("Antioquia") == PENDIENTE
+
+
+def test_fila_triple_na_no_interfiere_con_pais() -> None:
+    """D77: triple-N/A row is ignored; Colombia resolves to the country row."""
+    filas = [
+        {"id": "UBI-1136", "municipio": "N/A", "departamento": "N/A", "pais": "Colombia"},
+        {"id": "UBI-1137", "municipio": "N/A", "departamento": "N/A", "pais": "N/A"},
+    ]
+    cat = CatalogoUbicaciones(filas)
+    assert cat.resolver("Colombia") == "UBI-1136"
+
+
+def test_buscar_por_componentes_tupla_exacta(
+    catalogo: CatalogoUbicaciones,
+) -> None:
+    """Exact tuple matches the catalogue row."""
+    assert catalogo.buscar_por_componentes(
+        "Cali", "Valle del Cauca", "Colombia"
+    ) == "UBI-0152"
+
+
+def test_buscar_por_componentes_municipio_unico_con_dept_distinto(
+    catalogo: CatalogoUbicaciones,
+) -> None:
+    """Single-row municipality tolerates a different department."""
+    assert catalogo.buscar_por_componentes(
+        "Pereira", "Antioquia", "Colombia"
+    ) == "UBI-0669"
+
+
+def test_buscar_por_componentes_municipio_repetido_con_dept(
+    catalogo: CatalogoUbicaciones,
+) -> None:
+    """Repeated municipality with its department resolves correctly."""
+    assert catalogo.buscar_por_componentes(
+        "Granada", "Antioquia", "Colombia"
+    ) == "UBI-0388"
+
+
+def test_buscar_por_componentes_municipio_repetido_sin_dept(
+    catalogo: CatalogoUbicaciones,
+) -> None:
+    """Repeated municipality without department returns None."""
+    assert catalogo.buscar_por_componentes(
+        "Granada", "", "Colombia"
+    ) is None
+
+
+def test_buscar_por_componentes_municipio_inexistente(
+    catalogo: CatalogoUbicaciones,
+) -> None:
+    """Unknown municipality returns None."""
+    assert catalogo.buscar_por_componentes(
+        "Puerto Bogotá", "Cundinamarca", "Colombia"
+    ) is None
+
+
+def test_buscar_por_componentes_municipio_vacio(
+    catalogo: CatalogoUbicaciones,
+) -> None:
+    """Empty municipality returns None."""
+    assert catalogo.buscar_por_componentes("", "Antioquia", "Colombia") is None
+
+
+def test_departamento_en_texto_uno_solo(
+    catalogo: CatalogoUbicaciones,
+) -> None:
+    """One department in text returns its id."""
+    assert catalogo.departamento_en_texto(
+        "Algun texto, Valle del Cauca, Colombia"
+    ) == "UBI-1133"
+
+
+def test_departamento_en_texto_con_parte_desconocida(
+    catalogo: CatalogoUbicaciones,
+) -> None:
+    """Department present but another part is unknown — still returns the department."""
+    assert catalogo.departamento_en_texto(
+        "Algo raro, Antioquia, otra cosa"
+    ) == "UBI-1105"
+
+
+def test_departamento_en_texto_varios_casos(
+    catalogo: CatalogoUbicaciones,
+) -> None:
+    """Two departments or no department in text returns None."""
+    assert catalogo.departamento_en_texto(
+        "Antioquia, Valle del Cauca"
+    ) is None
+    assert catalogo.departamento_en_texto("Pereira, Colombia") is None
+
+
+def test_municipio_conocido_existente_y_desconocido(
+    catalogo: CatalogoUbicaciones,
+) -> None:
+    """municipio_conocido is True for existing, False for unknown; ignores special rows."""
+    assert catalogo.municipio_conocido("Pereira") is True
+    assert catalogo.municipio_conocido("pereira") is True
+    assert catalogo.municipio_conocido("Puerto Bogotá") is False
+    assert catalogo.municipio_conocido("") is False
+
+
+def test_buscar_por_componentes_bogota_dc(
+    catalogo: CatalogoUbicaciones,
+) -> None:
+    """Bogotá D.C. and Bogotá resolve to the same row via cleaning."""
+    assert catalogo.buscar_por_componentes(
+        "Bogotá D.C.", "Cundinamarca", "Colombia"
+    ) == "UBI-0109"
+    assert catalogo.buscar_por_componentes(
+        "Bogotá DC", "Cundinamarca", "Colombia"
+    ) == "UBI-0109"
+    assert catalogo.buscar_por_componentes(
+        "Bogotá", "Cundinamarca", "Colombia"
+    ) == "UBI-0109"
+
+
+def test_buscar_por_componentes_distrito_capital(
+    catalogo: CatalogoUbicaciones,
+) -> None:
+    """Distrito Capital resolves to Bogotá via equivalences."""
+    assert catalogo.buscar_por_componentes(
+        "Distrito Capital", "Cundinamarca", "Colombia"
+    ) == "UBI-0109"

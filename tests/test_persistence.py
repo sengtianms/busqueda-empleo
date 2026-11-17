@@ -1574,8 +1574,10 @@ def test_migracion_d33_desde_esquema_legado(tmp_path: Path) -> None:
         assert corrida["total_duplicadas"] == 0
 
         ubis = leer_tabla("ubicaciones")
-        assert len(ubis) == 1
-        assert ubis[0]["municipio"] == "Madrid"
+        assert len(ubis) == 2
+        madrid = [u for u in ubis if u["municipio"] == "Madrid"]
+        assert len(madrid) == 1
+        assert madrid[0]["municipio"] == "Madrid"
 
         evs = leer_tabla("eventos")
         assert len(evs) == 1
@@ -1642,7 +1644,7 @@ def test_migracion_d33_idempotente(tmp_path: Path) -> None:
         init_db()
         init_db()
         assert len(leer_tabla("ofertas_descubiertas")) == 1
-        assert len(leer_tabla("ubicaciones")) == 1
+        assert len(leer_tabla("ubicaciones")) == 2
         assert len(leer_tabla("eventos")) == 1
         conn = sqlite3.connect(str(path))
         try:
@@ -2267,3 +2269,94 @@ def test_reporte_listas_renderiza_y_avisa_sin_bases(temp_db_file: Path) -> None:
     with redirect_stdout(salida):
         assert main([]) == 0
     assert "todavia no esta disponible" in salida.getvalue()
+
+
+def test_esquema_fresco_d77_columna_origen_y_fila_sistema(
+    temp_db_file: Path,
+) -> None:
+    """D77: fresh DB has `origen` column and exactly one triple-N/A row."""
+    import sqlite3
+
+    conn = sqlite3.connect(str(temp_db_file))
+    try:
+        columnas = {
+            fila[1]
+            for fila in conn.execute(
+                "PRAGMA table_info(ubicaciones)"
+            ).fetchall()
+        }
+    finally:
+        conn.close()
+    assert "origen" in columnas
+
+    filas = leer_tabla("ubicaciones", {})
+    sistema = [
+        f for f in filas
+        if f["municipio"] == "N/A"
+        and f["departamento"] == "N/A"
+        and f["pais"] == "N/A"
+        and f["origen"] == "sistema"
+    ]
+    assert len(sistema) == 1
+    assert sistema[0]["id"] != ""
+    assert sistema[0]["fecha_creacion"] != ""
+    assert sistema[0]["fecha_ultima_edicion"] != ""
+
+
+def test_migracion_d77_idempotente_y_preserva_operador(
+    tmp_path: Path,
+) -> None:
+    """D77: double init preserves legacy row as `operador`, one `sistema`."""
+    import sqlite3
+
+    from shared.persistence import change_path, init_db, leer_tabla, reset_path
+
+    path = tmp_path / "d77_idem.db"
+    conn = sqlite3.connect(str(path))
+    conn.execute(
+        "CREATE TABLE secuencia_ids ("
+        "tabla_nombre TEXT PRIMARY KEY,"
+        "prefijo TEXT NOT NULL,"
+        "ultimo_numero INTEGER NOT NULL DEFAULT 0"
+        ")"
+    )
+    conn.execute(
+        "INSERT INTO secuencia_ids (tabla_nombre, prefijo, ultimo_numero) "
+        "VALUES ('ubicaciones', 'UBI', 1)"
+    )
+    conn.execute(
+        "CREATE TABLE ubicaciones ("
+        "id TEXT PRIMARY KEY,"
+        "municipio TEXT DEFAULT 'N/A',"
+        "departamento TEXT DEFAULT 'N/A',"
+        "pais TEXT DEFAULT 'N/A',"
+        "fecha_creacion TEXT DEFAULT '',"
+        "fecha_ultima_edicion TEXT DEFAULT ''"
+        ")"
+    )
+    conn.execute(
+        "INSERT INTO ubicaciones (id, municipio, departamento, pais) "
+        "VALUES ('UBI-0001', 'Bogotá', 'Cundinamarca', 'Colombia')"
+    )
+    conn.commit()
+    conn.close()
+
+    change_path(path)
+    try:
+        init_db()
+        init_db()
+        filas = leer_tabla("ubicaciones", {})
+        assert len(filas) == 2
+        bogota = [f for f in filas if f["municipio"] == "Bogotá"]
+        assert len(bogota) == 1
+        assert bogota[0]["origen"] == "operador"
+        sistema = [
+            f for f in filas
+            if f["municipio"] == "N/A"
+            and f["departamento"] == "N/A"
+            and f["pais"] == "N/A"
+            and f["origen"] == "sistema"
+        ]
+        assert len(sistema) == 1
+    finally:
+        reset_path()

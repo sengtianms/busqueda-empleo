@@ -14,6 +14,7 @@ the same convention exception approved for functional modules.
 
 from typing import Any
 
+from modules.preparation.ubicaciones import CatalogoUbicaciones
 from shared.persistence import generar_id
 from shared.utilidades import ahora
 
@@ -51,13 +52,15 @@ class RunContext:
         self.motivo_marca_temporal: str | None = None
         # Recursos de la fase de preparación (nodo "Preparación de ofertas",
         # ficha M2): sesión httpx de invitado creada con pereza y su contador
-        # de vida, más las cachés de corrida (empresas por nombre normalizado,
-        # ubicaciones por tupla normalizada e IA por texto crudo distinto —
-        # solo éxitos; los fallos no se cachean para que el lote (b) reintente).
+        # de vida, catálogo de ubicaciones (leído una vez por corrida) y las
+        # cachés de corrida (empresas por nombre normalizado y ubicaciones por
+        # texto resuelto a identificador).
         self.sesion_http: Any = None
         self.ofertas_en_sesion: int = 0
         self.cache_empresas: dict[str, str] = {}
-        self.cache_ubicaciones: dict[tuple[str, str, str], str] = {}
+        self.catalogo_ubicaciones: CatalogoUbicaciones | None = None
+        self.cache_ubicaciones: dict[str, str] = {}
+        self.cache_creadas: dict[str, str] = {}
         self.cache_ia: dict[str, tuple[str, str, str]] = {}
         # Memoria de puertas caídas de la corrida (D75, espejo de la
         # evaluación/D59): nombre -> motivo. Registro del nodo (log), nunca

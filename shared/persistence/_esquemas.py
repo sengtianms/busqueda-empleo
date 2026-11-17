@@ -41,6 +41,7 @@ ESQUEMAS: dict[str, str] = {
         "municipio TEXT DEFAULT 'N/A',"
         "departamento TEXT DEFAULT 'N/A',"
         "pais TEXT DEFAULT 'N/A',"
+        "origen TEXT DEFAULT 'operador',"
         "fecha_creacion TEXT DEFAULT '',"
         "fecha_ultima_edicion TEXT DEFAULT ''"
         ")"
