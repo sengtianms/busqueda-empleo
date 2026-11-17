@@ -88,7 +88,14 @@ def _sembrar() -> None:
             datos["observaciones"] = "dup"
         escribir_fila("ofertas_descubiertas", datos)
     escribir_fila("empresas", {"nombre": "Acme Corp", "nombre_normalizado": "acme corp"})
-    escribir_fila("ubicaciones", {"municipio": "Bogota", "departamento": "Cundinamarca", "pais": "Colombia"})
+    escribir_fila(
+        "ubicaciones",
+        {
+            "municipio": "Bogota",
+            "departamento": "Cundinamarca",
+            "pais": "Colombia",
+        },
+    )
 
 
 def test_reporte_sin_corridas(temp_db_file: Path) -> None:

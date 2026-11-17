@@ -5,6 +5,7 @@ Unless noted, decisions from previous sessions remain in effect.
 ## Sessions index
 | № | Date | Session ID | Summary |
 |---|---|---|---|
+| 57 | 17/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Construction of the location redesign started one verified step at a time: the master catalogue gained the 33 operator rows (32 department-only plus one country-only) on top of the 1,103 municipalities through the project's persistence API, with a backup and the original rows proven identical; then the AI-free linking engine was built and verified with 21 tests — strict exact matching after normalization, department disambiguation for repeated municipality names, department reading for the eight homonyms, fixed equivalences for Bogotá D.C. and Distrito Capital, honest pending for metropolitan-area variants and unknown names, run memory by text and a read-only catalogue; two corrective rounds removed identifiers that only existed in code and an order-dependent tolerance; repository-wide lint restored and the empty-catalogue warning pinned by its test; 850 tests, types and lint clean, and a replay of 129 archived offers links 123 with zero invented identifiers; runtime behavior unchanged until node integration |
 | 56 | 15/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Decision D77 registered in the official log (version 1.56) and the whole official documentation aligned with it in ten files: the location stops being classified by a model and is linked against the preloaded master catalogue of 1,103 Colombian municipalities that the module only reads; data model, tables reference, prefix catalogue, both module sheets, MVP plan (new sub-phase 5.8 plus a supersession note), operating contract, tracker and the phase-5 functional plan now marked historical; a false "decision number pending" statement repeated in three documents eliminated and the construction sheet made to cite the number; documents-only, zero code, configuration, database, prompt or deployment changes, construction pending approval |
 | 55 | 15/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Module 2 sheet rewritten to version 2.0: the location is linked from the preloaded master catalogue of 1,103 Colombian municipalities instead of being classified by AI, the AI route, prompt, keys and reserve doors are retired, the second lot and the retry of pending locations are eliminated, department-only and country-only texts resolve against operator-maintained not-applicable rows, and the module is documented as never creating or correcting catalogue rows; historical notes kept and marked as superseded, one of them restored after an accidental deletion caught by the acceptance checks; configuration, schema and status sections aligned and two stale technical references fixed; documents-only, implementation pending approval and decision number still unregistered |
 | 54 | 15/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Location catalog column rename (ciudad → municipio, region → departamento) aligned with Colombian administrative terminology across schema, models, preparation node, prompt, tests and docs; idempotent migration added for existing databases; the ubicaciones catalog then populated with all 1,103 Colombian municipalities from user-provided lists, sequence counter updated to 1,103; Module 3 then redesigned as two AI-free processes (decision D76 in log v1.55) — the scheduled batch exports prepared offers into chat-readable lots and a one-line manual command imports the chat's answer under strict whole-line validation, retiring the answering-door chain (D49/D50/D59 superseded for this module only) with no schema change; sheet rewritten to version 2.0 and nine official documents aligned, documentation reviewer approved with one minor corrected; construction pending approval |
@@ -50,6 +51,32 @@ Unless noted, decisions from previous sessions remain in effect.
 | 14 | 09/08/2026 | `ses_01bcc78adffemcqFEiZxT52Eli` | Sub-fase 4.4: capture/registration nodes implemented, audited, and post-audit fixes applied (FK-free schema, name columns, upsert tests) |
 | 13 | 08/08/2026 | `ses_01be77680ffeuyoKct4Qrfx1GG` | Repo sync to `fase-4`; new `/save` section with general git commit and push guidance |
 | 12 | 08/08/2026 | `ses_01c089ce2ffe9MvQT4F1pC0MJN` | Sub-fase 4.2 deep audit + post-audit fixes (credentials mapping, playwright lifecycle) |
+
+## Session 57 — 17/11/2026
+`ses_f4af1b961ffe5t8xNspW5U761x` · `rediseno-ubicacion`
+
+**Topics**
+- Working method agreed for the redesign: the assistant designs and writes self-contained executor prompts, the executor applies them, and every claim is re-checked against the real files and database
+- Step one, operator catalogue data: the 32 department-only rows and the single country-only row added on top of the 1,103 municipalities through the project's persistence API, with a backup and the original rows proven identical afterwards
+- Calibration before building: the 129 offers of the last backup measured against the proposed rules to know exactly which real texts resolve and which stay pending
+- Step two, the AI-free linking engine and its 21 tests: exact matching after normalization, department disambiguation, department reading for the eight homonyms, fixed city equivalences, run memory by text and a catalogue that is only read
+- Two corrective rounds: identifiers that existed only in code were caught by validating every returned identifier against the catalogue; then a contradictory department and a false empty-catalogue signal were closed
+- Repository-wide lint restored by reformatting one long line in an older, unrelated test, and the empty-catalogue test now pins the absence of the warning
+- Final verification reproduced by the assistant: 850 tests, types clean, lint clean, replay of 129 archived offers with 123 linked and zero invented identifiers
+
+**Decisions**
+- "Bogotá D.C." and "Bogotá DC" link to the Bogotá catalogue row, and "Distrito Capital" does too; "Área metropolitana de …" stays pending because it is a name variant
+- An empty or unusable catalogue never stops the module: every location stays pending and a single warning is left in the run log
+- The eight department/municipality homonyms read as the department unless the text names the town's department
+- These refinements are pending registration in the official decision log at the redesign's closure
+- Decisions from previous sessions remain in effect
+
+**Status**
+- Master catalogue: 1,136 rows (1,103 municipalities, 32 department-only, 1 country-only); backup kept; no schema change
+- Linking engine: built and verified with 21 new tests; 850 tests total; lint and types clean; 123 of 129 archived offers linked with real identifiers and 6 pending by design
+- Runtime unchanged: the preparation module still classifies location with AI until the node integration
+- Pending: node integration, AI/configuration/prompt retirement, real run and documentation closure
+- Active branch `rediseno-ubicacion`
 
 ## Session 56 — 15/11/2026
 `ses_f4af1b961ffe5t8xNspW5U761x` · `ajuste-final-v1`
