@@ -86,11 +86,6 @@ def _validar_preparacion(seccion: Any) -> str | None:
         umbral = seccion.get(clave)
         if not _es_numero(umbral) or not (0 <= umbral <= 100):
             return f"{clave} fuera de rango (0-100)"
-    umbral_alias = seccion.get("umbral_alias_ubicacion")
-    if umbral_alias is not None and (
-        not _es_numero(umbral_alias) or not (0 <= umbral_alias <= 100)
-    ):
-        return "umbral_alias_ubicacion invalida (numerico 0-100)"
     if not _es_entero(seccion.get("max_pasadas"), 1):
         return "max_pasadas invalida (entero >= 1)"
     pausa = seccion.get("pausa_entre_ofertas_segundos")

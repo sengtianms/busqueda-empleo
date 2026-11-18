@@ -60,7 +60,7 @@ class RunContext:
         self.cache_empresas: dict[str, str] = {}
         self.catalogo_ubicaciones: CatalogoUbicaciones | None = None
         self.cache_ubicaciones: dict[str, str] = {}
-        self.cache_creadas: dict[str, str] = {}
+        self.cache_creadas: dict[tuple[str, str, str], str] = {}
         self.cache_ia: dict[str, tuple[str, str, str]] = {}
         # Memoria de puertas caídas de la corrida (D75, espejo de la
         # evaluación/D59): nombre -> motivo. Registro del nodo (log), nunca

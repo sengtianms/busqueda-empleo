@@ -98,6 +98,12 @@ HTML_AUTHWALL = (
 )
 HTML_VACIO = "<html><body></body></html>"
 
+HTML_SIN_UBICACION = HTML_COMPLETO.replace(
+    '  <span class="topcard__flavor topcard__flavor--bullet">\n'
+    '    Bogotá, Distrito Capital, Colombia</span>\n',
+    "",
+)
+
 
 def _contexto(config: dict[str, Any] | None = None) -> RunContext:
     return RunContext(
@@ -213,15 +219,17 @@ def test_extraccion_completa_actualiza_oferta(
     assert fila["estado"] == "preparada"
     assert fila["titulo"] == "Ingeniero de Datos Senior"
     assert "vacante" in str(fila["descripcion_original"])
-    # Propiedad del Módulo 1: M2 las conserva intactas.
     assert fila["modalidad"] == "remoto"
-    assert fila["ubicacion"] == "Bogotá, Cundinamarca, Colombia"
+    # La página trae la ubicación en el span topcard__flavor
+    assert fila["ubicacion"] == "Bogotá, Distrito Capital, Colombia"
     empresa = leer_tabla("empresas", {"nombre_normalizado": "acme corp"})
     assert len(empresa) == 1
     assert empresa[0]["perfil_linkedin"] == (
         "https://www.linkedin.com/company/acme-corp/"
     )
     assert fila["empresa_id"] == empresa[0]["id"]
+    # Deduplicación: "bogota" aparece dos veces (bogota + distrito capital→bogota),
+    # queda un solo segmento → enlaza a Bogotá/Cundinamarca
     assert fila["ubicacion_id"] == ids["bogotá/cundinamarca"]
     # Catálogo no cambia: 4 sembradas + 1 de init_db = 5
     assert len(leer_tabla("ubicaciones", {})) == 5
@@ -558,7 +566,7 @@ def test_ubicacion_enlaza_fila_existente(
 ) -> None:
     ids = _sembrar_catalogo()
     _insertar_oferta("OFE-0001", ubicacion="Bogotá, Cundinamarca, Colombia")
-    _instalar_servidor(monkeypatch, [[(200, HTML_COMPLETO)]])
+    _instalar_servidor(monkeypatch, [[(200, HTML_SIN_UBICACION)]])
 
     ejecutar_preparacion(_contexto())
 
@@ -573,7 +581,7 @@ def test_ubicacion_sin_coincidencia_ia_crea_fila_sistema(
     """When deterministic engine fails, AI resolves and creates a new row."""
     _sembrar_catalogo()
     _insertar_oferta("OFE-0001", ubicacion="Puerto Bogotá")
-    _instalar_servidor(monkeypatch, [[(200, HTML_COMPLETO)]])
+    _instalar_servidor(monkeypatch, [[(200, HTML_SIN_UBICACION)]])
 
     def falso_ia(
         prompt_id: str,
@@ -612,7 +620,7 @@ def test_ubicacion_solo_departamento_enlaza_fila_na(
 ) -> None:
     ids = _sembrar_catalogo()
     _insertar_oferta("OFE-0001", ubicacion="Antioquia")
-    _instalar_servidor(monkeypatch, [[(200, HTML_COMPLETO)]])
+    _instalar_servidor(monkeypatch, [[(200, HTML_SIN_UBICACION)]])
 
     ejecutar_preparacion(_contexto())
 
@@ -625,7 +633,7 @@ def test_ubicacion_solo_pais_enlaza_fila_pais(
 ) -> None:
     ids = _sembrar_catalogo()
     _insertar_oferta("OFE-0001", ubicacion="Colombia")
-    _instalar_servidor(monkeypatch, [[(200, HTML_COMPLETO)]])
+    _instalar_servidor(monkeypatch, [[(200, HTML_SIN_UBICACION)]])
 
     ejecutar_preparacion(_contexto())
 
@@ -638,7 +646,7 @@ def test_ubicacion_remota_enlaza_fila_no_aplica(
 ) -> None:
     _sembrar_catalogo()
     _insertar_oferta("OFE-0001", ubicacion="Remoto")
-    _instalar_servidor(monkeypatch, [[(200, HTML_COMPLETO)]])
+    _instalar_servidor(monkeypatch, [[(200, HTML_SIN_UBICACION)]])
 
     ejecutar_preparacion(_contexto())
 
@@ -658,7 +666,7 @@ def test_ubicacion_ausente_enlaza_fila_no_aplica(
 ) -> None:
     _sembrar_catalogo()
     _insertar_oferta("OFE-0001", ubicacion="N/A")
-    _instalar_servidor(monkeypatch, [[(200, HTML_COMPLETO)]])
+    _instalar_servidor(monkeypatch, [[(200, HTML_SIN_UBICACION)]])
 
     ejecutar_preparacion(_contexto())
 
@@ -753,7 +761,7 @@ def test_pendiente_no_se_reintenta_en_la_misma_corrida(
 
     _sembrar_catalogo()
     _insertar_oferta("OFE-0001", ubicacion="Puerto Bogotá")
-    clientes, peticiones = _instalar_servidor(monkeypatch, [[(200, HTML_COMPLETO)]])
+    clientes, peticiones = _instalar_servidor(monkeypatch, [[(200, HTML_SIN_UBICACION)]])
 
     def falso_analyze(*args: Any, **kwargs: Any) -> dict[str, Any]:
         raise LLMError("003", "local Ollama responded with code 402")
@@ -909,11 +917,10 @@ def test_offer_tiene_campos_nuevos_d33() -> None:
     assert oferta.modalidad == "N/A"
 
 
-def test_m2_no_sobreescribe_ubicacion_ni_modalidad_de_m1(
+def test_m2_no_sobreescribe_modalidad_de_m1(
     temp_db_file: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Traspaso 2026-08-25: la actualización de M2 jamás toca las columnas
-    propiedad del Módulo 1 (`ubicacion`, `modalidad`)."""
+    """La modalidad no se toca; la ubicación se actualiza con el texto de la página."""
     _sembrar_catalogo()
     _insertar_oferta(
         "OFE-0001",
@@ -927,7 +934,9 @@ def test_m2_no_sobreescribe_ubicacion_ni_modalidad_de_m1(
     assert resultado.estado == "completada"
     fila = buscar_por_id("ofertas_descubiertas", "OFE-0001")
     assert fila is not None and fila["estado"] == "preparada"
-    assert fila["ubicacion"] == "Medellín, Antioquia, Colombia"
+    # La página manda en ubicacion
+    assert fila["ubicacion"] == "Bogotá, Distrito Capital, Colombia"
+    # Modalidad no se toca
     assert fila["modalidad"] == "hibrido"
 
 
@@ -949,7 +958,8 @@ def test_pausa_con_jitter_d42(
         preparacion,
         "_capturar_pagina",
         lambda ctx, enlace: preparacion.DatosCaptura(
-            titulo_h1="T", descripcion="", empresa_nombre="", empresa_perfil=""
+            titulo_h1="T", descripcion="", empresa_nombre="", empresa_perfil="",
+            ubicacion_pagina="",
         ),
     )
     monkeypatch.setattr(preparacion, "_diligenciar_empresa", lambda ctx, n, p: "EMP-0001")
@@ -986,7 +996,8 @@ def test_pausa_sin_jitter_mantiene_fijo_d42(
         preparacion,
         "_capturar_pagina",
         lambda ctx, enlace: preparacion.DatosCaptura(
-            titulo_h1="T", descripcion="", empresa_nombre="", empresa_perfil=""
+            titulo_h1="T", descripcion="", empresa_nombre="", empresa_perfil="",
+            ubicacion_pagina="",
         ),
     )
     monkeypatch.setattr(preparacion, "_diligenciar_empresa", lambda ctx, n, p: "EMP-0001")
@@ -1010,7 +1021,7 @@ def test_ia_resuelve_municipio_existente_con_dept_distinto(
     """AI resolves an existing municipality with different dept — no new row."""
     ids = _sembrar_catalogo()
     _insertar_oferta("OFE-0001", ubicacion="Algo desconocido")
-    _instalar_servidor(monkeypatch, [[(200, HTML_COMPLETO)]])
+    _instalar_servidor(monkeypatch, [[(200, HTML_SIN_UBICACION)]])
 
     def falso_ia(
         prompt_id: str, datos: dict[str, str], modelo: str, clave: str,
@@ -1036,7 +1047,7 @@ def test_segunda_oferta_mismo_municipio_desconocido_reutiliza_fila(
     _insertar_oferta("OFE-0001", ubicacion="Cota")
     _insertar_oferta("OFE-0002", ubicacion="Cota")
     _instalar_servidor(
-        monkeypatch, [[(200, HTML_COMPLETO)], [(200, HTML_COMPLETO)]]
+        monkeypatch, [[(200, HTML_SIN_UBICACION)], [(200, HTML_SIN_UBICACION)]]
     )
 
     def falso_ia(
@@ -1064,7 +1075,7 @@ def test_ia_caida_usa_departamento_del_texto(
     """When AI is down, departamento_en_texto fallback is used."""
     ids = _sembrar_catalogo()
     _insertar_oferta("OFE-0001", ubicacion="Algo, Antioquia")
-    _instalar_servidor(monkeypatch, [[(200, HTML_COMPLETO)]])
+    _instalar_servidor(monkeypatch, [[(200, HTML_SIN_UBICACION)]])
 
     def falso_ia(
         prompt_id: str, datos: dict[str, str], modelo: str, clave: str,
@@ -1086,7 +1097,7 @@ def test_ia_caida_sin_departamento_usa_fila_pais(
     """When AI is down and no department in text, country row is used."""
     ids = _sembrar_catalogo()
     _insertar_oferta("OFE-0001", ubicacion="Algo desconocido")
-    _instalar_servidor(monkeypatch, [[(200, HTML_COMPLETO)]])
+    _instalar_servidor(monkeypatch, [[(200, HTML_SIN_UBICACION)]])
 
     def falso_ia(
         prompt_id: str, datos: dict[str, str], modelo: str, clave: str,
@@ -1108,7 +1119,7 @@ def test_ia_responde_todo_na_usa_fila_pais(
     """When AI returns all N/A, country row fallback is used."""
     ids = _sembrar_catalogo()
     _insertar_oferta("OFE-0001", ubicacion="Algo desconocido")
-    _instalar_servidor(monkeypatch, [[(200, HTML_COMPLETO)]])
+    _instalar_servidor(monkeypatch, [[(200, HTML_SIN_UBICACION)]])
 
     def falso_ia(
         prompt_id: str, datos: dict[str, str], modelo: str, clave: str,
@@ -1139,7 +1150,7 @@ def test_ia_municipio_existente_ambiguo_no_crea_fila(
         {"municipio": "Granada", "departamento": "Antioquia", "pais": "Colombia"},
     )
     _insertar_oferta("OFE-0001", ubicacion="Algo desconocido")
-    _instalar_servidor(monkeypatch, [[(200, HTML_COMPLETO)]])
+    _instalar_servidor(monkeypatch, [[(200, HTML_SIN_UBICACION)]])
 
     def falso_ia(
         prompt_id: str, datos: dict[str, str], modelo: str, clave: str,
@@ -1155,3 +1166,304 @@ def test_ia_municipio_existente_ambiguo_no_crea_fila(
     assert fila is not None and fila["ubicacion_id"] == ids["N/A/N/A"]
     # No se creó fila nueva: 4 sembradas + 1 init_db + 2 granada = 7
     assert len(leer_tabla("ubicaciones", {})) == 7
+
+
+# -------------------------------------------------- Ubicación de página
+
+
+def test_extraccion_con_span_ubicacion(
+    temp_db_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Page location span is extracted and saved to the offer."""
+    ids = _sembrar_catalogo()
+    _insertar_oferta("OFE-0001", ubicacion="Bogotá")
+    _instalar_servidor(monkeypatch, [[(200, HTML_COMPLETO)]])
+
+    ejecutar_preparacion(_contexto())
+
+    fila = buscar_por_id("ofertas_descubiertas", "OFE-0001")
+    assert fila is not None
+    assert fila["ubicacion"] == "Bogotá, Distrito Capital, Colombia"
+    # Enlace a Bogotá por deduplicación de segmentos
+    assert fila["ubicacion_id"] == ids["bogotá/cundinamarca"]
+
+
+def test_extraccion_sin_span_ubicacion_conserva_tarjeta(
+    temp_db_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When page has no location span, the card value is preserved."""
+    _sembrar_catalogo()
+    _insertar_oferta("OFE-0001", ubicacion="Medellín, Antioquia, Colombia")
+    _instalar_servidor(monkeypatch, [[(200, HTML_SIN_UBICACION)]])
+
+    ejecutar_preparacion(_contexto())
+
+    fila = buscar_por_id("ofertas_descubiertas", "OFE-0001")
+    assert fila is not None
+    assert fila["ubicacion"] == "Medellín, Antioquia, Colombia"
+
+
+def test_nodo_usa_texto_pagina_por_encima_guardado(
+    temp_db_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The node uses page location text for resolution, not the card value."""
+    ids = _sembrar_catalogo()
+    # Card says Medellín, page says "Bogotá, Distrito Capital, Colombia"
+    # The page text is used for resolution → Bogotá by dedup
+    _insertar_oferta("OFE-0001", ubicacion="Medellín, Antioquia, Colombia")
+    _instalar_servidor(monkeypatch, [[(200, HTML_COMPLETO)]])
+
+    ejecutar_preparacion(_contexto())
+
+    fila = buscar_por_id("ofertas_descubiertas", "OFE-0001")
+    assert fila is not None
+    # Page text is used, not card text — links to Bogotá
+    assert fila["ubicacion_id"] == ids["bogotá/cundinamarca"]
+    # If card text were used, it would be Medellín
+    assert fila["ubicacion_id"] != ids["medellín/antioquia"]
+
+
+def test_area_metropolitana_enlaza_a_su_ciudad(
+    temp_db_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Metropolitan area text resolves to its city without creating a row."""
+    ids = _sembrar_catalogo()
+    _insertar_oferta(
+        "OFE-0001", ubicacion="Área metropolitana de Medellín"
+    )
+    # HTML with metropolitan area in the span
+    html_am = HTML_COMPLETO.replace(
+        "Bogotá, Distrito Capital, Colombia",
+        "Área metropolitana de Medellín",
+    )
+    _instalar_servidor(monkeypatch, [[(200, html_am)]])
+
+    llamar_ia: list[str] = []
+    def espia_ia(*a: Any, **k: Any) -> dict[str, str]:
+        llamar_ia.append("called")
+        return {"municipio": "N/A", "departamento": "N/A", "pais": "N/A"}
+
+    monkeypatch.setattr(preparacion, "analyze_openrouter", espia_ia)
+
+    ejecutar_preparacion(_contexto())
+
+    fila = buscar_por_id("ofertas_descubiertas", "OFE-0001")
+    assert fila is not None
+    # "Área metropolitana de Medellín" → resolves to Medellín
+    assert fila["ubicacion_id"] == ids["medellín/antioquia"]
+    # Original text preserved in column
+    assert "Área metropolitana de Medellín" in fila["ubicacion"]
+    # No new catalogue row created
+    assert len(leer_tabla("ubicaciones", {})) == 5
+    # IA was NOT called (known AM resolves deterministically)
+    assert llamar_ia == []
+
+
+def test_area_metropolitana_desconocida_no_crea_fila(
+    temp_db_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Unknown metropolitan area does not create a row; falls to country."""
+    ids = _sembrar_catalogo()
+    _insertar_oferta(
+        "OFE-0001", ubicacion="Área metropolitana del Valle de Aburrá"
+    )
+    html_am = HTML_COMPLETO.replace(
+        "Bogotá, Distrito Capital, Colombia",
+        "Área metropolitana del Valle de Aburrá",
+    )
+    _instalar_servidor(monkeypatch, [[(200, html_am)]])
+
+    llamar_ia: list[str] = []
+    def espia_ia(*a: Any, **k: Any) -> dict[str, str]:
+        llamar_ia.append("called")
+        return {"municipio": "N/A", "departamento": "N/A", "pais": "N/A"}
+
+    monkeypatch.setattr(preparacion, "analyze_openrouter", espia_ia)
+
+    ejecutar_preparacion(_contexto())
+
+    fila = buscar_por_id("ofertas_descubiertas", "OFE-0001")
+    assert fila is not None
+    # Falls to country row (paso 4 after AM skips 1-2)
+    assert fila["ubicacion_id"] == ids["N/A/N/A"]
+    # Original text preserved
+    assert "Área metropolitana del Valle de Aburrá" in fila["ubicacion"]
+    # No new catalogue row created
+    assert len(leer_tabla("ubicaciones", {})) == 5
+    # IA was NOT called (AM skips steps 1-2)
+    assert llamar_ia == []
+
+
+def test_lugar_extranjero_ausente_crea_fila_propia(
+    temp_db_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Foreign place creates its own row, not linked to Italy row."""
+    _sembrar_catalogo()
+    # Seed a Milan/Italy row
+    escribir_fila(
+        "ubicaciones",
+        {"municipio": "Milán", "departamento": "Lombardía", "pais": "Italia"},
+    )
+    _insertar_oferta("OFE-0001", ubicacion="Milán, Caquetá, Colombia")
+    html_milan = HTML_COMPLETO.replace(
+        "Bogotá, Distrito Capital, Colombia",
+        "Milán, Caquetá, Colombia",
+    )
+    _instalar_servidor(monkeypatch, [[(200, html_milan)]])
+
+    def falso_ia(
+        prompt_id: str, datos: dict[str, str], modelo: str, clave: str,
+        *, timeout: float | None = None,
+    ) -> dict[str, str]:
+        return {"municipio": "Milán", "departamento": "Caquetá", "pais": "Colombia"}
+
+    monkeypatch.setattr(preparacion, "analyze_openrouter", falso_ia)
+
+    ejecutar_preparacion(_contexto())
+
+    fila = buscar_por_id("ofertas_descubiertas", "OFE-0001")
+    assert fila is not None
+    # New row created: milan/caqueta/colombia (not the Italy row)
+    nuevas = leer_tabla("ubicaciones", {
+        "municipio": "milan", "departamento": "caqueta", "pais": "colombia"
+    })
+    assert len(nuevas) == 1
+    assert nuevas[0]["origen"] == "sistema"
+    assert fila["ubicacion_id"] == nuevas[0]["id"]
+    # Catalogue grew: 4 sembradas + 1 init_db + 1 milan/italia + 1 creada = 7
+    assert len(leer_tabla("ubicaciones", {})) == 7
+
+
+def test_ubicacion_nombre_oficial_largo_enlaza_municipio_catalogo(
+    temp_db_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """San José de Cúcuta (official long name) links to Cúcuta catalogue row."""
+    _sembrar_catalogo()
+    # Seed Cúcuta / Norte de Santander / Colombia
+    cucuta_id = escribir_fila(
+        "ubicaciones",
+        {"municipio": "Cúcuta", "departamento": "Norte de Santander", "pais": "Colombia"},
+    )
+    _insertar_oferta("OFE-0001", ubicacion="San Jose de Cucuta, Norte de Santander, Colombia")
+    html = HTML_COMPLETO.replace(
+        "Bogotá, Distrito Capital, Colombia",
+        "San Jose de Cucuta, Norte de Santander, Colombia",
+    )
+    _instalar_servidor(monkeypatch, [[(200, html)]])
+
+    llamar_ia: list[str] = []
+    def espia_ia(*a: Any, **k: Any) -> dict[str, str]:
+        llamar_ia.append("called")
+        return {"municipio": "N/A", "departamento": "N/A", "pais": "N/A"}
+
+    monkeypatch.setattr(preparacion, "analyze_openrouter", espia_ia)
+
+    ejecutar_preparacion(_contexto())
+
+    fila = buscar_por_id("ofertas_descubiertas", "OFE-0001")
+    assert fila is not None
+    assert fila["estado"] == "preparada"
+    assert fila["ubicacion_id"] == cucuta_id
+    assert fila["ubicacion"] == "San Jose de Cucuta, Norte de Santander, Colombia"
+    # IA was NOT called (alias resolves deterministically)
+    assert llamar_ia == []
+    # 4 sembradas + 1 init_db + 1 Cúcuta = 6, no new rows
+    assert len(leer_tabla("ubicaciones", {})) == 6
+
+
+def test_ubicacion_localidad_distrito_capital_enlaza_bogota(
+    temp_db_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ciudad Bolívar is a Bogotá locality: link to Bogotá, no new row."""
+    ids = _sembrar_catalogo()
+    _insertar_oferta(
+        "OFE-0001", ubicacion="Ciudad Bolivar, Distrito Capital, Colombia"
+    )
+    html = HTML_COMPLETO.replace(
+        "Bogotá, Distrito Capital, Colombia",
+        "Ciudad Bolivar, Distrito Capital, Colombia",
+    )
+    _instalar_servidor(monkeypatch, [[(200, html)]])
+
+    llamar_ia: list[str] = []
+    def espia_ia(*a: Any, **k: Any) -> dict[str, str]:
+        llamar_ia.append("called")
+        return {"municipio": "N/A", "departamento": "N/A", "pais": "N/A"}
+
+    monkeypatch.setattr(preparacion, "analyze_openrouter", espia_ia)
+
+    ejecutar_preparacion(_contexto())
+
+    fila = buscar_por_id("ofertas_descubiertas", "OFE-0001")
+    assert fila is not None
+    assert fila["estado"] == "preparada"
+    assert fila["ubicacion_id"] == ids["bogotá/cundinamarca"]
+    assert fila["ubicacion"] == "Ciudad Bolivar, Distrito Capital, Colombia"
+    # IA was NOT called (locality rule resolves deterministically)
+    assert llamar_ia == []
+    # No new catalogue row created
+    assert len(leer_tabla("ubicaciones", {})) == 5
+
+
+def test_creacion_fila_sistema_distinge_homonimos(
+    temp_db_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Same municipality name in two departments gets two distinct rows."""
+    _sembrar_catalogo()
+    _insertar_oferta("OFE-0001", ubicacion="Puerto Bogotá Norte")
+    _insertar_oferta("OFE-0002", ubicacion="Puerto Bogotá Sur")
+    _instalar_servidor(monkeypatch, [[(200, HTML_SIN_UBICACION)], [(200, HTML_SIN_UBICACION)]])
+
+    respuestas = {
+        "Puerto Bogotá Norte": {
+            "municipio": "Puerto Bogotá", "departamento": "Caquetá", "pais": "Colombia",
+        },
+        "Puerto Bogotá Sur": {
+            "municipio": "Puerto Bogotá", "departamento": "Cauca", "pais": "Colombia",
+        },
+    }
+
+    def falso_ia(
+        prompt_id: str, datos: dict[str, str], modelo: str, clave: str,
+        *, timeout: float | None = None,
+    ) -> dict[str, str]:
+        return respuestas[datos["texto_ubicacion"]]
+
+    monkeypatch.setattr(preparacion, "analyze_openrouter", falso_ia)
+    ejecutar_preparacion(_contexto())
+
+    creadas = leer_tabla("ubicaciones", {
+        "origen": "sistema", "municipio": "puerto bogota"
+    })
+    assert len(creadas) == 2
+    assert {fila["departamento"] for fila in creadas} == {"caqueta", "cauca"}
+    for oferta_id, departamento in (("OFE-0001", "caqueta"), ("OFE-0002", "cauca")):
+        oferta = buscar_por_id("ofertas_descubiertas", oferta_id)
+        assert oferta is not None
+        enlace = next(f for f in creadas if f["departamento"] == departamento)
+        assert oferta["ubicacion_id"] == enlace["id"]
+
+
+def test_ia_pais_alias_enlaza_fila_existente_sin_duplicar(
+    temp_db_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """'CO' as the AI country still links the existing Medellín row."""
+    ids = _sembrar_catalogo()
+    _insertar_oferta("OFE-0001", ubicacion="Puerto Bogotá")
+    _instalar_servidor(monkeypatch, [[(200, HTML_SIN_UBICACION)]])
+
+    def falso_ia(
+        prompt_id: str, datos: dict[str, str], modelo: str, clave: str,
+        *, timeout: float | None = None,
+    ) -> dict[str, str]:
+        return {"municipio": "Medellín", "departamento": "Antioquia", "pais": "CO"}
+
+    monkeypatch.setattr(preparacion, "analyze_openrouter", falso_ia)
+    ejecutar_preparacion(_contexto())
+
+    oferta = buscar_por_id("ofertas_descubiertas", "OFE-0001")
+    assert oferta is not None
+    assert oferta["ubicacion_id"] == ids["medellín/antioquia"]
+    assert leer_tabla("ubicaciones", {
+        "origen": "sistema", "municipio": "medellin"
+    }) == []

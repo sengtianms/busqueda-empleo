@@ -95,7 +95,7 @@ Sole official reference for assigning, administering, and interpreting all prefi
 |--------|-------------|---------|
 | FNT | — (retired) | Job source — **retired** (D31, 2026-08-18): the `fuentes` table was dropped from the physical model; sources are config-driven via `config.yaml`; the FNT- prefix is no longer generated. |
 | EMP | companies | Employer company (populated by Module 2, Nodo 2 — D33) |
-| UBI | locations | Geographic location (preloaded master catalogue of the 1,103 Colombian municipalities — operator data; Module 2 only reads it and links offers by exact match, D77; no `modalidad` column) |
+| UBI | locations | Geographic location (preloaded master catalogue of the 1,103 Colombian municipalities — operator data; Module 2 links offers deterministically and, only when that path fails, the AI exception may create one row with `origen='sistema'` (D78); no `modalidad` column) |
 | OFE | ofertas_descubiertas | Raw job offer (Module 1 capture + Module 2 enrichment) |
 | OFP | processed_offers | Processed and cleaned offer |
 | EVL | evaluations | Compatibility evaluation |

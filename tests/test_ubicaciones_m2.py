@@ -7,6 +7,8 @@ import pytest
 from modules.preparation.ubicaciones import (
     PENDIENTE,
     CatalogoUbicaciones,
+    normalizar_pais,
+    resolver_area_metropolitana,
 )
 
 
@@ -186,7 +188,11 @@ def test_catalogo_vacio_queda_pendiente_y_avisa_una_vez() -> None:
 
         encontrados = [
             m for m in mensajes
-            if "catalogo_ubicaciones_vacio | todas las ofertas quedaran pendientes" in m
+            if (
+                "catalogo_ubicaciones_vacio | las ofertas se prepararan"
+                " sin ubicacion enlazada (N/A)"
+                in m
+            )
         ]
         assert len(encontrados) == 1
     finally:
@@ -347,3 +353,176 @@ def test_buscar_por_componentes_distrito_capital(
     assert catalogo.buscar_por_componentes(
         "Distrito Capital", "Cundinamarca", "Colombia"
     ) == "UBI-0109"
+
+
+# -------------------------------------------------- País en búsquedas
+
+def test_buscar_por_componentes_pais_distinto_no_captura() -> None:
+    """A row from another country does not capture the offer."""
+    cat = CatalogoUbicaciones([
+        {"id": "UBI-1", "municipio": "bogotá", "departamento": "cundinamarca", "pais": "Colombia"},
+        {"id": "UBI-2", "municipio": "milán", "departamento": "lombardía", "pais": "Italia"},
+        {"id": "UBI-3", "municipio": "N/A", "departamento": "N/A", "pais": "Colombia"},
+        {"id": "UBI-4", "municipio": "N/A", "departamento": "N/A", "pais": "N/A"},
+    ])
+    assert cat.buscar_por_componentes("Milán", "Lombardía", "Colombia") is None
+    assert cat.buscar_por_componentes("Milán", "Lombardía", "Italia") == "UBI-2"
+    assert cat.buscar_por_componentes("Milán", "Lombardía", "") == "UBI-2"
+    assert cat.municipio_conocido("Milán", "Colombia") is False
+    assert cat.municipio_conocido("Milán", "Italia") is True
+    assert cat.municipio_conocido("Milán", "") is True
+
+
+def test_municipio_conocido_con_pais_vacio_siempre_true(
+    catalogo: CatalogoUbicaciones,
+) -> None:
+    """Empty/N/A country does not filter; municipality is known."""
+    assert catalogo.municipio_conocido("Pereira", "") is True
+    assert catalogo.municipio_conocido("Pereira", "N/A") is True
+
+
+def test_normalizar_pais_formas_alternativas() -> None:
+    """Country aliases collapse to the canonical form used by the catalogue."""
+    assert normalizar_pais("Colombia") == "colombia"
+    assert normalizar_pais("CO") == "colombia"
+    assert normalizar_pais("COL") == "colombia"
+    assert normalizar_pais("República de Colombia") == "colombia"
+    assert normalizar_pais("Italia") == "italia"
+    assert normalizar_pais("") == ""
+    assert normalizar_pais("N/A") == ""
+
+
+def test_pais_alias_enlaza_fila_existente_sin_duplicar() -> None:
+    """Alternative country spellings must not create a duplicate municipality."""
+    cat = CatalogoUbicaciones([
+        {"id": "UBI-1", "municipio": "medellín", "departamento": "antioquia", "pais": "Colombia"},
+        {"id": "UBI-2", "municipio": "N/A", "departamento": "N/A", "pais": "N/A"},
+    ])
+    assert cat.buscar_por_componentes("Medellín", "Antioquia", "CO") == "UBI-1"
+    assert (
+        cat.buscar_por_componentes("Medellín", "Antioquia", "República de Colombia")
+        == "UBI-1"
+    )
+    assert cat.municipio_conocido("Medellín", "CO") is True
+    assert cat.municipio_conocido("Medellín", "República de Colombia") is True
+    # La forma alterna también puede venir en la propia fila del catálogo.
+    cat_alias = CatalogoUbicaciones([
+        {"id": "UBI-3", "municipio": "cali", "departamento": "valle del cauca",
+         "pais": "República de Colombia"},
+    ])
+    assert cat_alias.buscar_por_componentes("Cali", "Valle del Cauca", "Colombia") == "UBI-3"
+
+
+def test_municipio_conocido_fila_sin_pais_no_se_descarta() -> None:
+    """A row with no registered country is not evidence of a different country."""
+    cat = CatalogoUbicaciones([
+        {"id": "UBI-1", "municipio": "pereira", "departamento": "risaralda"},
+    ])
+    assert cat.municipio_conocido("Pereira", "Colombia") is True
+    assert cat.municipio_conocido("Pereira", "Italia") is True
+
+
+# -------------------------------------------------- Áreas metropolitanas
+
+
+def test_resolver_area_metropolitana_de_ciudad() -> None:
+    assert resolver_area_metropolitana(
+        "Área metropolitana de Medellín"
+    ) == "Medellín"
+    assert resolver_area_metropolitana(
+        "Área  metropolitana de Medellín"
+    ) == "Medellín"
+    assert resolver_area_metropolitana(
+        "Área metropolitana de Medellín, Antioquia, Colombia"
+    ) == "Medellín, Antioquia, Colombia"
+    assert resolver_area_metropolitana(
+        "area metropolitana de bogota"
+    ) == "bogota"
+
+
+def test_resolver_area_metropolitana_del_ciudad() -> None:
+    assert resolver_area_metropolitana(
+        "Área metropolitana del Valle del Cauca"
+    ) == "Valle del Cauca"
+    assert resolver_area_metropolitana(
+        "area metropolitana del cauca"
+    ) == "cauca"
+    assert resolver_area_metropolitana(
+        "Área metropolitana del Valle de Aburrá"
+    ) == "Valle de Aburrá"
+
+
+def test_resolver_area_metropolitana_no_coincide() -> None:
+    assert resolver_area_metropolitana("Bogotá") is None
+    assert resolver_area_metropolitana("Medellín, Antioquia") is None
+    assert resolver_area_metropolitana("") is None
+
+
+def test_resolver_deduplica_segmentos(
+    catalogo: CatalogoUbicaciones,
+) -> None:
+    """Resolver deduplicates segments before classifying."""
+    assert catalogo.resolver("Bogotá, Distrito Capital, Colombia") == "UBI-0109"
+    assert catalogo.resolver("Bogotá, Bogotá, Colombia") == "UBI-0109"
+    assert catalogo.resolver("Distrito Capital, Colombia") == "UBI-0109"
+
+
+def test_resolver_area_metropolitana_conserva_separadores(
+    catalogo: CatalogoUbicaciones,
+) -> None:
+    """Metropolitan area rest preserves commas, so resolver can split segments."""
+    resto = resolver_area_metropolitana(
+        "Área metropolitana de Medellín, Antioquia, Colombia"
+    )
+    assert resto == "Medellín, Antioquia, Colombia"
+    assert catalogo.resolver(resto) == "UBI-0557"
+
+
+# -------------------------------------------------- Alias de municipios
+
+
+def test_alias_nombre_oficial_largo_enlaza_municipio_corto() -> None:
+    """San José de Cúcuta (official long name) resolves to Cúcuta catalogue row."""
+    cat = CatalogoUbicaciones([
+        {
+            "id": "UBI-0265",
+            "municipio": "cúcuta",
+            "departamento": "norte de santander",
+            "pais": "Colombia",
+        },
+        {"id": "UBI-0001", "municipio": "N/A", "departamento": "N/A", "pais": "Colombia"},
+        {"id": "UBI-0002", "municipio": "N/A", "departamento": "N/A", "pais": "N/A"},
+    ])
+    assert cat.resolver("San Jose de Cucuta, Norte de Santander, Colombia") == "UBI-0265"
+    assert cat.resolver("San José de Cúcuta, Norte de Santander, Colombia") == "UBI-0265"
+    assert cat.buscar_por_componentes(
+        "San José de Cúcuta", "Norte de Santander", "Colombia"
+    ) == "UBI-0265"
+    assert cat.municipio_conocido("San José de Cúcuta", "Colombia") is True
+
+
+# -------------------------------------------------- Localidad del Distrito Capital
+
+
+def test_localidad_del_distrito_capital_enlaza_bogota(
+    catalogo: CatalogoUbicaciones,
+) -> None:
+    """Ciudad Bolívar is a locality of Bogotá, not a municipality: link to Bogotá."""
+    assert catalogo.resolver("Ciudad Bolivar, Distrito Capital, Colombia") == "UBI-0109"
+    assert catalogo.resolver("Ciudad Bolivar, Bogotá D.C., Colombia") == "UBI-0109"
+    assert catalogo.resolver("Chapinero, Bogotá, Colombia") == "UBI-0109"
+
+
+def test_localidad_del_distrito_capital_no_aplica_a_otro_pais(
+    catalogo: CatalogoUbicaciones,
+) -> None:
+    """Caracas, Distrito Capital, Venezuela: two unknowns, rule does not apply."""
+    assert catalogo.resolver("Caracas, Distrito Capital, Venezuela") == "N/A"
+
+
+def test_localidad_no_se_fuerza_si_hay_otro_municipio(
+    catalogo: CatalogoUbicaciones,
+) -> None:
+    """Granada + Bogotá: two known municipalities, do not force Bogotá."""
+    # Granada exists in the shared fixture (seeded by _sembrar_catalogo)
+    assert catalogo.resolver("Granada, Bogotá, Colombia") == "N/A"

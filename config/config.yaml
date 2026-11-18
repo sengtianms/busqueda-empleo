@@ -144,11 +144,6 @@ preparacion:
   pausa_entre_ofertas_segundos: 1.2
   # Jitter de la pausa anterior (>= 0); 0 desactiva la aleatoriedad.
   pausa_jitter_segundos: 0.4
-  # Umbral de similitud (0-100) para fusionar variantes de nombre del mismo
-  # lugar antes de crear una fila nueva en `ubicaciones` (D46): mismo pais,
-  # ciudad/region comparadas con RapidFuzz; un componente N/A no bloquea.
-  # Con 0 se desactiva la fusion (siempre crea fila nueva si no hay igualdad exacta).
-  umbral_alias_ubicacion: 90
   # Renovar la sesión httpx de invitado cada N ofertas (>= 1).
   limite_vida_sesion: 50
   # Reintentos por oferta/página (misma estructura que `retries` global).

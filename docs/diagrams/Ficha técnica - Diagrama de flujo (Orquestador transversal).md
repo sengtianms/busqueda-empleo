@@ -118,7 +118,7 @@ Al recibir disparador manual:
 
 **Nota as-built 2026-08-25 (decisión D42):** el arranque (`ejecutar_corrida_programada`) inicializa el esquema automáticamente cuando la base no tiene tablas; el chequeo prevuelo de este lote vive en `scripts/preflight.py` y el diagnóstico post-corrida en `scripts/reporte_corrida.py`.
 
-**Nota aprobado M3-docs (decisión D48, previo a construcción):** el Módulo 3 «Evaluación inicial» se suma tercero tras Preparación, solo después de su vuelta real de verificación en solo (`orquestador.modulos: [descubrimiento, preparacion, evaluacion]`; hasta entonces la lista sigue con 2). Su resultado se lee desde la base como los demás; sin migraciones propias del orquestador.
+**Nota aprobado M3-docs (decisión D48, previo a construcción):** el Módulo 3 «Evaluación inicial» se suma tercero tras Preparación, solo después de su vuelta real de verificación en solo (`orquestador.modulos: [descubrimiento, preparacion, evaluacion]`; hasta entonces la lista sigue con 2 — restricción ya retirada el 2026-11-18 (D78), con el reloj programado pausado). Su resultado se lee desde la base como los demás; sin migraciones propias del orquestador.
 
 **Nota aprobada D76 (2026-11-15, rediseño del Módulo 3):** el tercer módulo ya no evalúa con inteligencia artificial. Su corrida programada **exporta** los lotes de ofertas preparadas y cierra con `evaluacion_pendiente` cuando quedan lotes esperando; la **importación** de lo que devuelve el chat la lanza el operador con un comando, fuera de la tanda, y registra su propia corrida. La lista de módulos no cambia (`[descubrimiento, preparacion, evaluacion]`), el resultado se sigue leyendo desde la base como los demás y el orquestador no gana nodos, migraciones ni claves de configuración propias. El aviso del veredicto debe informar «evaluación exportada, pendiente de importar» con el número de lotes en espera.
 - Estructura: `modules/orchestrator/orchestrator.py` con la función pública `ejecutar_corrida_programada()` (distinta de `ejecutar_flujo()` de los módulos) y el registro declarativo `MODULOS: list[ModuloOrquestado]` (nombre, `estado_entrada`, `estado_salida`, `ejecutar_flujo`). Tests de integración en `tests/test_orquestador_transversal.py` (patrón de `tests/test_orquestador_integracion.py`: flujo completo con nodos reales y arranque de plataforma simulado).
@@ -143,7 +143,7 @@ Pendiente de implementación — se construye **al cierre del Módulo 2** con la
 
 ## Dependencias (consolidadas)
 
-1. `config/config.yaml`: sección nueva `orquestador:` (`modo_ejecucion: serie`, `modulos: [descubrimiento, preparacion]`, `pausa_entre_modulos_segundos`).
+1. `config/config.yaml`: sección nueva `orquestador:` (`modo_ejecucion: serie`, `modulos: [descubrimiento, preparacion]`, `pausa_entre_modulos_segundos`). *(Histórico D48; desde 2026-11-18 la lista vigente incluye también `evaluacion`, D78.)*
 2. `shared/persistence.py`: nueva helper `leer_ultima_corrida_cerrada(...)` (derivar el resultado por módulo desde `corridas`); `shared/retry.py`: `ejecutar_con_reintento` para los reintentos del nodo (ERR-02/ERR-05).
 3. `modules/orchestrator/`: `orchestrator.py` (público `ejecutar_corrida_programada()`) + registro declarativo de módulos; tests `tests/test_orquestador_transversal.py`.
 4. `modules/preparation/`: contrato público `ejecutar_flujo()` (se implementa con el Módulo 2).

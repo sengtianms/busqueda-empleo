@@ -1,9 +1,11 @@
-"""Motor determinista de enlace de ubicaciones del Módulo 2 (decisión D77).
+"""Motor determinista de enlace de ubicaciones del Módulo 2 (as-built D78).
 
-Resuelve texto libre contra el catálogo pre-cargado sin IA ni red.
+Resuelve texto libre contra el catálogo pre-cargado sin IA ni red; la excepción
+por IA del nodo de preparación usa ``buscar_por_componentes`` y ``normalizar_pais``.
 Reglas RN-06, RN-07 y RN-08 de la ficha técnica del Módulo 2.
 """
 
+import re
 from collections import defaultdict
 from typing import Any, Iterable, Mapping, MutableMapping
 
@@ -14,6 +16,36 @@ from shared.utilidades import normalizar_texto
 PENDIENTE = "N/A"
 REMOTOS = frozenset({"remoto", "trabajo remoto", "remote"})
 EQUIVALENCIAS = {"distrito capital": "bogota"}
+
+ALIAS_MUNICIPIOS = {
+    # Nombres oficiales largos verificados → municipio del catálogo.
+    # Solo casos comprobados: una contención genérica confundiría
+    # "Ciudad Bolívar, Antioquia" con "Bolívar, Antioquia".
+    "san jose de cucuta": "cucuta",
+}
+
+# Formas alternativas del país devueltas por el clasificador → forma canónica.
+# Sin esto, un "CO" o "República de Colombia" no reconocería una fila ya cargada
+# y la excepción crearía un duplicado del municipio.
+ALIAS_PAISES = {
+    "co": "colombia",
+    "col": "colombia",
+    "republica de colombia": "colombia",
+    "rep de colombia": "colombia",
+}
+
+
+def normalizar_pais(pais: str) -> str:
+    """Return the canonical normalized country, or '' when not applicable."""
+    if not pais or pais in ("", "N/A", "N/R"):
+        return ""
+    normalizado = normalizar_texto(pais)
+    return ALIAS_PAISES.get(normalizado, normalizado)
+
+_RE_AREA_METROPOLITANA = re.compile(
+    r"^\s*[aá]rea\s+metropolitana\s+(?:de\s+|del\s+)",
+    re.IGNORECASE,
+)
 
 
 class CatalogoUbicaciones:
@@ -26,6 +58,7 @@ class CatalogoUbicaciones:
         self._municipios: dict[str, list[tuple[str, str]]] = defaultdict(list)
         self._departamentos: dict[str, str | None] = {}
         self._nombres_departamento: set[str] = set()
+        self._pais_por_id: dict[str, str] = {}
 
         filas_lista = list(filas)
         conte_pais = 0
@@ -40,6 +73,9 @@ class CatalogoUbicaciones:
             fila_id = fila.get("id", "")
             if not fila_id:
                 continue
+            pais_raw = fila.get("pais", "")
+            if pais_raw and pais_raw not in ("", "N/A", "N/R"):
+                self._pais_por_id[fila_id] = normalizar_pais(pais_raw)
             mun_raw = fila.get("municipio", "")
             dept_raw = fila.get("departamento", "")
 
@@ -78,7 +114,10 @@ class CatalogoUbicaciones:
 
         if mun_count == 0 and dept_count == 0 and conte_pais == 0:
             self.esta_vacio = True
-            logger.warning("catalogo_ubicaciones_vacio | todas las ofertas quedaran pendientes")
+            logger.warning(
+                "catalogo_ubicaciones_vacio | las ofertas se prepararan"
+                " sin ubicacion enlazada (N/A)"
+            )
         else:
             self.esta_vacio = False
 
@@ -121,6 +160,15 @@ class CatalogoUbicaciones:
         if not segmentos:
             return self._guardar(memoria, clave, self._no_aplica_o_pendiente())
 
+        # Eliminar segmentos repetidos conservando el orden
+        visto: set[str] = set()
+        segmentos_unicos: list[str] = []
+        for seg in segmentos:
+            if seg not in visto:
+                visto.add(seg)
+                segmentos_unicos.append(seg)
+        segmentos = segmentos_unicos
+
         # 6. Clasificar
         paises, dept_cand, mun_cand, desconocidos = [], [], [], []
         for seg in segmentos:
@@ -132,6 +180,12 @@ class CatalogoUbicaciones:
                 mun_cand.append(seg)
             else:
                 desconocidos.append(seg)
+
+        # 6bis. Localidad del Distrito Capital (RN-06): si el texto nombra a
+        # Bogotá y queda una sola parte desconocida, esa parte es una localidad
+        # (Ciudad Bolívar, Chapinero, …), no un municipio: se enlaza a Bogotá.
+        if len(desconocidos) == 1 and mun_cand == ["bogota"]:
+            desconocidos = []
 
         # 7. Desconocidos → PENDIENTE
         if desconocidos:
@@ -199,18 +253,20 @@ class CatalogoUbicaciones:
             n = n[:-3]
         if n in EQUIVALENCIAS:
             n = EQUIVALENCIAS[n]
-        return n
+        return ALIAS_MUNICIPIOS.get(n, n)
 
     def buscar_por_componentes(
         self, municipio: str, departamento: str, pais: str
     ) -> str | None:
         """Search by components for AI-driven linking without creating duplicates.
 
-        Returns the catalogue id or ``None`` when the municipality is unknown
-        or ambiguous.  The country parameter is ignored.
+        Returns the catalogue id or ``None`` when the municipality is unknown,
+        ambiguous, or belongs to a different country.  País vacío o "N/A" no
+        filtra; un país distinto sí descarta la fila.
         """
         mun_norm = self.limpiar_municipio(normalizar_texto(municipio))
         dept_norm = normalizar_texto(departamento) if departamento not in ("", "N/A", "N/R") else ""
+        pais_norm = normalizar_pais(pais)
 
         if not mun_norm:
             return None
@@ -220,22 +276,48 @@ class CatalogoUbicaciones:
             return None
 
         if len(filas) == 1:
-            return filas[0][0]
+            fila_id = filas[0][0]
+            fila_pais = self._pais_por_id.get(fila_id)
+            if pais_norm and fila_pais and fila_pais != pais_norm:
+                return None
+            return fila_id
 
         # Varios: necesita departamento para desambiguar
         if not dept_norm:
             return None
         coinc = [f for f in filas if f[1] == dept_norm]
         if len(coinc) == 1:
-            return coinc[0][0]
+            fila_id = coinc[0][0]
+            fila_pais = self._pais_por_id.get(fila_id)
+            if pais_norm and fila_pais and fila_pais != pais_norm:
+                return None
+            return fila_id
         return None
 
-    def municipio_conocido(self, municipio: str) -> bool:
-        """True if at least one catalogue row has this municipality (after cleaning)."""
+    def municipio_conocido(self, municipio: str, pais: str = "") -> bool:
+        """True if at least one catalogue row has this municipality (after cleaning).
+
+        If ``pais`` is provided (and not empty/"N/A"), a row with that country
+        or with no registered country counts; rows from a different country
+        alone do not capture the offer.
+        """
         mun_norm = self.limpiar_municipio(normalizar_texto(municipio))
         if not mun_norm:
             return False
-        return mun_norm in self._municipios
+        if mun_norm not in self._municipios:
+            return False
+        pais_norm = normalizar_pais(pais)
+        if not pais_norm:
+            return True
+        # Una fila del mismo país basta; una fila sin país registrado no es
+        # evidencia en contra (evita crear un duplicado con datos incompletos).
+        paises = [
+            self._pais_por_id.get(fila_id)
+            for fila_id, _dept in self._municipios[mun_norm]
+        ]
+        if any(p == pais_norm for p in paises):
+            return True
+        return all(not p for p in paises)
 
     def departamento_en_texto(self, texto: str) -> str | None:
         """Find a department id within free-form text, ignoring equivalences.
@@ -272,3 +354,22 @@ class CatalogoUbicaciones:
         if memoria is not None and clave is not None:
             memoria[clave] = valor
         return valor
+
+
+def resolver_area_metropolitana(texto: str) -> str | None:
+    """Extract the city from a metropolitan area text, or None.
+
+    If the text starts with "área metropolitana de " or "área metropolitana
+    del " (case- and accent-insensitive), matches the prefix against the
+    original text and returns the rest with original casing, accents, and
+    commas intact.  The caller keeps the original text in the offer column
+    and uses only this result to query the catalogue, where each segment
+    is normalized independently.
+    """
+    match = _RE_AREA_METROPOLITANA.match(texto)
+    if match is None:
+        return None
+    resto = texto[match.end():].strip()
+    if not resto:
+        return None
+    return resto

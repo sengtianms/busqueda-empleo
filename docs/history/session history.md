@@ -5,6 +5,7 @@ Unless noted, decisions from previous sessions remain in effect.
 ## Sessions index
 | № | Date | Session ID | Summary |
 |---|---|---|---|
+| 59 | 18/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Location-redesign documentation closed: decision D78 registered as the as-built (AI kept as an exception that may create one system row, D77 kept as history), module sheet raised to v2.1 and the data model, tables reference, prefix catalogue, MVP plan, tracker and operating contract aligned; live run recorded with 313 offers, zero chain errors, zero pending locations, two corrected links with backups and phantom runs deleted; the full three-module chain restored while the scheduler stays parked; seven documentation drifts and two catalogue-integrity defects found by the two reviewers all corrected with five new tests; 889 tests, lint and types clean; historical two-module notes marked no longer in force |
 | 58 | 17/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Location redesign advanced in four verified steps: the preparation node was wired to the deterministic engine with a single lot per pass and the catalogue read once per run; the catalogue gained a marker for who created each row and an all-not-applicable system row, with the live database migrated in place and the previous rows proven identical against the backup; the engine learned the special-row identifiers, component search tolerant of the capital's name variants, department lookup inside free text, and the "not reported" state was retired. The AI then returned as an exception only — Gemma 4 31B through a single OpenRouter door with the local route switched off and the key kept in the unversioned secrets file — completing the cascade: catalogue, one AI question per text, component lookup, creation only for truly unknown municipalities, named department, country row, and a stop when the special rows are missing. Verified end to end on a database copy and against the live model, 868 tests, lint and types clean, live data untouched |
 | 57 | 17/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Construction of the location redesign started one verified step at a time: the master catalogue gained the 33 operator rows (32 department-only plus one country-only) on top of the 1,103 municipalities through the project's persistence API, with a backup and the original rows proven identical; then the AI-free linking engine was built and verified with 21 tests — strict exact matching after normalization, department disambiguation for repeated municipality names, department reading for the eight homonyms, fixed equivalences for Bogotá D.C. and Distrito Capital, honest pending for metropolitan-area variants and unknown names, run memory by text and a read-only catalogue; two corrective rounds removed identifiers that only existed in code and an order-dependent tolerance; repository-wide lint restored and the empty-catalogue warning pinned by its test; 850 tests, types and lint clean, and a replay of 129 archived offers links 123 with zero invented identifiers; runtime behavior unchanged until node integration |
 | 56 | 15/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Decision D77 registered in the official log (version 1.56) and the whole official documentation aligned with it in ten files: the location stops being classified by a model and is linked against the preloaded master catalogue of 1,103 Colombian municipalities that the module only reads; data model, tables reference, prefix catalogue, both module sheets, MVP plan (new sub-phase 5.8 plus a supersession note), operating contract, tracker and the phase-5 functional plan now marked historical; a false "decision number pending" statement repeated in three documents eliminated and the construction sheet made to cite the number; documents-only, zero code, configuration, database, prompt or deployment changes, construction pending approval |
@@ -52,6 +53,35 @@ Unless noted, decisions from previous sessions remain in effect.
 | 14 | 09/08/2026 | `ses_01bcc78adffemcqFEiZxT52Eli` | Sub-fase 4.4: capture/registration nodes implemented, audited, and post-audit fixes applied (FK-free schema, name columns, upsert tests) |
 | 13 | 08/08/2026 | `ses_01be77680ffeuyoKct4Qrfx1GG` | Repo sync to `fase-4`; new `/save` section with general git commit and push guidance |
 | 12 | 08/08/2026 | `ses_01c089ce2ffe9MvQT4F1pC0MJN` | Sub-fase 4.2 deep audit + post-audit fixes (credentials mapping, playwright lifecycle) |
+
+## Session 59 — 18/11/2026
+`ses_f4af1b961ffe5t8xNspW5U761x` · `rediseno-ubicacion`
+
+**Topics**
+- Location-redesign documentation closed in small, independently verified passes: decision record, module sheet, data model, tables reference, prefix catalogue, execution plan, tracker and operating contract
+- Decision D78 registered as the as-built account of the redesign, with D77 preserved as the superseded design record
+- Alias-fusion threshold removed from settings and its validation; stale read-only and no-AI claims rewritten wherever they survived
+- Live-run evidence recorded: 313 offers, zero chain errors, zero pending locations, two corrected links with prior backups and phantom runs deleted
+- Both closing reviewers run: seven documentation drifts and two catalogue-integrity defects found, then every finding closed
+- Same-name municipalities now receive separate system rows; alternative country spellings resolve to the canonical country instead of duplicating a row
+- Page location text takes precedence over the card value when present, while modality stays owned by the earlier module
+- Five new tests cover homonyms, country aliases and rows with no registered country; historical two-module notes marked as no longer in force
+- Full three-module chain restored in settings while the scheduled clock remains parked by operator order
+
+**Decisions**
+- Option A kept: the AI stays as an exception and may create one system-origin catalogue row; D78 supersedes D77's total-retirement and no-write clauses, D77 kept as history
+- The recorded benefit is quality and independence from quotas, not speed: the measured pace sits in the normal band
+- Historical two-module notes marked as superseded rather than rewritten, and the preloaded catalogue count kept as the load figure with a separate note for system rows
+- Version-history order in the data model left untouched; only a new row inserted at the top
+- Full three-module chain restored because the scheduler is parked; the older evaluation would run only if the clock were re-armed before the AI-free evaluation is built
+- Decisions from previous sessions remain in effect
+
+**Status**
+- Documentation closure confirmed CONFORME by the documentation reviewer; code reviewer confirmed all six findings closed after the two integrity defects were fixed
+- 889 tests passing, lint and types clean, diff check clean
+- Live database healthy: five completed runs, zero errors, 313 offers, zero pending locations, 1,138 locations with two system rows
+- Pending: AI-free evaluation build and any operator decision about re-arming the scheduler
+- Active branch `rediseno-ubicacion`
 
 ## Session 58 — 17/11/2026
 `ses_f4af1b961ffe5t8xNspW5U761x` · `rediseno-ubicacion`

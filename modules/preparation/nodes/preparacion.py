@@ -33,7 +33,12 @@ from pydantic import BaseModel, ValidationError
 
 from modules.preparation.nodes.inicio import _validar_preparacion
 from modules.preparation.run_context import RunContext
-from modules.preparation.ubicaciones import PENDIENTE, CatalogoUbicaciones
+from modules.preparation.ubicaciones import (
+    PENDIENTE,
+    CatalogoUbicaciones,
+    normalizar_pais,
+    resolver_area_metropolitana,
+)
 from shared.ia_service import analyze, analyze_openrouter
 from shared.persistence import (
     actualizar_fila,
@@ -100,14 +105,15 @@ class ResultadoPreparacion:
 class DatosCaptura:
     """Raw data extracted from one offer page (paso 1).
 
-    La ubicación y la modalidad ya no se extraen aquí: llegan en la fila de
-    la oferta escritas por el Módulo 1 (traspaso aprobado 2026-08-25).
+    La ubicación se extrae del span de la página para enriquecer la columna
+    `ubicacion` con el texto completo. La modalidad no se extrae aquí.
     """
 
     titulo_h1: str | None
     descripcion: str
     empresa_nombre: str
     empresa_perfil: str
+    ubicacion_pagina: str = ""
 
 
 def _construir_cliente() -> httpx.Client:
@@ -195,11 +201,12 @@ def _primer_texto_estructurado(soup: BeautifulSoup, selectores: list[str]) -> st
 
 
 def _extraer_datos(html: str) -> DatosCaptura:
-    """Extract title/description/company (paso 1).
+    """Extract title/description/company/location (paso 1).
 
-    La ubicación y la modalidad NO se extraen de la página (traspaso
-    aprobado 2026-08-25: las escribe el Módulo 1 desde la tarjeta); esta
-    extracción degrada con gracia (vacío → `N/R`/`N/A` downstream).
+    La ubicación se extrae del primer span con las clases `topcard__flavor`
+    y `topcard__flavor--bullet` (texto completo, sin recortes). La modalidad
+    no se extrae de la página. Esta extracción degrada con gracia
+    (vacío → `N/R`/`N/A` downstream).
     """
     soup = BeautifulSoup(html, "lxml")
     h1 = soup.select_one("h1")
@@ -225,6 +232,12 @@ def _extraer_datos(html: str) -> DatosCaptura:
         href = ancla.get("href")
         if isinstance(href, str) and href:
             empresa_perfil = urljoin(BASE_LINKEDIN, href)
+    ubicacion_span = soup.select_one("span.topcard__flavor.topcard__flavor--bullet")
+    ubicacion_pagina = (
+        ubicacion_span.get_text(strip=True)
+        if isinstance(ubicacion_span, Tag)
+        else ""
+    )
     if not any([titulo_h1, descripcion, empresa_nombre]):
         raise ValueError("html sin contenido interpretable")
     return DatosCaptura(
@@ -232,6 +245,7 @@ def _extraer_datos(html: str) -> DatosCaptura:
         descripcion=descripcion,
         empresa_nombre=empresa_nombre,
         empresa_perfil=empresa_perfil,
+        ubicacion_pagina=ubicacion_pagina,
     )
 
 
@@ -332,9 +346,11 @@ def _diligenciar_ubicacion(contexto: RunContext, texto_crudo: str) -> str:
     """Paso 3: cascade — deterministic engine, then AI, then fallbacks.
 
     Without catalogue loaded, returns the pending sentinel with ERR-08.
+    Step 0: metropolitan area — strip prefix and resolve the city.
     Step 1: resolver with text cache. Step 2: AI components via
-    _clasificar_con_puertas (cached in cache_ia by truncated text),
-    buscar_por_componentes, create if unknown with normalized components.
+    _clasificar_con_puertas (cached in cache_ia by full text),
+    buscar_por_componentes, create if unknown with normalized components
+    (reused within the run by full tuple, not by municipality name alone).
     Step 3: departamento_en_texto. Step 4: country row. Step 5: sentinel.
     """
     catalogo = contexto.catalogo_ubicaciones
@@ -343,6 +359,21 @@ def _diligenciar_ubicacion(contexto: RunContext, texto_crudo: str) -> str:
             f"ERR-08 | run={contexto.id_corrida} | ubicacion_no_clasificada"
             f" | catalogo no cargado"
         )
+        return PENDIENTE
+
+    # Paso 0: área metropolitana — resolver por ciudad sin crear fila
+    ciudad_am = resolver_area_metropolitana(texto_crudo)
+    if ciudad_am is not None:
+        resultado_am = catalogo.resolver(ciudad_am, contexto.cache_ubicaciones)
+        if resultado_am != PENDIENTE:
+            return resultado_am
+        # Área metropolitana: si la ciudad no se resolvió, saltar pasos 1-2
+        # (no consultar IA ni crear fila); ir directo a pasos 3-5.
+        dept_id = catalogo.departamento_en_texto(texto_crudo)
+        if dept_id is not None:
+            return dept_id
+        if catalogo.fila_pais_id is not None:
+            return catalogo.fila_pais_id
         return PENDIENTE
 
     # Paso 1: resolver determinista
@@ -378,24 +409,19 @@ def _diligenciar_ubicacion(contexto: RunContext, texto_crudo: str) -> str:
                 fila_id = catalogo.buscar_por_componentes(mun, dept_raw, pais_raw)
                 if fila_id is not None:
                     return fila_id
-                if not catalogo.municipio_conocido(mun):
-                    # Municipio desconocido: crear o reutilizar
-                    if mun_limpiado in contexto.cache_creadas:
-                        return contexto.cache_creadas[mun_limpiado]
+                if not catalogo.municipio_conocido(mun, pais_raw):
+                    # Municipio desconocido: crear o reutilizar por tupla COMPLETA.
+                    # Indexar solo por municipio haría compartir la fila a dos
+                    # homónimos de departamentos o países distintos.
                     dept_norm = (
                         normalizar_texto(dept_raw)
                         if dept_raw and dept_raw not in ("", "N/A", "N/R")
                         else "N/A"
-                    )
-                    if not dept_norm:
-                        dept_norm = "N/A"
-                    pais_norm = (
-                        normalizar_texto(pais_raw)
-                        if pais_raw and pais_raw not in ("", "N/A", "N/R")
-                        else "N/A"
-                    )
-                    if not pais_norm:
-                        pais_norm = "N/A"
+                    ) or "N/A"
+                    pais_norm = normalizar_pais(pais_raw) or "N/A"
+                    clave_creada = (mun_limpiado, dept_norm, pais_norm)
+                    if clave_creada in contexto.cache_creadas:
+                        return contexto.cache_creadas[clave_creada]
                     nueva_id = escribir_fila(
                         "ubicaciones",
                         {
@@ -405,7 +431,7 @@ def _diligenciar_ubicacion(contexto: RunContext, texto_crudo: str) -> str:
                             "origen": "sistema",
                         },
                     )
-                    contexto.cache_creadas[mun_limpiado] = nueva_id
+                    contexto.cache_creadas[clave_creada] = nueva_id
                     return nueva_id
 
     # Paso 3: departamento en texto
@@ -529,14 +555,17 @@ def _actualizar_oferta(
 ) -> None:
     """Pasos 4: faithful update; never `fecha_ultima_verificacion` (RN-11).
 
-    `ubicacion` y `modalidad` NO se tocan: son propiedad del Módulo 1
-    desde el traspaso aprobado (2026-08-25).
+    `ubicacion` se actualiza con el texto de la página si llega con contenido;
+    si la página no trajo ubicación, se conserva el valor de la tarjeta.
+    `modalidad` no se toca.
     """
     campos: dict[str, Any] = {
         "empresa_id": empresa_id,
         "ubicacion_id": ubicacion_id,
         "estado": "preparada",
     }
+    if datos.ubicacion_pagina:
+        campos["ubicacion"] = datos.ubicacion_pagina
     if datos.titulo_h1:
         campos["titulo"] = datos.titulo_h1  # RN-10: solo si existe el <h1>
     if datos.descripcion:
@@ -595,8 +624,15 @@ def _procesar_lote(contexto: RunContext, lote: list[dict[str, Any]]) -> bool:
             empresa_id = _diligenciar_empresa(
                 contexto, datos.empresa_nombre, datos.empresa_perfil
             )
+            # Usar la ubicación de la página si está disponible;
+            # si no, usar la guardada en la tarjeta.
+            texto_para_resolver = (
+                datos.ubicacion_pagina
+                if datos.ubicacion_pagina
+                else str(oferta.get("ubicacion", "") or "")
+            )
             ubicacion_id = _diligenciar_ubicacion(
-                contexto, str(oferta.get("ubicacion", "") or "")
+                contexto, texto_para_resolver
             )
             _actualizar_oferta(oferta, datos, empresa_id, ubicacion_id)
             contexto.contador_preparadas += 1
@@ -656,7 +692,7 @@ def ejecutar_preparacion(contexto: RunContext | None) -> ResultadoPreparacion:
             descripcion=f"insumos ausentes o corruptos: {problema}",
         )
 
-    # Cargar catálogo de ubicaciones una sola vez por corrida (D77).
+    # Cargar catálogo de ubicaciones una sola vez por corrida (D78).
     try:
         filas_ubicaciones = leer_tabla("ubicaciones")
     except Exception as error:
