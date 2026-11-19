@@ -82,6 +82,15 @@ class RunContext:
         self.carpeta_lotes: Path | None = None
         self.carpeta_resultados: Path | None = None
         self.carpeta_rechazados: Path | None = None
+        # Seguimiento del proceso de importación (Fase 3), aditivo: el cierre
+        # necesita saber qué lotes se cerraron, cuáles se conservaron y qué
+        # ofertas siguen pendientes para el informe del operador.
+        self.lotes_cerrados: list[str] = []
+        self.lotes_conservados: list[str] = []
+        self.faltantes_por_lote: dict[str, list[str]] = {}
+        self.archivos_rechazados: list[str] = []
+        self.archivos_no_eliminados: list[str] = []
+        self.informe: dict[str, Any] = {}
 
     @property
     def carpetas_resueltas(self) -> bool:

@@ -5,6 +5,7 @@ Unless noted, decisions from previous sessions remain in effect.
 ## Sessions index
 | № | Date | Session ID | Summary |
 |---|---|---|---|
+| 61 | 19/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Module 3 AI-free redesign completed Phase 3: the import node pairs chat answers with their lots, validates every line strictly, applies approved and discarded verdicts with full results and events, keeps incomplete lots intact and deletes resolved ones only after database verification; a shared closure handles both processes with official motives, event-based metrics and ownership-safe lock release; two flow entries cover the scheduled export and the manual import while the old AI route stays untouched; the three approved rules were applied and recorded in the sheet and decision log; 63 new tests, 1018 total, lint and types clean, both reviewers green |
 | 60 | 19/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Module 3 AI-free redesign advanced with Phase 2 closed: the export node guards existing lots, refreshes the chat instruction from the official prompt, groups prepared offers into FIFO lots with internal control sheets and verified atomic writes, and emits one event per lot without changing any offer; reviewer pass closed a corrupt-configuration crash, added a write-permission probe and restored error accounting for half-written lots; tracker and project status updated; 36 new tests, 955 total, lint and types clean |
 | 59 | 18/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Location-redesign documentation closed: decision D78 registered as the as-built (AI kept as an exception that may create one system row, D77 kept as history), module sheet raised to v2.1 and the data model, tables reference, prefix catalogue, MVP plan, tracker and operating contract aligned; live run recorded with 313 offers, zero chain errors, zero pending locations, two corrected links with backups and phantom runs deleted; the full three-module chain restored while the scheduler stays parked; seven documentation drifts and two catalogue-integrity defects found by the two reviewers all corrected with five new tests; 889 tests, lint and types clean; historical two-module notes marked no longer in force |
 | 58 | 17/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Location redesign advanced in four verified steps: the preparation node was wired to the deterministic engine with a single lot per pass and the catalogue read once per run; the catalogue gained a marker for who created each row and an all-not-applicable system row, with the live database migrated in place and the previous rows proven identical against the backup; the engine learned the special-row identifiers, component search tolerant of the capital's name variants, department lookup inside free text, and the "not reported" state was retired. The AI then returned as an exception only — Gemma 4 31B through a single OpenRouter door with the local route switched off and the key kept in the unversioned secrets file — completing the cascade: catalogue, one AI question per text, component lookup, creation only for truly unknown municipalities, named department, country row, and a stop when the special rows are missing. Verified end to end on a database copy and against the live model, 868 tests, lint and types clean, live data untouched |
@@ -54,6 +55,31 @@ Unless noted, decisions from previous sessions remain in effect.
 | 14 | 09/08/2026 | `ses_01bcc78adffemcqFEiZxT52Eli` | Sub-fase 4.4: capture/registration nodes implemented, audited, and post-audit fixes applied (FK-free schema, name columns, upsert tests) |
 | 13 | 08/08/2026 | `ses_01be77680ffeuyoKct4Qrfx1GG` | Repo sync to `fase-4`; new `/save` section with general git commit and push guidance |
 | 12 | 08/08/2026 | `ses_01c089ce2ffe9MvQT4F1pC0MJN` | Sub-fase 4.2 deep audit + post-audit fixes (credentials mapping, playwright lifecycle) |
+
+## Session 61 — 19/11/2026
+`ses_f4af1b961ffe5t8xNspW5U761x` · `rediseno-evaluacion`
+
+**Topics**
+- Module 3 AI-free redesign advanced with Phase 3 built beside the untouched AI flow
+- Import node matches each chat answer to its lot and control sheet, joins numbered answer parts in numeric order and sets aside files with no lot or unreadable sheet
+- Strict per-line validation: chat ornaments removed, five vetoes and coherent decision, real justification and deliverable, offer still pending and not applied twice
+- Valid answers update the offer through evaluation to its final state with the full stored result and one event per offer; invalid ones leave the offer pending with an error event
+- Incomplete lots are kept with their missing offers named; resolved lots are deleted only after the database is verified
+- Shared closure for both processes with official motives, event-based metrics, ownership-safe lock release and a returned operator report
+- Two module entries for the scheduled export and the manual import; every registered run is closed
+- Old AI closure, orchestrator and suite left byte-unchanged; new pieces use separate manual names
+- Reviewer pass added leftover-file reporting, cross-lot duplicate coverage and a corrected test count; sheet and decision log aligned with the approved rules
+
+**Decisions**
+- An answer naming an offer outside its lot's control sheet is rejected as an error; a lot can never evaluate another lot's offers
+- The closure computes the operator report but neither prints nor notifies it; the Phase 4 command will do that
+- Split answers keep the numbered part naming and are joined in numeric order
+- Decisions from previous sessions remain in effect
+
+**Status**
+- Phase 3 of the Module 3 redesign closed; phases 1–3 done, phase 4 pending
+- 1018 tests passing, lint and types clean, both closing reviewers green
+- Active branch `rediseno-evaluacion`; all session changes committed in the save commit
 
 ## Session 60 — 19/11/2026
 `ses_f4af1b961ffe5t8xNspW5U761x` · `rediseno-evaluacion`

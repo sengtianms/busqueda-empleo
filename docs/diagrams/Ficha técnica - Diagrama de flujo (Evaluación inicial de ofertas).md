@@ -603,7 +603,7 @@ Flujo por lote, en orden de nombre (orden obligatorio):
 | 7 | **Cerrar el lote** | Si todas sus ofertas quedaron resueltas, borra los tres archivos; si falta alguna, conserva el lote completo y lo informa | Carpeta + BD |
 | 8 | **Registrar el lote** | Suceso con aplicadas, rechazadas, faltantes y archivos eliminados | `eventos` |
 
-Un lote con faltantes no se borra mientras conserve ofertas pendientes. Un lote resuelto se borra completo (texto, ficha y respuesta, incluidas sus partes). **Todos los eventos de oferta llevan `id_oferta`; los de lote llevan el nombre del archivo y el `id_corrida` de la exportación.**
+Un lote con faltantes no se borra mientras conserve ofertas pendientes. Un lote resuelto se borra completo (texto, ficha y respuesta, incluidas sus partes). **Todos los eventos de oferta llevan `id_oferta`; los de lote llevan el nombre del archivo y el `id_corrida`.** En la importación ese campo es el id de la corrida de importación (para que el cierre pueda medir sus propios eventos); el id de la exportación viaja dentro del nombre del lote (`<id_corrida>_lote_<NNN>`).
 
 ### Entradas
 - Contexto: lista de archivos no vacía, `id_corrida`, configuración (`carpeta_base`, `modelo_evaluador`, `retries`), contadores.
@@ -623,7 +623,7 @@ Un lote con faltantes no se borra mientras conserve ofertas pendientes. Un lote 
 ### Reglas de negocio
 - **RN-01**: por lotes: este nodo recorre todos los archivos antes de entregar control.
 - **RN-02**: manda el archivo: se aplica lo que trae, sin completar campos ausentes ni reinterpretar la decisión.
-- **RN-03**: validación estricta: 5 vetos con valor válido, decisión coherente con ellos, justificación con contenido real y entregable con contenido real —única excepción: `N/A` admitido en el descarte por falta de descripción (`v3 = FAIL` y `DESCARTADA`)—, oferta existente y en `preparada`.
+- **RN-03**: validación estricta: 5 vetos con valor válido, decisión coherente con ellos, justificación con contenido real y entregable con contenido real —única excepción: `N/A` admitido en el descarte por falta de descripción (`v3 = FAIL` y `DESCARTADA`)—, oferta existente y en `preparada`, e identificador incluido en la ficha de control del lote (aprobado en la Fase 3: una respuesta no puede evaluar ofertas de otro lote).
 - **RN-04**: una línea inválida se rechaza entera; la oferta no cambia de estado. Nunca se descarta por una duda ni por un dato faltante.
 - **RN-05**: una oferta no se aplica dos veces: si ya no está en `preparada`, la línea se rechaza como "ya no pendiente" y se informa.
 - **RN-06**: la aprobada se marca `aceptada_ei` y la descartada `descartada_ei`, pasando por `evaluada` en el mismo movimiento. `aceptada_ei`/`descartada_ei` son estados propios de esta fase.
@@ -639,7 +639,7 @@ Un lote con faltantes no se borra mientras conserve ofertas pendientes. Un lote 
 - **VAL-01**: insumos presentes (lista no vacía, configuración, carpetas, BD).
 - **VAL-02**: todo archivo de resultados tiene lote y ficha de control con el mismo nombre base; un archivo sin pareja se rechaza completo, se informa y se aparta a `resultados/rechazados/` (no se borra y no se vuelve a procesar).
 - **VAL-03**: lectura línea por línea; una línea es un objeto JSON con `id`; los adornos se descartan antes de validar.
-- **VAL-04**: por línea — oferta existente; estado `preparada`; `v1`–`v5` presentes con valor `PASS`/`FAIL`; `decision` ∈ {`APROBADA`, `DESCARTADA`} y coherente (aprobada exige los cinco `PASS`; descartada exige al menos un `FAIL`); `justificacion` con contenido real (no vacía, no `N/A`/`N/R`); `entregable_principal` con contenido real, con una única excepción: se admite `N/A` cuando `v3 = FAIL` y la decisión es `DESCARTADA` (oferta sin descripción; excepción a la validación de contenido de D52, cumpliendo D31); oferta no repetida en el lote ni en otro archivo.
+- **VAL-04**: por línea — identificador incluido en la ficha de control del lote; oferta existente; estado `preparada`; `v1`–`v5` presentes con valor `PASS`/`FAIL`; `decision` ∈ {`APROBADA`, `DESCARTADA`} y coherente (aprobada exige los cinco `PASS`; descartada exige al menos un `FAIL`); `justificacion` con contenido real (no vacía, no `N/A`/`N/R`); `entregable_principal` con contenido real, con una única excepción: se admite `N/A` cuando `v3 = FAIL` y la decisión es `DESCARTADA` (oferta sin descripción; excepción a la validación de contenido de D52, cumpliendo D31); oferta no repetida en el lote ni en otro archivo.
 - **VAL-05**: la comparación con la ficha de control identifica con nombre y número los identificadores faltantes.
 - **VAL-06**: lo aplicado respeta D31 (sin vacíos; el único `'N/A'` admitido en el entregable es el del descarte por falta de descripción); el estado final corresponde a la decisión; el resultado queda completo.
 - **VAL-07**: el borrado ocurre solo tras verificar en la base todas las ofertas del lote (aplicadas o ya no pendientes), y borra las tres piezas del lote.
@@ -662,7 +662,7 @@ Un lote con faltantes no se borra mientras conserve ofertas pendientes. Un lote 
 | ERR-01 | Insumos ausentes/corruptos | No | 1 | Evento crítico; aborto | `abortada` |
 | ERR-02 | Archivo de resultados sin lote o ficha de control | No | 1 | Se rechaza el archivo completo; evento de error con su nombre y se aparta a `resultados/rechazados/` (no se borra y no se repite el error) | `preparada` (sin cambios) |
 | ERR-03 | Línea ilegible, sin `id` o sin los 5 vetos | No | 2-3 | Se rechaza la línea; se informa; se cuenta rechazo | `preparada` |
-| ERR-04 | Oferta inexistente, no pendiente o repetida | No | 3 | Se rechaza la línea; nunca se cambia el estado | `preparada` |
+| ERR-04 | Oferta inexistente, no pendiente, repetida o fuera de la ficha del lote | No | 3 | Se rechaza la línea; nunca se cambia el estado | `preparada` |
 | ERR-05 | Decisión incoherente con los vetos, o justificación/entregable vacíos (salvo `entregable_principal = 'N/A'` en el descarte por falta de descripción) | No | 3 | Se rechaza la línea; se informa | `preparada` |
 | ERR-06 | Fallo persistente al aplicar una línea válida | Sí (`retries`) | 4 | Reintento; agotado → aborto (no se puede garantizar integridad) | `abortada` |
 | ERR-07 | Faltantes contra la ficha de control | No | 6-7 | El lote no se cierra: se conserva completo y se informa qué falta | `preparada` |
@@ -742,6 +742,8 @@ Cerrar la corrida de importación de forma determinista, con trazabilidad comple
 | 4 | **Cerrar recursos** | Cerrar la conexión (best-effort) | — |
 | 5 | **Liberar bloqueo** | Solo si la corrida lo posee | `bloqueo` |
 | 6 | **Informar al operador** | Resumen en pantalla y aviso de escritorio: aplicadas, rechazadas, lotes cerrados y ofertas que siguen pendientes | — |
+
+**Nota as-built (Fase 3, decisión aprobada):** el cierre calcula y devuelve el informe del operador, pero no lo imprime ni envía el aviso de escritorio; el paso 6 lo ejecuta el comando de importación de la Fase 4. Así la capa de operación sigue intacta durante la construcción.
 
 ### Entradas
 Contexto best-effort:
