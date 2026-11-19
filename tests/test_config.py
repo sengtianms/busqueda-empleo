@@ -100,3 +100,6 @@ def test_config_real_define_seccion_preparacion_y_ruteo() -> None:
     assert preparacion["retries"]["max_attempts"] >= 1
 
     assert config["ai_routing"]["preparacion"] == "local"
+    assert "evaluacion" not in config
+    assert "evaluation" not in config["ai_routing"]
+    assert config["evaluacion_manual"]["tamano_lote"] >= 1

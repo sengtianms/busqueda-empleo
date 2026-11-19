@@ -1,37 +1,16 @@
-"""Tests del Previo Fase 6 (D48): terreno del Módulo 3 sin activar nada nuevo."""
+"""Previo Fase 6 y cierre del rediseño (D48, D76): terreno del Módulo 3.
+
+Se conserva lo que sigue vigente —estados, transiciones, columnas y llaves
+compartidas—. Las comprobaciones de la ruta de inteligencia artificial se
+retiraron al cerrar la Fase 4, cuando el flujo antiguo dejó de existir.
+"""
 
 from pathlib import Path
-from typing import Any
 
 import pytest
 
-from shared.evaluacion import validar_evaluacion
 from shared.models import Corrida, Offer, OfferState
 from shared.state_machine import possible_transitions, transition
-
-
-def _seccion_ok() -> dict[str, Any]:
-    return {
-        "pausa_entre_ofertas_segundos": 1.2,
-        "pausa_jitter_segundos": 0.4,
-        "timeout_puerta_segundos": 60,
-        "retries": {
-            "max_attempts": 2,
-            "base_wait_seconds": 2,
-            "max_wait_seconds": 30,
-            "multiplier": 2,
-        },
-        "puertas_alternas": [],
-    }
-
-
-def _config_ok() -> dict[str, Any]:
-    return {
-        "evaluacion": _seccion_ok(),
-        "ai_routing": {"evaluation": "cloud"},
-        "ai_cloud": {"model": "gemma4:31b-cloud"},
-        "ai_local": {"model": "gpt-oss:120b-cloud"},
-    }
 
 
 def test_estados_nuevos_existen() -> None:
@@ -102,94 +81,24 @@ def test_migracion_idempotente(temp_db_file: Path) -> None:
     test_migracion_crea_columnas_y_check(temp_db_file)
 
 
-def test_validador_acepta_configuracion_real() -> None:
-    from shared import config as config_module
-
-    config_module.reload_config()
-    config = config_module.load()
-    assert validar_evaluacion(config.get("evaluacion"), config) is None
-
-
-def test_validador_acepta_seccion_minima() -> None:
-    assert validar_evaluacion(_seccion_ok(), _config_ok()) is None
-
-
-def test_validador_rechaza_seccion_ausente() -> None:
-    assert validar_evaluacion(None, _config_ok()) is not None
-
-
-def test_validador_rechaza_reintentos_distintos_de_dos() -> None:
-    seccion = _seccion_ok()
-    seccion["retries"] = dict(seccion["retries"], max_attempts=3)
-    assert "max_attempts" in str(validar_evaluacion(seccion, _config_ok()))
-
-
-def test_validador_rechaza_pausa_negativa() -> None:
-    seccion = _seccion_ok()
-    seccion["pausa_entre_ofertas_segundos"] = -1
-    assert validar_evaluacion(seccion, _config_ok()) is not None
-
-
-def test_validador_rechaza_timeout_de_puerta_ausente() -> None:
-    seccion = _seccion_ok()
-    del seccion["timeout_puerta_segundos"]
-    assert "timeout_puerta_segundos" in str(validar_evaluacion(seccion, _config_ok()))
-
-
-def test_validador_rechaza_timeout_de_puerta_no_positivo() -> None:
-    seccion = _seccion_ok()
-    seccion["timeout_puerta_segundos"] = 0
-    assert "timeout_puerta_segundos" in str(validar_evaluacion(seccion, _config_ok()))
-
-
-def test_validador_rechaza_puertas_no_lista() -> None:
-    seccion = _seccion_ok()
-    seccion["puertas_alternas"] = "llave"
-    assert validar_evaluacion(seccion, _config_ok()) is not None
-
-
-def test_validador_rechaza_puerta_con_nombre_no_texto() -> None:
-    seccion = _seccion_ok()
-    seccion["puertas_alternas"] = [{"nombre": 5}]
-    assert validar_evaluacion(seccion, _config_ok()) is not None
-
-
-def test_validador_rechaza_puerta_sin_modelo() -> None:
-    seccion = _seccion_ok()
-    seccion["puertas_alternas"] = [{"nombre": "alterna", "clave_ref": "K"}]
-    assert validar_evaluacion(seccion, _config_ok()) is not None
-
-
-def test_validador_rechaza_puerta_sin_clave() -> None:
-    seccion = _seccion_ok()
-    seccion["puertas_alternas"] = [{"nombre": "alterna", "modelo": "m"}]
-    assert validar_evaluacion(seccion, _config_ok()) is not None
-
-
-def test_validador_acepta_tres_puertas_openrouter() -> None:
-    from shared import config as config_module
-
-    config_module.reload_config()
-    config = config_module.load()
-    assert validar_evaluacion(config.get("evaluacion"), config) is None
-    assert len(config["evaluacion"]["puertas_alternas"]) == 3
-
-
 def test_template_privado_reserva_las_tres_llaves() -> None:
-    from pathlib import Path
-
     plantilla = Path("config/.env.template").read_text(encoding="utf-8")
     for i in (1, 2, 3):
         assert f"OPENROUTER_API_KEY_{i}=" in plantilla
 
 
-def test_validador_rechaza_ruta_ausente() -> None:
-    config = _config_ok()
-    del config["ai_routing"]
-    assert validar_evaluacion(config["evaluacion"], config) is not None
+def test_config_ya_no_declara_la_ruta_de_evaluacion_con_ia() -> None:
+    from shared.config import load
+
+    config = load()
+    assert "evaluacion" not in config
+    assert "evaluation" not in config["ai_routing"]
 
 
-def test_validador_rechaza_modelo_ausente() -> None:
-    config = _config_ok()
-    config["ai_cloud"] = {}
-    assert validar_evaluacion(config["evaluacion"], config) is not None
+def test_herramienta_de_prompts_no_usa_la_ruta_retirada() -> None:
+    from scripts.prompt_tester import PURPOSE
+    from shared.config import load
+
+    rutas = load()["ai_routing"]
+    assert "evaluation" not in PURPOSE.values()
+    assert all(proposito in rutas for proposito in PURPOSE.values())

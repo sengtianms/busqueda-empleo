@@ -34,8 +34,12 @@ PROMPT_PATH: dict[str, str] = {
     "PRM-005": "processing/inputs",
 }
 
+# La ruta `evaluation` se retiró con el rediseño del Módulo 3 (D76/D79): el
+# prompt de compatibilidad sigue vigente como instrucción del chat, pero ya no
+# se envía a un modelo desde el sistema. Para la prueba se usa la ruta cloud
+# declarada, que es una configuración existente y reporta sus fallos.
 PURPOSE: dict[str, str] = {
-    "PRM-001": "evaluation",
+    "PRM-001": "processing",
     "PRM-002": "processing",
     "PRM-003": "processing",
     "PRM-004": "processing",
@@ -112,7 +116,7 @@ def main() -> None:
 
     prompt_id = args.prompt_id.upper() if args.prompt_id.startswith("PRM") else args.prompt_id
     prompt_path = _prompt_name(prompt_id)
-    purpose = PURPOSE.get(prompt_id, "evaluation")
+    purpose = PURPOSE.get(prompt_id, "processing")
 
     contexts_path = Path(args.context) if args.context else _CONTEXTS_PATH
     if not contexts_path.exists():

@@ -27,20 +27,17 @@ CONFIG_OK: dict[str, Any] = {
         "puertas_alternas": [],
     },
     "concurrencia": {"umbral_obsolescencia_minutos": 120},
-    "evaluacion": {
-        "pausa_entre_ofertas_segundos": 1.2,
-        "pausa_jitter_segundos": 0.4,
-        "timeout_puerta_segundos": 60,
+    "evaluacion_manual": {
+        "carpeta_base": "data/evaluacion_manual",
+        "tamano_lote": 30,
+        "modelo_evaluador": "chat: operador",
         "retries": {
             "max_attempts": 2,
             "base_wait_seconds": 2,
             "max_wait_seconds": 30,
             "multiplier": 2,
         },
-        "puertas_alternas": [],
     },
-    "ai_routing": {"evaluation": "cloud"},
-    "ai_cloud": {"model": "gemma4:31b-cloud"},
 }
 
 
@@ -93,10 +90,31 @@ def test_check_bloqueo_obsoleto(temp_db_file: Path) -> None:
 
 
 def test_ejecutar_preflight_camino_feliz(temp_db_file: Path) -> None:
-    todo_ok, lineas = ejecutar_preflight(usar_ia=False)
+    todo_ok, lineas = ejecutar_preflight()
     assert todo_ok is True
     assert any("base de datos escribible" in linea for linea in lineas)
     assert any("bloqueo libre" in linea for linea in lineas)
+    assert any("evaluacion manual" in linea for linea in lineas)
+    assert any("carpeta de trabajo evaluacion" in linea for linea in lineas)
+
+
+def test_check_config_evaluacion_manual_invalida() -> None:
+    rota = dict(CONFIG_OK)
+    rota["evaluacion_manual"] = {**CONFIG_OK["evaluacion_manual"], "tamano_lote": 0}
+    fallas = [mensaje for ok, mensaje in _check_config(rota) if not ok]
+    assert len(fallas) == 1 and "evaluacion manual" in fallas[0]
+
+
+def test_check_carpeta_evaluacion_no_disponible(tmp_path: Path) -> None:
+    config = {
+        **CONFIG_OK,
+        "evaluacion_manual": {
+            **CONFIG_OK["evaluacion_manual"],
+            "carpeta_base": str(tmp_path / "sin_padre" / "manual"),
+        },
+    }
+    fallas = [mensaje for ok, mensaje in _check_config(config) if not ok]
+    assert any("carpeta de trabajo evaluacion" in falla for falla in fallas)
 
 
 def _ahora() -> str:

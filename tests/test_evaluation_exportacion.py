@@ -6,7 +6,6 @@ from typing import Any
 import pytest
 
 from modules.evaluation.nodes import exportacion
-from modules.evaluation.nodes.evaluacion import _limpiar_descripcion_para_ia
 from modules.evaluation.nodes.exportacion import (
     ResultadoExportacion,
     ejecutar_exportacion,
@@ -405,18 +404,22 @@ def test_escritura_de_instruccion_fallida_aborta_con_err02(
     assert resultado.codigo == "ERR-02"
 
 
-def test_limpieza_de_descripcion_es_igual_a_la_del_flujo_viejo() -> None:
-    casos = [
-        "",
-        "N/A",
-        "About us\nPropaganda\nThe role\nDirigir operaciones",
-        "Benefits\nSeguro médico\nResponsabilidades\nPlanear la demanda",
-        "Texto sin encabezados",
-    ]
-    for caso in casos:
-        assert limpiar_descripcion_para_evaluacion(caso)[0] == (
-            _limpiar_descripcion_para_ia(caso)
-        )
+def test_limpieza_de_descripcion_quita_ruido_y_conserva_el_original() -> None:
+    casos = {
+        "": "",
+        "N/A": "N/A",
+        "About us\nPropaganda\nThe role\nDirigir operaciones": (
+            "The role\nDirigir operaciones"
+        ),
+        "Benefits\nSeguro médico\nResponsabilidades\nPlanear la demanda": (
+            "Responsabilidades\nPlanear la demanda"
+        ),
+        "Texto sin encabezados": "Texto sin encabezados",
+    }
+    for caso, esperado in casos.items():
+        limpio, recortado = limpiar_descripcion_para_evaluacion(caso)
+        assert limpio == esperado
+        assert recortado is False
 
 
 # ------------------------------------------------------------------ Guardián

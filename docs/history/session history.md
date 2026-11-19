@@ -5,6 +5,7 @@ Unless noted, decisions from previous sessions remain in effect.
 ## Sessions index
 | № | Date | Session ID | Summary |
 |---|---|---|---|
+| 62 | 19/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Module 3 AI-free redesign closed with Phase 4: a one-line import command shows the operator report and sends the desktop notice; the scheduled batch exports lots instead of calling a model, the verdict names exported lots and pending offers, the board shows lots instead of per-offer failures, the preflight checks no model, and the old AI route and its settings were removed; real export of 294 offers into 10 lots plus a real import on a copy, zero errors; reviewer findings fixed, 973 tests, lint and types clean |
 | 61 | 19/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Module 3 AI-free redesign completed Phase 3: the import node pairs chat answers with their lots, validates every line strictly, applies approved and discarded verdicts with full results and events, keeps incomplete lots intact and deletes resolved ones only after database verification; a shared closure handles both processes with official motives, event-based metrics and ownership-safe lock release; two flow entries cover the scheduled export and the manual import while the old AI route stays untouched; the three approved rules were applied and recorded in the sheet and decision log; 63 new tests, 1018 total, lint and types clean, both reviewers green |
 | 60 | 19/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Module 3 AI-free redesign advanced with Phase 2 closed: the export node guards existing lots, refreshes the chat instruction from the official prompt, groups prepared offers into FIFO lots with internal control sheets and verified atomic writes, and emits one event per lot without changing any offer; reviewer pass closed a corrupt-configuration crash, added a write-permission probe and restored error accounting for half-written lots; tracker and project status updated; 36 new tests, 955 total, lint and types clean |
 | 59 | 18/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Location-redesign documentation closed: decision D78 registered as the as-built (AI kept as an exception that may create one system row, D77 kept as history), module sheet raised to v2.1 and the data model, tables reference, prefix catalogue, MVP plan, tracker and operating contract aligned; live run recorded with 313 offers, zero chain errors, zero pending locations, two corrected links with backups and phantom runs deleted; the full three-module chain restored while the scheduler stays parked; seven documentation drifts and two catalogue-integrity defects found by the two reviewers all corrected with five new tests; 889 tests, lint and types clean; historical two-module notes marked no longer in force |
@@ -55,6 +56,30 @@ Unless noted, decisions from previous sessions remain in effect.
 | 14 | 09/08/2026 | `ses_01bcc78adffemcqFEiZxT52Eli` | Sub-fase 4.4: capture/registration nodes implemented, audited, and post-audit fixes applied (FK-free schema, name columns, upsert tests) |
 | 13 | 08/08/2026 | `ses_01be77680ffeuyoKct4Qrfx1GG` | Repo sync to `fase-4`; new `/save` section with general git commit and push guidance |
 | 12 | 08/08/2026 | `ses_01c089ce2ffe9MvQT4F1pC0MJN` | Sub-fase 4.2 deep audit + post-audit fixes (credentials mapping, playwright lifecycle) |
+
+## Session 62 — 19/11/2026
+`ses_f4af1b961ffe5t8xNspW5U761x` · `rediseno-evaluacion`
+
+**Topics**
+- Final phase of the Module 3 redesign planned, approved and built in four verified steps
+- New one-line import command runs the import flow, prints the full report and sends the desktop notice with a real exit status
+- Scheduled batch now exports lots and closes as awaiting import; the import stays a manual step outside the batch
+- Batch verdict reports exported lots and pending offers instead of model verdicts; board shows lot counts, not per-offer failure estimates
+- Preflight validates the manual evaluation section and work folder and makes no model call; the obsolete check flag was removed
+- Old evaluation model route, its settings and its validator removed while the shared classifier keys and compatibility prompt stay
+- Real verification with backup: export of 294 offers into ten lots, import on a copy with 15 approvals and 15 discards, and an empty-folder run
+- Two review rounds closed reporting, prompt-tool, board, preflight and run-identifier findings; all primary documents aligned
+
+**Decisions**
+- The old AI route is retired for good; the import command keeps the proposed name and needs no arguments
+- The preflight does not check Ollama: the local classifier door is off and classification uses the configured reserve route
+- Every registered run reports its real motive and identifier, including closures without a context
+- Decisions from previous sessions remain in effect
+
+**Status**
+- Module 3 redesign complete; all four build phases and the integration closed
+- 973 tests passing, lint and types clean, both closing reviewers green
+- Active branch `rediseno-evaluacion`; all session changes committed in the save commit
 
 ## Session 61 — 19/11/2026
 `ses_f4af1b961ffe5t8xNspW5U761x` · `rediseno-evaluacion`

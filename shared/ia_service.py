@@ -209,16 +209,17 @@ def _validate_response(raw_response: str) -> dict[str, Any]:
 def analyze(
     prompt_id: str,
     context: dict[str, Any],
-    purpose: str = "evaluation",
+    purpose: str,
     *,
     timeout: float | None = None,
     reintentar: bool = True,
 ) -> dict[str, Any]:
     """Renders a prompt and asks the routed provider.
 
-    `timeout` overrides the route's configured wait. `reintentar=False`
-    skips the shared retry wrapper so the caller can rotate providers on
-    the first failure (evaluation door policy, D59).
+    `purpose` names the configured route (evaluation was retired by D76;
+    the location classifier still uses `preparacion`). `timeout` overrides
+    the route's wait; `reintentar=False` lets the caller rotate providers on
+    the first failure.
     """
     template = load_prompt(prompt_id)
     final_prompt = render_prompt(template, context)

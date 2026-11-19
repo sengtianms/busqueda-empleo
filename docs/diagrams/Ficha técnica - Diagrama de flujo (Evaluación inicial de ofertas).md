@@ -1,5 +1,7 @@
 # Especificación canónica densificada — Módulo 3: Evaluación inicial de ofertas
 
+**Versión:** 2.1 — rediseño construido y cerrado el 2026-11-19 (Fase 4). La v2.0 fue la base de construcción de las fases 1–3; esta versión añade la integración, el retiro del circuito con IA y la verificación real.
+
 **Base de decisiones:** rediseño del módulo en **dos procesos independientes y consecutivos**, aprobado por el usuario el 2026-11-15. Proceso **A — Exportación**, lanzado por la tanda programada: convierte las ofertas en `preparada` en lotes de archivos legibles por un chat y cierra su corrida con `evaluacion_pendiente`. Proceso **B — Importación**, lanzado a mano con un comando: valida lo que devolvió el chat, aplica el resultado, cambia el estado de cada oferta y cierra su corrida. La espera entre ambos **no es un nodo**: es el tiempo entre dos corridas cortas, cada una con su propio bloqueo y su propio cierre; ninguna corrida espera a una persona. El módulo deja de usar inteligencia artificial: se retiran las puertas, las llaves, las cuotas, las esperas máximas, las pausas entre ofertas, la política D50/D59 y el motivo `cupo_agotado`. Los 5 controles de veto, la regla de oro y el prompt `compatibility.md` v6 (D58) no cambian (el prompt pasa a ser la instrucción del chat); del resultado guardado solo cambia el campo que identificaba la puerta, que pasa a ser el modelo evaluador. Sin cambios de esquema: `resultado_evaluacion_inicial` se conserva y el campo de la puerta que respondió se reemplaza por el modelo evaluador declarado en configuración. Cuatro nodos por proceso (arranque, decisión, proceso, cierre), estructura espejo de las fichas de los Módulos 1 y 2.
 
 ## Convenciones comunes
@@ -809,7 +811,24 @@ No se sobrescribe `ofertas_descubiertas.id_corrida` (sigue siendo la corrida de 
 
 ---
 
-## Pendientes de construcción e integración (aprobados)
+## Integración y cierre (Fase 4, as-built)
+
+Los ocho puntos aprobados quedaron ejecutados:
+
+1. **Instrucción del chat:** construida en la Fase 2; `instruccion_evaluacion.md` se regenera por huella del prompt oficial y ya incluye el formato JSON por línea y la excepción `N/A`.
+2. **Comando de importación:** `scripts/importar_evaluaciones.sh` (una línea, sin argumentos; `--db` para copias) y su motor `scripts/importar_evaluaciones.py`. Muestra el informe completo, avisa en el escritorio y devuelve salida correcta o fallida. El cierre calcula el informe; el comando lo entrega.
+3. **Orquestador del módulo:** construido en la Fase 3 (`orchestrator_manual.py`) con las dos entradas; el transversal usa la de exportación.
+4. **Orquestador transversal:** `MODULOS` mantiene a evaluación en tercer lugar; su función pública es ahora la exportación, con estado de salida `evaluacion_pendiente/sin_pendientes`. El resultado sigue leyéndose de la base; la importación queda fuera de la tanda.
+5. **Notificador de veredicto:** la tanda informa «N lotes exportados · M ofertas pendientes de importar» leyendo la corrida de exportación; la importación tiene texto propio reutilizado por el comando.
+6. **Tablero y centinela:** el tablero muestra lotes exportados, ofertas evaluadas y pendientes de importar; el vocabulario de eventos del módulo se actualizó sin tocar umbrales, cierres ni alertas.
+7. **Prevuelo:** valida `evaluacion_manual:` y la carpeta de trabajo (existente o creable); deja de comprobar modelos o llaves de evaluación y no hace ninguna llamada a un modelo. `corrida_programada.sh` ya no usa `--ia`.
+8. **Retiro de la ruta de IA:** se eliminaron los nodos, cierre, orquestador y suites del flujo anterior, la sección `evaluacion:`, `ai_routing.evaluation` y el validador asociado. La ruta por defecto de la llamada compartida dejó de apuntar a `evaluation`. Se conservan el prompt de compatibilidad, la configuración y las claves de Preparación (incluidas las tres de OpenRouter).
+
+**Notas de la revisión:** el orquestador devuelve el cierre de toda corrida registrada —también en concurrencia, fallo de arranque o aborto— para que el comando informe el motivo real y el identificador en vez de decir que no hubo corrida; solo devuelve vacío cuando el fallo ocurre antes del registro. La herramienta de prueba de prompts usa una ruta declarada, porque la de evaluación se retiró. El tablero no pinta ceros de importación durante la exportación, y el prevuelo resuelve la carpeta de trabajo exactamente igual que el arranque del módulo.
+
+**Verificación real (2026-11-19):** con respaldo previo (`data/backup/job_search_pre_fase4_20261119_175455.db`), exportación real COR-0008: 294 ofertas `preparada` → 10 lotes, cierre `evaluacion_pendiente`, 0 errores. Importación sobre copia de la base con un lote real (COR-0009): 15 aprobadas / 15 descartadas, lote cerrado y verificado, aviso entregado y bloqueo libre. Sin respuestas (COR-0010): cierre `sin_resultados`, salida correcta y aviso informativo. Los diez lotes reales quedan en la carpeta de trabajo para que el operador los evalúe en el chat.
+
+**(Histórico) Pendientes aprobados antes de la Fase 4:**
 
 1. **Instrucción del chat:** `instruccion_evaluacion.md` se genera en la exportación desde el prompt oficial `prompts/initial_evaluation/compatibility.md` (v6, D58), con una sección nueva de formato de salida (una línea JSON por oferta, incluida la excepción de `entregable_principal = 'N/A'` cuando la oferta no trae descripción y se descarta por `v3 = FAIL`) y la orden de procesar el archivo del lote. Sin llaves, sin ruta de modelo y sin ejemplos de puertas.
 2. **Comando de importación (nuevo):** pieza de la capa de operación, de una línea, que lanza el flujo de importación, muestra el informe y envía el aviso de escritorio. No requiere argumentos; opera sobre la carpeta configurada.

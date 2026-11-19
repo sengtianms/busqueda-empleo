@@ -276,7 +276,10 @@ def test_sin_contexto_cierra_por_id_con_motivo_explicito() -> None:
     _corrida()
     resultado = finalizar_proceso(None, "exportacion", "concurrencia", _CORRIDA)
     assert resultado.codigo == "concurrencia"
-    assert resultado.informe == {"proceso": "exportacion"}
+    assert resultado.informe == {
+        "proceso": "exportacion",
+        "id_corrida": _CORRIDA,
+    }
     terminacion = [e for e in _eventos_de() if e["codigo"] == "concurrencia"]
     assert len(terminacion) == 1
     assert terminacion[0]["tipo"] == "suceso"

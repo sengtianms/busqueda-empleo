@@ -20,7 +20,7 @@ from typing import Any, Callable, TypeVar
 from loguru import logger
 
 from modules.discovery.orchestrator import ejecutar_flujo as flujo_descubrimiento
-from modules.evaluation.orchestrator import ejecutar_flujo as flujo_evaluacion
+from modules.evaluation.orchestrator_manual import ejecutar_flujo_exportacion
 from modules.preparation.orchestrator import ejecutar_flujo as flujo_preparacion
 from shared.config import load
 from shared.persistence import (
@@ -47,6 +47,15 @@ class ModuloOrquestado:
     ejecutar_flujo: Callable[[], None]
 
 
+def flujo_evaluacion() -> None:
+    """Punto de entrada sin argumentos que exige el orquestador transversal.
+
+    La exportación del Módulo 3 ya no devuelve un veredicto: el orquestador
+    lee su resultado de la base, como hace con los otros dos módulos (D76).
+    """
+    ejecutar_flujo_exportacion()
+
+
 MODULOS: list[ModuloOrquestado] = [
     ModuloOrquestado(
         "descubrimiento",
@@ -63,7 +72,7 @@ MODULOS: list[ModuloOrquestado] = [
     ModuloOrquestado(
         "evaluacion",
         estado_entrada="preparada",
-        estado_salida="aceptada_ei/descartada_ei",
+        estado_salida="evaluacion_pendiente/sin_pendientes",
         ejecutar_flujo=flujo_evaluacion,
     ),
 ]

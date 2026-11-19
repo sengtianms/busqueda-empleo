@@ -60,7 +60,16 @@ FAMILIAS_CODIGOS: dict[str, frozenset[str]] = {
         }
     ),
     "evaluacion": frozenset(
-        {"oferta_aprobada", "oferta_descartada", "evaluacion_fallida"}
+        {
+            "oferta_aprobada",
+            "oferta_descartada",
+            "evaluacion_rechazada",
+            "ofertas_exportadas",
+            "exportacion_omitida",
+            "lotes_retirados",
+            "evaluaciones_importadas",
+            "lote_conservado",
+        }
     ),
 }
 

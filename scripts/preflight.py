@@ -1,24 +1,27 @@
 """Chequeo prevuelo del pipeline (D42): valida entorno antes de lanzar una corrida.
 
 Uso:
-    python scripts/preflight.py [--ia] [--db data/job_search.db]
+    python scripts/preflight.py [--db data/job_search.db]
 
-Verifica: configuracion de modulos/orquestador, base escribible, bloqueo
-de concurrencia y (opcional, --ia) disponibilidad del modelo local.
+Verifica: configuracion de modulos/orquestador y de la evaluacion manual,
+carpeta de trabajo, base escribible y bloqueo de concurrencia. No consulta
+ningun modelo: la inteligencia artificial ya no interviene en la evaluacion
+y la de preparacion es opcional (Fase 4, D76).
 Codigo de salida 0 = todo en orden; 1 = hay bloqueos.
 """
 
 from __future__ import annotations
 
 import argparse
-import os
 import sys
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from modules.evaluation.nodes.inicio_manual import _carpetas_de_trabajo
 from shared.config import load
 from shared.persistence import (
     change_path,
@@ -35,7 +38,7 @@ Resultados = list[tuple[bool, str]]
 def _check_config(config: dict[str, Any]) -> Resultados:
     from modules.orchestrator.orchestrator import _validar_configuracion
     from modules.preparation.nodes.inicio import _validar_preparacion
-    from shared.evaluacion import validar_evaluacion
+    from shared.evaluacion import validar_evaluacion_manual
 
     resultados: Resultados = []
     detalle_orquestador = _validar_configuracion(config.get("orquestador"))
@@ -52,14 +55,40 @@ def _check_config(config: dict[str, Any]) -> Resultados:
             f"configuracion preparacion: {detalle_preparacion or 'ok'}",
         )
     )
-    detalle_evaluacion = validar_evaluacion(config.get("evaluacion"), config)
+    detalle_evaluacion = validar_evaluacion_manual(config.get("evaluacion_manual"))
     resultados.append(
         (
             not detalle_evaluacion,
-            f"configuracion evaluacion: {detalle_evaluacion or 'ok'}",
+            f"configuracion evaluacion manual: {detalle_evaluacion or 'ok'}",
         )
     )
+    resultados.append(_check_carpeta_manual(config))
     return resultados
+
+
+def _check_carpeta_manual(config: dict[str, Any]) -> tuple[bool, str]:
+    """La carpeta de la evaluación manual existe o puede crearla el arranque."""
+    seccion = config.get("evaluacion_manual")
+    valor = seccion.get("carpeta_base") if isinstance(seccion, dict) else None
+    if not isinstance(valor, str) or not valor.strip():
+        return False, "carpeta de trabajo evaluacion: configuracion ausente"
+    # Misma resolución que usa el arranque del módulo: una ruta relativa
+    # se interpreta desde la raíz del proyecto, no desde el directorio actual.
+    base = _carpetas_de_trabajo(valor)["base"]
+    destino = base if base.is_dir() else base.parent
+    if not destino.is_dir():
+        return False, f"carpeta de trabajo evaluacion no disponible: {base}"
+    try:
+        with tempfile.NamedTemporaryFile(dir=destino, prefix=".sonda_", suffix=".tmp"):
+            pass
+    except OSError as exc:
+        return False, f"carpeta de trabajo evaluacion no escribible: {exc}"
+    mensaje = (
+        "carpeta de trabajo evaluacion disponible"
+        if base.is_dir()
+        else "carpeta de trabajo evaluacion creable por el arranque"
+    )
+    return True, f"{mensaje}: {base}"
 
 
 def _check_base_datos() -> tuple[bool, str]:
@@ -91,27 +120,7 @@ def _check_bloqueo(config: dict[str, Any]) -> tuple[bool, str]:
     )
 
 
-def _check_ia(config: dict[str, Any]) -> tuple[bool, str]:
-    import httpx
-
-    routing = config.get("ai_routing") if isinstance(config, dict) else None
-    local = routing.get("local", {}) if isinstance(routing, dict) else {}
-    host = os.environ.get("OLLAMA_HOST") or (
-        str(local.get("host")) if isinstance(local, dict) and local.get("host") else "localhost"
-    )
-    puerto = int(
-        os.environ.get("OLLAMA_PORT")
-        or (local.get("port", 11434) if isinstance(local, dict) else 11434)
-    )
-    try:
-        respuesta = httpx.get(f"http://{host}:{puerto}/api/tags", timeout=3.0)
-        respuesta.raise_for_status()
-    except Exception as exc:  # noqa: BLE001 - diagnostico, no flujo
-        return False, f"modelo local inaccesible ({host}:{puerto}): {exc}"
-    return True, f"modelo local accesible ({host}:{puerto})"
-
-
-def ejecutar_preflight(usar_ia: bool = False) -> tuple[bool, list[str]]:
+def ejecutar_preflight() -> tuple[bool, list[str]]:
     """Ejecuta todos los chequeos; devuelve (todo_en_orden, lineas)."""
     config = load()
     if not isinstance(config, dict):
@@ -128,22 +137,17 @@ def ejecutar_preflight(usar_ia: bool = False) -> tuple[bool, list[str]]:
     ok_bloqueo, mensaje_bloqueo = _check_bloqueo(config)
     lineas.append(f"[{'OK ' if ok_bloqueo else 'FALLA'}] {mensaje_bloqueo}")
     todo_ok = todo_ok and ok_bloqueo
-    if usar_ia:
-        ok_ia, mensaje_ia = _check_ia(config)
-        lineas.append(f"[{'OK ' if ok_ia else 'FALLA'}] {mensaje_ia}")
-        todo_ok = todo_ok and ok_ia
     return todo_ok, lineas
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--ia", action="store_true", help="verificar tambien el modelo local")
     parser.add_argument("--db", help="ruta alternativa a la base de datos")
     argumentos = parser.parse_args(argv)
     if argumentos.db:
         change_path(Path(argumentos.db))
     try:
-        todo_ok, lineas = ejecutar_preflight(usar_ia=argumentos.ia)
+        todo_ok, lineas = ejecutar_preflight()
     finally:
         if argumentos.db:
             reset_path()

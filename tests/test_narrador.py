@@ -139,14 +139,14 @@ def test_metricas_de_preparacion_no_cuentan_narracion() -> None:
 
 
 def test_metricas_de_evaluacion_no_cuentan_narracion() -> None:
-    from modules.evaluation.nodes.finalizar import _consultar_metricas
+    from modules.evaluation.nodes.finalizar_manual import _consultar_metricas
 
     _evento("COR-MET3", "suceso", "oferta_aprobada", "APROBADA", id_oferta="OFE-1")
     _evento("COR-MET3", "suceso", "oferta_descartada", "DESCARTADA", id_oferta="OFE-2")
     _evento("COR-MET3", "error", "ERR-04", "anotación fallida", id_oferta="OFE-3")
     _evento("COR-MET3", "suceso", "tic_modulo_iniciado", "modulo=evaluacion")
 
-    metricas = _consultar_metricas("COR-MET3")
+    metricas = _consultar_metricas("importacion", "COR-MET3")
     assert metricas is not None
     assert metricas["total_aprobadas"] == 1
     assert metricas["total_descartadas"] == 1

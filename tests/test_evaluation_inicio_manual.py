@@ -12,7 +12,7 @@ from modules.evaluation.nodes.inicio_manual import (
     hay_resultados_para_importar,
 )
 from modules.evaluation.run_context import RunContext
-from shared.evaluacion import validar_evaluacion, validar_evaluacion_manual
+from shared.evaluacion import validar_evaluacion_manual
 from shared.persistence import (
     adquirir_bloqueo,
     consultar_bloqueo,
@@ -75,8 +75,6 @@ def test_validacion_manual_acepta_la_configuracion_oficial() -> None:
 
     config = load()
     assert validar_evaluacion_manual(config.get("evaluacion_manual")) is None
-    # El validador del flujo viejo sigue operando con su propia sección.
-    assert validar_evaluacion(config.get("evaluacion"), config) is None
 
 
 def test_validacion_manual_rechaza_seccion_ausente() -> None:

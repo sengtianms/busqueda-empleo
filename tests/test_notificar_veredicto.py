@@ -1,6 +1,7 @@
 """Tests for the batch-verdict notifier (D57): verdicts from the official trace."""
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -48,9 +49,8 @@ def _sembrar_exito() -> None:
             "COR-8004": {
                 "estado": "completada",
                 "fecha_fin": "2026-10-19 16:14:55",
-                "motivo_terminacion": "corrida_completada",
-                "total_aprobadas": 7,
-                "total_descartadas": 39,
+                "motivo_terminacion": "evaluacion_pendiente",
+                "total_ofertas": 50,
             },
             "COR-8001": {
                 "estado": "completada",
@@ -77,6 +77,16 @@ def _sembrar_exito() -> None:
                     f"motivo=corrida_completada;id_corrida={id_modulo}"
                 ),
                 "marca_temporal": marca,
+            }
+        )
+    for lote in (1, 2):
+        escribir_evento(
+            {
+                "id_corrida": "COR-8004",
+                "tipo": "suceso",
+                "codigo": "ofertas_exportadas",
+                "evidencia": f"lote={lote:03d};cantidad=25",
+                "marca_temporal": f"2026-10-19 16:14:{50 + lote}",
             }
         )
     escribir_evento(
@@ -144,7 +154,7 @@ def test_veredicto_exito_con_metricas(temp_db_file: Path) -> None:
     assert "Tanda 16:11 completada ✓" in mensaje
     assert "48 nuevas" in mensaje
     assert "47 preparadas / 1 duplicadas" in mensaje
-    assert "7 aprobadas / 39 descartadas" in mensaje
+    assert "2 lotes exportados · 50 ofertas pendientes de importar" in mensaje
     assert "0 errores" in mensaje
 
 
@@ -153,11 +163,12 @@ def test_veredicto_exito_sin_novedades(temp_db_file: Path) -> None:
 
     _sembrar_exito()
     # Overwrite to a zero-news batch: no counts, no offers to report.
-    for id_corrida, campos in {
+    cambios: dict[str, dict[str, Any]] = {
         "COR-8002": {"total_ofertas": 0, "fuentes_procesadas": 1},
         "COR-8003": {"total_preparadas": 0, "total_duplicadas": 0},
-        "COR-8004": {"total_aprobadas": 0, "total_descartadas": 0},
-    }.items():
+        "COR-8004": {"total_ofertas": 0, "motivo_terminacion": "sin_pendientes"},
+    }
+    for id_corrida, campos in cambios.items():
         actualizar_corrida(id_corrida, campos)
     nivel, mensaje = componer_veredicto(DESDE)
     assert nivel == "exito"

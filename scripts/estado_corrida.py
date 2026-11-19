@@ -319,25 +319,24 @@ def _bloque_universo(
         if estimacion:
             lineas.append(estimacion)
         return lineas
-    aprobadas = len(_distintos(eventos, ("oferta_aprobada",)))
-    descartadas = len(_distintos(eventos, ("oferta_descartada",)))
-    caidas = len(_distintos(eventos, ("evaluacion_fallida",)))
-    en_cola = _conteo_estados(conteos, "preparada")
-    unidades = f"   · aprobadas {aprobadas} · descartadas {descartadas}"
-    if caidas:
-        unidades += f" · con reintento pendiente {caidas}"
-    unidades += f" · en cola: {en_cola}"
-    lineas = [unidades]
-    estimacion = _estimacion_linea(
-        fila,
-        eventos,
-        en_cola,
-        ("oferta_aprobada", "oferta_descartada"),
-        instante=instante,
+    exportados = sum(
+        1 for e in eventos if str(e.get("codigo")) == "ofertas_exportadas"
     )
-    if estimacion:
-        lineas.append(estimacion)
-    return lineas
+    evaluadas = len(_distintos(eventos, ("oferta_aprobada", "oferta_descartada")))
+    conservados = sum(
+        1 for e in eventos if str(e.get("codigo")) == "lote_conservado"
+    )
+    en_cola = _conteo_estados(conteos, "preparada")
+    # Durante la exportación (la que corre dentro de la tanda) solo existen los
+    # eventos de lote; las cifras de importación se muestran solo cuando hay
+    # evidencia de ella, para no pintar ceros que no aportan información.
+    unidades = f"   · lotes exportados {exportados}"
+    if evaluadas or conservados:
+        unidades += f" · ofertas evaluadas {evaluadas}"
+        if conservados:
+            unidades += f" · lotes con pendientes {conservados}"
+    unidades += f" · pendientes de importar: {en_cola}"
+    return [unidades]
 
 
 def _vida_de_tanda(

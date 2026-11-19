@@ -160,14 +160,14 @@ def test_send_cloud_http_error(mock_post: MagicMock) -> None:
 
 
 def test_route_provider_ok() -> None:
-    assert _route_provider("evaluation") == "cloud"
+    assert _route_provider("preparacion") == "local"
     assert _route_provider("processing") == "cloud"
 
 
 @patch("shared.ia_service.load")
 def test_route_provider_invalid(mock_load: MagicMock) -> None:
     mock_load.return_value = {
-        "ai_routing": {"evaluation": "local", "processing": "aws"}
+        "ai_routing": {"preparacion": "cloud", "processing": "aws"}
     }
     with pytest.raises(ConfigurationError, match="ER-CFG-003"):
         _route_provider("processing")
@@ -209,7 +209,7 @@ def test_analyze_local(mock_post: MagicMock, tmp_path: Path) -> None:
     result = analyze(
         "test_category/test_prompt",
         {"titulo": "Data Engineer"},
-        purpose="evaluation",
+        purpose="preparacion",
     )
     assert result == {"compatibilidad": "alta"}
 
@@ -242,7 +242,7 @@ def test_analyze_sin_reintento_hace_un_solo_intento(
         MagicMock(side_effect=AssertionError("no debe reintentar")),
     )
     with pytest.raises(LLMError):
-        ia_service.analyze("p", {}, timeout=30, reintentar=False)
+        ia_service.analyze("p", {}, purpose="preparacion", timeout=30, reintentar=False)
     assert llamado["n"] == 1
 
 
@@ -268,7 +268,7 @@ def test_analyze_por_defecto_conserva_el_reintento_compartido(
         "_send_cloud",
         MagicMock(side_effect=AssertionError("debe usar el envoltorio")),
     )
-    assert ia_service.analyze("p", {}, timeout=45) == {"ok": True}
+    assert ia_service.analyze("p", {}, purpose="preparacion", timeout=45) == {"ok": True}
     assert llamado["n"] == 1
 
 

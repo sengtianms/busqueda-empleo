@@ -177,7 +177,8 @@ def test_inicio_error_con_id_cierra_como_critico(
     registrar_corrida(
         {"id_corrida": "COR-0100", "fecha_inicio": ahora(), "estado": "en_ejecucion"}
     )
-    assert ejecutar_flujo_exportacion(_config(tmp_path / "manual")) is None
+    cierre = ejecutar_flujo_exportacion(_config(tmp_path / "manual"))
+    assert cierre is not None and cierre.codigo == "error_critico"
     fila = next(f for f in _corridas() if f["id_corrida"] == "COR-0100")
     assert fila["estado"] == "abortada"
     assert fila["motivo_terminacion"] == "error_critico"
@@ -200,7 +201,8 @@ def test_inicio_error_sin_id_no_cierra_nada(
 
 def test_concurrencia_cierra_sin_tocar_el_bloqueo_ajeno(tmp_path: Path) -> None:
     adquirir_bloqueo("COR-9999", ahora())
-    assert ejecutar_flujo_exportacion(_config(tmp_path / "manual")) is None
+    cierre = ejecutar_flujo_exportacion(_config(tmp_path / "manual"))
+    assert cierre is not None and cierre.codigo == "concurrencia"
     assert [f["id_corrida"] for f in leer_tabla("bloqueo")] == ["COR-9999"]
     fila = next(f for f in _corridas() if f["id_corrida"] != "COR-9999")
     assert fila["estado"] == "abortada"
@@ -220,7 +222,8 @@ def test_nodo_con_error_cierra_con_el_motivo_correspondiente(
     monkeypatch.setattr(orchestrator_manual, "ejecutar_exportacion", nodo_error)
     for numero in range(1, 3):
         _insertar(f"OFE-{numero:04d}")
-    assert ejecutar_flujo_exportacion(_config(tmp_path / "manual")) is None
+    cierre = ejecutar_flujo_exportacion(_config(tmp_path / "manual"))
+    assert cierre is not None and cierre.codigo == motivo
     assert _corridas()[0]["motivo_terminacion"] == motivo
     assert leer_tabla("bloqueo") == []
 
@@ -233,7 +236,8 @@ def test_nodo_con_excepcion_cierra_aborto(
 
     monkeypatch.setattr(orchestrator_manual, "ejecutar_exportacion", nodo_explota)
     _insertar("OFE-0001")
-    assert ejecutar_flujo_exportacion(_config(tmp_path / "manual")) is None
+    cierre = ejecutar_flujo_exportacion(_config(tmp_path / "manual"))
+    assert cierre is not None and cierre.codigo == "aborto"
     assert _corridas()[0]["motivo_terminacion"] == "aborto"
 
 
@@ -247,5 +251,6 @@ def test_decision_con_error_cierra_error_critico(
 
     monkeypatch.setattr(orchestrator_manual, "hay_ofertas_preparadas", decision_error)
     _insertar("OFE-0001")
-    assert ejecutar_flujo_exportacion(_config(tmp_path / "manual")) is None
+    cierre = ejecutar_flujo_exportacion(_config(tmp_path / "manual"))
+    assert cierre is not None and cierre.codigo == "error_critico"
     assert _corridas()[0]["motivo_terminacion"] == "error_critico"

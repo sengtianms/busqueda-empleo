@@ -234,11 +234,16 @@ def _evidencia(proceso: str, metricas: dict[str, int] | None, contexto: RunConte
 
 
 def _construir_informe(
-    proceso: str, contexto: RunContext | None, metricas: dict[str, int] | None
+    proceso: str,
+    contexto: RunContext | None,
+    metricas: dict[str, int] | None,
+    id_corrida: str = "",
 ) -> dict[str, Any]:
     """Informe del operador: se calcula aquí; mostrarlo es labor de la Fase 4."""
     if contexto is None:
-        return {"proceso": proceso}
+        # Concurrencia y fallo de INICIO con id cierran sin contexto: la corrida
+        # existe y su identificador debe llegar al informe y al aviso.
+        return {"proceso": proceso, "id_corrida": id_corrida}
     base: dict[str, Any] = {"proceso": proceso, "id_corrida": contexto.id_corrida}
     if proceso == "exportacion":
         base.update(
@@ -363,7 +368,7 @@ def finalizar_proceso(
     if id_corrida:
         _liberar_bloqueo(id_corrida)
 
-    informe = _construir_informe(proceso, contexto, metricas)
+    informe = _construir_informe(proceso, contexto, metricas, id_corrida)
     if contexto is not None:
         contexto.informe = informe
     resumen = (

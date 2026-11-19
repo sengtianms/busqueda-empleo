@@ -465,4 +465,4 @@ def test_registro_declara_los_tres_modulos_del_pipeline() -> None:
     estados = {(m.estado_entrada, m.estado_salida) for m in MODULOS}
     assert ("-", "descubierta") in estados
     assert ("descubierta", "preparada/duplicada") in estados
-    assert ("preparada", "aceptada_ei/descartada_ei") in estados
+    assert ("preparada", "evaluacion_pendiente/sin_pendientes") in estados

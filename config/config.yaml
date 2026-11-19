@@ -190,38 +190,6 @@ almacen_credenciales:
     - "LINKEDIN_EMAIL"
     - "LINKEDIN_PASSWORD"
 
-# --- Initial evaluation (Module 3, 5 controles de veto; ficha M3) ---
-evaluacion:
-  # Pausa anti-bloqueo entre ofertas consecutivas (>= 0), espejo de Preparación:
-  # la pausa efectiva es aleatoria en [base - jitter, base + jitter]; con jitter 0 queda fija.
-  pausa_entre_ofertas_segundos: 1.2
-  pausa_jitter_segundos: 0.4
-  # Espera máxima por puerta (D59): una puerta que no responde en este tiempo
-  # se descarta y se pasa de inmediato a la siguiente; las puertas caídas no
-  # se reintentan durante la corrida.
-  timeout_puerta_segundos: 60
-  # Intentos por oferta ante RESPUESTA INVÁLIDA en la misma puerta (ficha M3: 2).
-  # Un fallo de puerta no consume intentos: la puerta se descarta (D59).
-  retries:
-    max_attempts: 2
-    base_wait_seconds: 2
-    max_wait_seconds: 30
-    multiplier: 2
-  # Puertas alternas del mismo modelo, en orden (la primera que responde manda).
-  # Cada puerta indica su nombre, el modelo en el proveedor y la referencia de
-  # su llave; las llaves viven solo en config/.env. Tres puertas OpenRouter
-  # con el mismo Gemma 4 31B (D50) — si una falla, la siguiente responde.
-  puertas_alternas:
-    - nombre: "openrouter-1"
-      modelo: "google/gemma-4-31b-it"
-      clave_ref: "OPENROUTER_API_KEY_1"
-    - nombre: "openrouter-2"
-      modelo: "google/gemma-4-31b-it"
-      clave_ref: "OPENROUTER_API_KEY_2"
-    - nombre: "openrouter-3"
-      modelo: "google/gemma-4-31b-it"
-      clave_ref: "OPENROUTER_API_KEY_3"
-
 # --- Manual evaluation (Module 3 redesign, D76: two independent processes) ---
 # Export writes chat-readable lots into the work folder; import applies the
 # answers the chat returned. The folder is transport only and is not versioned.
@@ -298,12 +266,11 @@ ai_cloud:
 
 # --- AI Routing by Purpose ---
 ai_routing:
-  evaluation: "cloud"
   processing: "cloud"
-  # Clasificación de ubicación del Módulo 2 (D33): usa la ruta local,
-  # cuyo modelo es gpt-oss:120b-cloud vía proxy Ollama (D44: swap desde
-  # gpt-oss:20b-cloud tras experimento comparado — igual calidad, ~3x
-  # más rápido, mejor cobertura para expansión América).
+  # Clasificación de ubicación del Módulo 2 (D33): la ruta local sigue
+  # declarada, pero la puerta principal está apagada
+  # (`preparacion.puerta_principal_activa: false`) y el clasificador sale por
+  # la puerta de reserva de OpenRouter. No afecta a la evaluación (D76).
   preparacion: "local"
 
 # --- Persistence ---

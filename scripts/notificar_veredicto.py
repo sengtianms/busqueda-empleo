@@ -129,10 +129,26 @@ def _mensaje_exito(fecha_inicio: str, modulos: dict[str, dict[str, Any]]) -> str
     duplicadas = _entero(modulos.get("preparacion"), "total_duplicadas")
     if preparadas or duplicadas:
         partes.append(f"{preparadas} preparadas / {duplicadas} duplicadas")
-    aprobadas = _entero(modulos.get("evaluacion"), "total_aprobadas")
-    descartadas = _entero(modulos.get("evaluacion"), "total_descartadas")
-    if aprobadas or descartadas:
-        partes.append(f"{aprobadas} aprobadas / {descartadas} descartadas")
+    evaluacion = modulos.get("evaluacion")
+    if evaluacion and str(evaluacion.get("motivo_terminacion") or "") == "evaluacion_pendiente":
+        id_evaluacion = str(evaluacion.get("id_corrida") or "")
+        lotes = (
+            len(
+                leer_tabla(
+                    "eventos",
+                    {"id_corrida": id_evaluacion, "codigo": "ofertas_exportadas"},
+                )
+            )
+            if id_evaluacion
+            else 0
+        )
+        ofertas = _entero(evaluacion, "total_ofertas")
+        if lotes:
+            partes.append(
+                f"{lotes} lotes exportados · {ofertas} ofertas pendientes de importar"
+            )
+        else:
+            partes.append("evaluación exportada")
     if len(partes) == 1:
         partes.append("sin ofertas nuevas")
     partes.append("0 errores")
@@ -188,6 +204,53 @@ def componer_de_texto(fallo: str | None, omitida: str | None) -> tuple[str, str]
             f"Tanda omitida: había otra tanda en curso ({razon}) — no es un error",
         )
     return "fallo", f"La tanda no pudo arrancar: {_primer_detalle(texto)} · {PISTA_REVISION}"
+
+
+def componer_importacion(motivo: str, informe: dict[str, Any]) -> tuple[str, str]:
+    """Aviso breve de la importación manual (Fase 4); devuelve (texto, urgencia)."""
+    corrida = str(informe.get("id_corrida") or "N/R")
+    def entero(clave: str) -> int:
+        valor = informe.get(clave, 0)
+        return (
+            int(valor)
+            if isinstance(valor, (int, float)) and not isinstance(valor, bool)
+            else 0
+        )
+
+    aplicadas = entero("aprobadas")
+    descartadas = entero("descartadas")
+    rechazadas = entero("rechazadas")
+    conservados = informe.get("lotes_conservados", [])
+    total_conservados = len(conservados) if isinstance(conservados, list) else 0
+
+    if motivo == "corrida_completada":
+        texto = f"Importación {corrida}: {aplicadas} aprobadas · {descartadas} descartadas"
+        if total_conservados:
+            faltantes = informe.get("faltantes", {})
+            pendientes = sum(
+                len(ids)
+                for ids in (faltantes.values() if isinstance(faltantes, dict) else [])
+                if isinstance(ids, list)
+            )
+            etiqueta_lote = "lote" if total_conservados == 1 else "lotes"
+            texto += (
+                f" · {pendientes} ofertas siguen pendientes en "
+                f"{total_conservados} {etiqueta_lote}"
+            )
+        return texto[:_TOPE_DETALLE], "normal"
+    if motivo == "sin_resultados":
+        return (
+            f"Importación {corrida}: no había respuestas en la carpeta, no se aplicó nada",
+            "normal",
+        )
+    if motivo == "error_total":
+        texto = (
+            f"Importación {corrida}: nada aplicado · {rechazadas} respuestas rechazadas. "
+            f"{PISTA_REVISION}"
+        )
+        return texto[:_TOPE_DETALLE], "critical"
+    texto = f"Importación {corrida} interrumpida: {motivo}. {PISTA_REVISION}"
+    return texto[:_TOPE_DETALLE], "critical"
 
 
 def enviar_aviso(cuerpo: str, urgencia: str) -> None:

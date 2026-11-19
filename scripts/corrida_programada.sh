@@ -26,7 +26,7 @@ export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR:-/run/user/$(id -u)
 # run (Lote 2). Manual runs don't set it → they narrate in their terminal.
 export TANDA_PROGRAMADA="1"
 
-if ! SALIDA_PREVIA=$("$PY" scripts/preflight.py --ia 2>&1); then
+if ! SALIDA_PREVIA=$("$PY" scripts/preflight.py 2>&1); then
   "$PY" scripts/notificar_veredicto.py --fallo "$SALIDA_PREVIA" || true
   exit 1
 fi

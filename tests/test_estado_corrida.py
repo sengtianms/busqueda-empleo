@@ -411,7 +411,36 @@ def test_tanda_en_modulo_evaluacion() -> None:
     lineas = componer_estado(referencia=datetime(2026, 10, 22, 19, 1, 0), sets_total=18)
     unica = " ".join(lineas)
     assert "Módulo en curso: evaluacion" in unica
-    assert "aprobadas 2 · descartadas 1 · en cola: 1" in unica
+    assert "lotes exportados 0 · ofertas evaluadas 3 · pendientes de importar: 1" in unica
+
+
+def test_exportacion_en_curso_no_pinta_cifras_de_importacion() -> None:
+    _corrida("COR-9020", "2026-10-22 19:00:00")
+    _corrida("COR-9021", "2026-10-22 19:00:10")
+    _silla("COR-9021", "2026-10-22 19:00:10")
+    _cerrar(
+        "COR-9020",
+        {
+            "estado": "completada",
+            "fecha_fin": "2026-10-22 18:59:30",
+            "motivo_terminacion": "corrida_completada",
+        },
+    )
+    _evento(
+        "COR-9020",
+        "modulo_ejecutado",
+        "modulo=preparacion;estado=completada;motivo=corrida_completada;id_corrida=COR-9021",
+        "2026-10-22 18:59:20",
+    )
+    _evento("COR-9021", "ofertas_exportadas", "lote=001;cantidad=30", "2026-10-22 19:00:30")
+    _evento("COR-9021", "ofertas_exportadas", "lote=002;cantidad=30", "2026-10-22 19:00:40")
+    for numero in (1, 2):
+        _oferta(f"OFE-{numero}", "preparada", "COR-9021")
+
+    unica = " ".join(componer_estado(referencia=REF, sets_total=18))
+    assert "lotes exportados 2" in unica
+    assert "pendientes de importar: 2" in unica
+    assert "ofertas evaluadas" not in unica
 
 
 def test_tanda_congelada_con_silla() -> None:
