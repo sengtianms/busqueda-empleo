@@ -42,6 +42,7 @@ data/processing/*
 data/output/*
 data/backup/*
 data/browser_profile/*
+data/evaluacion_manual/*
 data/*.db
 !data/**/.gitkeep
 

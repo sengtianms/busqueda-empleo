@@ -222,6 +222,25 @@ evaluacion:
       modelo: "google/gemma-4-31b-it"
       clave_ref: "OPENROUTER_API_KEY_3"
 
+# --- Manual evaluation (Module 3 redesign, D76: two independent processes) ---
+# Export writes chat-readable lots into the work folder; import applies the
+# answers the chat returned. The folder is transport only and is not versioned.
+evaluacion_manual:
+  # Work folder root: `lotes/` (lot files and control sheets) and
+  # `resultados/` (chat answers) live inside it. Relative to the project root.
+  carpeta_base: "data/evaluacion_manual"
+  # Offers per lot file (ficha M3 v2.0: 30 by default). The run exports every
+  # offer in `preparada`; this only bounds the work per file.
+  tamano_lote: 30
+  # Evaluator label stored inside each result (for example "chat: gemini").
+  modelo_evaluador: "chat: operador"
+  # Retries of the manual processes' file operations (export and import).
+  retries:
+    max_attempts: 2
+    base_wait_seconds: 2
+    max_wait_seconds: 30
+    multiplier: 2
+
 # --- Browser ---
 browser:
   headless: true

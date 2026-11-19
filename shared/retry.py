@@ -41,6 +41,9 @@ _CODIGOS_REINTENTABLES = (
     # invalid answer, next door for a verified door failure).
     "puerta_evaluacion_no_disponible",
     "respuesta_evaluacion_invalida",
+    # Module 3 manual processes (Fase 2): writing/removing lot and
+    # instruction files can succeed on a later attempt.
+    "error_archivo",
 )
 
 

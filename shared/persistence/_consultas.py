@@ -157,6 +157,28 @@ def leer_candidatas_preparadas() -> list[dict[str, Any]]:
         conn.close()
 
 
+def leer_estados_ofertas(ids: Iterable[str]) -> dict[str, str]:
+    """Read-only state lookup for the export lot guard (M3 v2.0, RN-07).
+
+    Returns ``{id: estado}`` for the requested offers; unknown ids are simply
+    absent. The functional module never opens SQL itself — it asks the
+    persistence layer whether the offers of an existing lot are still
+    pending. Bounded one-call-per-lot use: callers pass one lot's ids.
+    """
+    ids_unicos = list(dict.fromkeys(str(i) for i in ids if str(i)))
+    if not ids_unicos:
+        return {}
+    conn = _connection()
+    try:
+        marcadores = ", ".join("?" for _ in ids_unicos)
+        cursor = conn.execute(
+            f"SELECT id, estado FROM ofertas_descubiertas WHERE id IN ({marcadores})",
+            ids_unicos,
+        )
+        return {str(fila[0]): str(fila[1]) for fila in cursor.fetchall()}
+    finally:
+        conn.close()
+
 
 def contar_filas(tabla: str, filtros: dict[str, Any] | None = None) -> int:
     """Counts rows of a table; optional equality filters."""

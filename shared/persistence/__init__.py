@@ -61,6 +61,9 @@ from ._consultas import (
     leer_corridas_abiertas as leer_corridas_abiertas,
 )
 from ._consultas import (
+    leer_estados_ofertas as leer_estados_ofertas,
+)
+from ._consultas import (
     leer_eventos_de_corridas as leer_eventos_de_corridas,
 )
 from ._consultas import (
