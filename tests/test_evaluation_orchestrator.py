@@ -71,7 +71,7 @@ def _linea(identificador: str) -> str:
     return json.dumps(
         {
             "id": identificador,
-            "entregable_principal": "Plan de operaciones",
+            "eje_organizacional": "SISTEMAS_OPERACIONALES",
             "v1": "PASS",
             "v2": "PASS",
             "v3": "PASS",

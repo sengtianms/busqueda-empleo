@@ -61,10 +61,11 @@ _PREAMBULO_INSTRUCCION = (
 )
 
 _JSON_EJEMPLO = (
-    '{"id": "...", "entregable_principal": "...", "v1": "PASS|FAIL", '
-    '"v2": "PASS|FAIL", "v3": "PASS|FAIL", "v4": "PASS|FAIL", '
-    '"v5": "PASS|FAIL", "decision": "APROBADA|DESCARTADA", '
-    '"justificacion": "..."}'
+    '{"id": "...", "eje_organizacional": "SISTEMAS_OPERACIONALES|'
+    'SISTEMAS_DECISION_E_INFORMACION|DISENO_Y_TRANSFORMACION_ORGANIZACIONAL|'
+    'MULTIPLE|NO_APLICA", "v1": "PASS|FAIL", "v2": "PASS|FAIL", '
+    '"v3": "PASS|FAIL", "v4": "PASS|FAIL", "v5": "PASS|FAIL", '
+    '"decision": "APROBADA|DESCARTADA", "justificacion": "..."}'
 )
 
 _SALIDA_POR_LOTES = """\
@@ -81,13 +82,15 @@ exactamente estos campos:
 - `v1` a `v5`: solo `PASS` o `FAIL`, según las cinco reglas de veto.
 - `decision`: `APROBADA` solo si los cinco vetos son `PASS`; `DESCARTADA` si al
   menos uno es `FAIL`.
-- `entregable_principal`: una sola línea, máximo 20 palabras, sin comillas
-  dobles. Se admite `N/A` únicamente cuando la oferta no trae descripción, `v3`
-  es `FAIL` y la decisión es `DESCARTADA`.
-- `justificacion`: una sola línea, máximo 60 palabras, específica de esta
-  oferta y con evidencia concreta de su descripción. Sin comillas dobles,
-  barras invertidas ni llaves. Si la decisión es `DESCARTADA`, nombra todos los
-  vetos que la descartan.
+- `eje_organizacional`: debe utilizar exclusivamente uno de los cinco valores
+  definidos. Si `v1` es `FAIL`, debe ser `NO_APLICA`. Si `v1` es `PASS`, debe
+  identificar el eje correspondiente o `MULTIPLE` cuando cumpla dos o más ejes.
+- `justificacion`: una sola línea, máximo 60 palabras. Debe explicar la
+  relación entre la evidencia específica de la oferta y el resultado de la
+  evaluación. Si la decisión es `APROBADA`, debe justificar el foco
+  organizacional, el nivel y alcance y la viabilidad geográfica. Si es
+  `DESCARTADA`, debe identificar todos los vetos `FAIL` y explicar la evidencia
+  que activa cada uno. Sin comillas dobles, barras invertidas ni llaves.
 - No repitas ofertas y no omitas ninguna.
 - Si la respuesta se corta, continúa en un mensaje nuevo; el operador lo
   guardará como una parte.

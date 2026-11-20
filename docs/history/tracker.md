@@ -161,7 +161,7 @@
 
 ## Phase 6. Module 3 — Initial Evaluation
 
-> Build strategy: functional sub-phases grouping nodes by testable unit, per canonical spec in `docs/diagrams/Ficha técnica - Diagrama de flujo (Evaluación inicial de ofertas).md` (version 2.0 since decision D76). Pre-build gate: "Previo Fase 6" above (5 points). Legacy scoring tasks retired.
+> Build strategy: functional sub-phases grouping nodes by testable unit, per canonical spec in `docs/diagrams/Ficha técnica - Diagrama de flujo (Evaluación inicial de ofertas).md` (version 2.2 since D80 — v2.0 was the D76 design and v2.1 its Fase 4 close). Pre-build gate: "Previo Fase 6" above (5 points). Legacy scoring tasks retired.
 
 | # | Sub-phase (content) | Source docs | Status | Notes |
 |---|---|---|---|---|
@@ -405,6 +405,19 @@
 | 9 | Cascada con la IA como excepción | ✅ | Una sola puerta de IA (Gemma 4 31B por OpenRouter) y la ruta local apagada por configuración. La respuesta se guarda por texto y solo se repite la pregunta si el texto es distinto; la fila nueva se crea únicamente cuando el municipio no existe, con componentes normalizados y la marca del sistema. 884 pruebas al cierre, estilo y tipos limpios, base viva intacta. |
 | 10 | Cierre documental del rediseño | ✅ | D78 registrada en el libro (versión 1.57) en sustitución de las cláusulas de D77 sobre no usar IA y no crear filas; ficha en 2.1 con reglas, error y escenarios reescritos; modelo de datos (1.24), referencia de tablas, catálogo de prefijos, plan de ejecución del MVP y contrato de operación alineados; precedencia página sobre tarjeta del texto de ubicación documentada; frase obsoleta de la migración y aviso de catálogo vacío retirados, y umbral de alias sin uso eliminado. Corrida real del 2026-11-18: 313 ofertas, cero errores de cadena, cero ubicaciones pendientes; dos enlaces corregidos con respaldo previo (OFE-0244 → UBI-0109, OFE-0248 → UBI-0265); 884 pruebas, estilo y tipos limpios. |
 | 11 | Correcciones del revisor de código | ✅ | La fila creada por la excepción se reutiliza por municipio, departamento y país completos (dos homónimos ya no comparten fila) y las formas alternas del país (`CO`, `República de Colombia`) se reconocen como la forma canónica, sin duplicar municipios existentes; cinco pruebas nuevas, 889 en total, estilo y tipos limpios. |
+
+---
+
+## Instrucción v7 del chat — eje organizacional (2026-11-20)
+
+> Decisión D80. A petición del operador, la instrucción de evaluación del chat pasó a v7: el análisis del entregable sigue siendo interno para V1 y la respuesta lleva `eje_organizacional` (cinco valores). El sistema quedó alineado en los tres puntos donde usaba el campo anterior; la carpeta de trabajo y la base no se tocaron.
+
+| # | Cambio | Estado | Notas |
+|---|--------|--------|-------|
+| 1 | Instrucción oficial v7 | ✅ | El cuerpo de la instrucción editada se adoptó como fuente oficial sin modificar la carpeta de trabajo; las generaciones futuras mantienen v7. |
+| 2 | Formato de respuesta del lote | ✅ | La sección que prevalece pide el eje y sus cinco valores con la regla de coherencia con V1; se retiran el entregable y su excepción `N/A`. |
+| 3 | Importación y resultado guardado | ✅ | Se deja de exigir entregable; se exige el eje, se valida contra los cinco valores y V1, y se guarda normalizado en el resultado. Eje ausente, inválido o incoherente → línea rechazada con motivo claro. Los cinco vetos y la decisión no cambian. |
+| 4 | Pruebas y documentación | ✅ | Casos nuevos de eje válido, ausente, inválido e incoherente; ficha M3 v2.2, DOC-13A v1.26, referencia de tablas, libro de decisiones v1.60, README y AGENTS alineados. Sin cambios de esquema, configuración ni lotes; sin importar ni tocar la base real. |
 
 ---
 

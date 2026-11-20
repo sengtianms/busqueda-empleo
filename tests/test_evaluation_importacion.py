@@ -102,7 +102,7 @@ def _lote(contexto: RunContext, ids: list[str], base: str = "COR-0009_lote_001")
 def _linea(identificador: str, **extra: Any) -> str:
     datos: dict[str, Any] = {
         "id": identificador,
-        "entregable_principal": "Diseñar el plan de operaciones",
+        "eje_organizacional": "SISTEMAS_OPERACIONALES",
         "v1": "PASS",
         "v2": "PASS",
         "v3": "PASS",
@@ -267,8 +267,18 @@ def test_adornos_del_chat_se_ignoran(tmp_path: Path) -> None:
         ({"v3": "FAIL"}, "decision_incoherente", "ERR-05"),
         ({"decision": "DESCARTADA"}, "decision_incoherente", "ERR-05"),
         ({"justificacion": "N/A"}, "justificacion_vacia", "ERR-05"),
-        ({"entregable_principal": ""}, "entregable_vacio", "ERR-05"),
-        ({"entregable_principal": "N/A"}, "entregable_vacio", "ERR-05"),
+        ({"eje_organizacional": ""}, "eje_invalido", "ERR-05"),
+        ({"eje_organizacional": "OPERACIONAL"}, "eje_invalido", "ERR-05"),
+        ({"eje_organizacional": "NO_APLICA"}, "eje_incoherente", "ERR-05"),
+        (
+            {
+                "eje_organizacional": "SISTEMAS_OPERACIONALES",
+                "v1": "FAIL",
+                "decision": "DESCARTADA",
+            },
+            "eje_incoherente",
+            "ERR-05",
+        ),
         ({"decision": "INDETERMINADA"}, "decision_invalida", "ERR-05"),
     ],
 )
@@ -308,7 +318,19 @@ def test_id_ausente_se_rechaza_como_err03(tmp_path: Path) -> None:
     assert "codigo=ERR-03" in _rechazo()["evidencia"]
 
 
-def test_entregable_na_se_admite_en_descarte_sin_descripcion(tmp_path: Path) -> None:
+def test_eje_ausente_se_rechaza_como_err05(tmp_path: Path) -> None:
+    contexto, base = _preparar(tmp_path)
+    datos = json.loads(_linea("OFE-0001"))
+    del datos["eje_organizacional"]
+    _respuesta(contexto, f"{base}.jsonl", [json.dumps(datos)])
+    ejecutar_importacion(contexto)
+    rechazo = _rechazo()
+    assert "codigo=ERR-05" in rechazo["evidencia"]
+    assert "motivo=falta_eje_organizacional" in rechazo["evidencia"]
+    assert _oferta("OFE-0001")["estado"] == "preparada"
+
+
+def test_eje_no_aplica_se_admite_en_descarte_sin_descripcion(tmp_path: Path) -> None:
     contexto = _contexto([], tmp_path / "manual")
     _insertar("OFE-0001", descripcion="N/A")
     assert contexto.carpeta_lotes is not None
@@ -324,7 +346,8 @@ def test_entregable_na_se_admite_en_descarte_sin_descripcion(tmp_path: Path) -> 
         [
             _linea(
                 "OFE-0001",
-                entregable_principal="N/A",
+                eje_organizacional="NO_APLICA",
+                v1="FAIL",
                 v3="FAIL",
                 decision="DESCARTADA",
             )
@@ -334,8 +357,8 @@ def test_entregable_na_se_admite_en_descarte_sin_descripcion(tmp_path: Path) -> 
     assert resultado.estado == "ok"
     assert _oferta("OFE-0001")["estado"] == "descartada_ei"
     assert json.loads(_oferta("OFE-0001")["resultado_evaluacion_inicial"])[
-        "entregable_principal"
-    ] == "N/A"
+        "eje_organizacional"
+    ] == "NO_APLICA"
 
 
 @pytest.mark.parametrize(
@@ -397,7 +420,7 @@ def test_aplicacion_guarda_estado_resultado_evento_y_contador(tmp_path: Path) ->
     assert _oferta("OFE-0001")["estado"] == "aceptada_ei"
     almacenado = json.loads(_oferta("OFE-0001")["resultado_evaluacion_inicial"])
     assert almacenado == {
-        "entregable_principal": "Diseñar el plan de operaciones",
+        "eje_organizacional": "SISTEMAS_OPERACIONALES",
         "v1": "PASS",
         "v2": "PASS",
         "v3": "PASS",

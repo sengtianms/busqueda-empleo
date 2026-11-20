@@ -264,7 +264,7 @@ def test_main_con_cadena_real_aplica_la_respuesta(
         json.dumps(
             {
                 "id": "OFE-0001",
-                "entregable_principal": "Plan operativo",
+                "eje_organizacional": "SISTEMAS_OPERACIONALES",
                 "v1": "PASS",
                 "v2": "PASS",
                 "v3": "PASS",

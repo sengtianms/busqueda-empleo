@@ -41,7 +41,7 @@ _PATRON_RESPUESTA = re.compile(
 )
 _CAMPOS_LINEA = (
     "id",
-    "entregable_principal",
+    "eje_organizacional",
     "v1",
     "v2",
     "v3",
@@ -53,6 +53,15 @@ _CAMPOS_LINEA = (
 _VETOS = ("v1", "v2", "v3", "v4", "v5")
 _VALORES_VETO = frozenset({"PASS", "FAIL"})
 _DECISIONES = frozenset({"APROBADA", "DESCARTADA"})
+_EJES = frozenset(
+    {
+        "SISTEMAS_OPERACIONALES",
+        "SISTEMAS_DECISION_E_INFORMACION",
+        "DISENO_Y_TRANSFORMACION_ORGANIZACIONAL",
+        "MULTIPLE",
+        "NO_APLICA",
+    }
+)
 _VACIOS = frozenset({"", "n/a", "n/r"})
 
 _MOTIVOS_ERR03 = frozenset(
@@ -304,11 +313,13 @@ def _validar_linea(
     justificacion = str(datos["justificacion"]).strip()
     if not justificacion or justificacion.lower() in _VACIOS:
         return None, "justificacion_vacia"
-    entregable = str(datos["entregable_principal"]).strip()
-    excepto = votos[2] == "FAIL" and decision == "DESCARTADA"
-    if not entregable or entregable.lower() in _VACIOS:
-        if not (excepto and entregable.upper() == "N/A"):
-            return None, "entregable_vacio"
+    eje = str(datos["eje_organizacional"]).strip().upper()
+    if eje not in _EJES:
+        return None, "eje_invalido"
+    if votos[0] == "FAIL" and eje != "NO_APLICA":
+        return None, "eje_incoherente"
+    if votos[0] == "PASS" and eje == "NO_APLICA":
+        return None, "eje_incoherente"
 
     # El contrato del lote se comprueba primero: un identificador ajeno a la
     # ficha se rechaza como "fuera_de_lote" aunque exista en la base.
@@ -341,7 +352,7 @@ def _aplicar(
         return False
 
     resultado = {
-        "entregable_principal": str(datos["entregable_principal"]).strip(),
+        "eje_organizacional": str(datos["eje_organizacional"]).strip().upper(),
         "v1": str(datos["v1"]).strip().upper(),
         "v2": str(datos["v2"]).strip().upper(),
         "v3": str(datos["v3"]).strip().upper(),

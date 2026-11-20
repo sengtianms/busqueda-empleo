@@ -42,7 +42,7 @@ Usa datos, modelos predictivos, tableros y automatización como insumo del siste
 
 Evalúa el propósito del rol y lo que produce día a día, no el vocabulario ni las herramientas que usa.
 
-**Paso 1.** Identifica el entregable principal: qué produce esta persona en su trabajo diario y cuál es la competencia central que la oferta exige para producirlo. Léelo en las responsabilidades y los requisitos, no en el resumen del cargo ni en la misión de la empresa. Escríbelo en el campo entregable_principal ANTES de decidir V1.
+**Paso 1.** Identifica internamente el entregable principal: qué produce esta persona en su trabajo diario y cuál es la competencia central que la oferta exige para producirlo. Léelo en las responsabilidades y los requisitos, no en el resumen del cargo ni en la misión de la empresa. Utiliza este análisis exclusivamente para determinar V1. No incluyas el entregable principal en el JSON de salida.
 
 **Paso 2.** Clasifica el entregable:
 
@@ -54,6 +54,18 @@ Evalúa el propósito del rol y lo que produce día a día, no el vocabulario ni
 1. Sistemas operacionales (procesos, cadena de suministro, capacidad, servicio, mejora continua, calidad).
 2. Sistemas de decisión e información (planeación, gobierno de datos y de métricas, criterios de priorización, control operacional, reglas de decisión).
 3. Diseño y transformación organizacional (arquitectura de negocio, rediseño estructural, modelo operativo, gobierno operacional, escalabilidad, gestión del cambio sistémico).
+
+**Clasificación del eje organizacional para la salida:**
+
+Asigna el campo eje_organizacional según la naturaleza del cargo:
+
+- SISTEMAS_OPERACIONALES: cuando el cargo cumple el eje de sistemas operacionales.
+- SISTEMAS_DECISION_E_INFORMACION: cuando cumple el eje de sistemas de decisión e información.
+- DISENO_Y_TRANSFORMACION_ORGANIZACIONAL: cuando cumple el eje de diseño y transformación organizacional.
+- MULTIPLE: cuando el cargo cumple de manera sustancial dos o más de los tres ejes anteriores.
+- NO_APLICA: cuando V1 es FAIL.
+
+Si V1 es PASS y el cargo cumple un solo eje, asigna ese eje. Si cumple dos o más, asigna MULTIPLE. Esta clasificación es informativa y no modifica los criterios, vetos ni la decisión de V1.
 
 **Reglas de aplicación:**
 
@@ -132,19 +144,33 @@ Devuelve exclusivamente este JSON, sin markdown, sin texto adicional. El primer 
 
 La decisión debe ser coherente: APROBADA solo si v1, v2, v3, v4 y v5 son PASS.
 
-El campo entregable_principal va primero, se redacta antes de decidir V1 y debe describir lo que el rol produce día a día. Una sola línea, máximo 20 palabras, sin comillas dobles.
+**REGLA CRÍTICA PARA JUSTIFICACIÓN (contenido):**
 
-**REGLA CRÍTICA PARA JUSTIFICACIÓN (contenido):** el texto debe explicar ESTA oferta, no una genérica. Redacta según el caso:
+La justificación debe permitir entender por qué se aprobó o descartó ESTA oferta, sin necesidad de volver a leer toda su descripción.
 
-- Si APROBADA: nombra el eje del foco organizacional que cumple (sistemas operacionales / sistemas de decisión e información / diseño y transformación organizacional), aporta una evidencia concreta de la descripción (una responsabilidad, requisito o frase del cargo, entre comillas simples) y confirma la viabilidad con el dato de modalidad/ubicación.
-- Si DESCARTADA: nombra TODOS los vetos que la descartan (V1–V5) y el dato exacto de la oferta que activa cada uno (la responsabilidad, requisito o frase que lo demuestra).
+No basta con nombrar un eje, mencionar un veto o copiar una frase de la oferta. Debes explicar la relación entre la evidencia encontrada y el criterio evaluado: qué dice la oferta, qué significa frente a la regla y por qué determina el resultado.
 
-**PROHIBIDO:** frases que servirían igual para cualquier oferta (ej. 'rol compatible con el perfil'), repetir el título sin analizar, o justificaciones sin evidencia de la descripción.
+Redacta según el caso:
+
+- Si APROBADA: explica brevemente por qué el cargo cumple el foco organizacional, identifica el eje correspondiente y aporta una responsabilidad concreta que demuestre qué mecanismo organizacional diseña, gobierna o dirige. Justifica el nivel y alcance mediante evidencia de liderazgo real o autoridad de diseño. Confirma la viabilidad indicando la modalidad y ubicación. La evidencia de responsabilidades concretas también puede demostrar V3, sin repetir información innecesariamente. Incluye al menos una cita textual breve de la descripción, entre comillas simples, que respalde la responsabilidad organizacional identificada. La cita debe demostrar una función concreta, no limitarse al título o a una frase comercial.
+
+- Si DESCARTADA: identifica TODOS los vetos que resultaron FAIL. Para cada uno, presenta el dato concreto de la oferta que lo activa y explica brevemente por qué incumple ese criterio. No te limites a enumerar los vetos ni a mencionar el título del cargo. Si varios vetos se activan por un mismo dato, explica cómo ese dato incumple cada regla. Siempre que sea posible, respalda cada veto FAIL con una cita textual breve de la oferta, entre comillas simples. Explica qué demuestra esa evidencia y por qué incumple el criterio correspondiente.
+
+**CRITERIO DE REDACCIÓN:**
+- Prioriza evidencias decisivas sobre explicaciones generales.
+- Explica el porqué, no solamente el qué.
+- Utiliza información específica de la oferta, no afirmaciones genéricas.
+- No repitas evidencias ni describas nuevamente el cargo.
+- No inventes responsabilidades, niveles de autoridad ni condiciones que la oferta no menciona.
+- No confundas ausencia de información con evidencia de incumplimiento, excepto cuando V3, V4 o V5 establezcan expresamente esa condición.
+
+**PROHIBIDO:** frases que servirían igual para cualquier oferta, repetir el título sin analizar, enumerar vetos sin explicar su incumplimiento o justificar una aprobación únicamente con frases como 'cumple el perfil' o 'es compatible con el candidato'.
 
 **FORMATO DE LA JUSTIFICACIÓN:** una sola línea continua, máximo 60 palabras, en español. Prohibido usar comillas dobles ("), saltos de línea, barras invertidas y llaves dentro del valor de "justificacion". Tildes y eñe permitidas.
 
 {
-  "entregable_principal": "Qué produce el rol día a día, en una línea",
+  "id": "...",
+  "eje_organizacional": "SISTEMAS_OPERACIONALES|SISTEMAS_DECISION_E_INFORMACION|DISENO_Y_TRANSFORMACION_ORGANIZACIONAL|MULTIPLE|NO_APLICA",
   "v1": "PASS|FAIL",
   "v2": "PASS|FAIL",
   "v3": "PASS|FAIL",
@@ -154,4 +180,4 @@ El campo entregable_principal va primero, se redacta antes de decidir V1 y debe 
   "justificacion": "Explicación específica de esta oferta con evidencia concreta del texto, en una sola línea"
 }
 
-**Version:** v6
+**Version:** v7

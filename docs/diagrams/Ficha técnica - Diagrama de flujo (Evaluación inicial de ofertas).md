@@ -1,8 +1,8 @@
 # Especificación canónica densificada — Módulo 3: Evaluación inicial de ofertas
 
-**Versión:** 2.1 — rediseño construido y cerrado el 2026-11-19 (Fase 4). La v2.0 fue la base de construcción de las fases 1–3; esta versión añade la integración, el retiro del circuito con IA y la verificación real.
+**Versión:** 2.2 — 2026-11-20: la instrucción del chat pasa a v7 (D80) y `eje_organizacional` reemplaza a `entregable_principal` en el formato de respuesta y en el resultado guardado. La v2.1 fue el rediseño construido y cerrado el 2026-11-19 (Fase 4); la v2.0 fue la base de construcción de las fases 1–3.
 
-**Base de decisiones:** rediseño del módulo en **dos procesos independientes y consecutivos**, aprobado por el usuario el 2026-11-15. Proceso **A — Exportación**, lanzado por la tanda programada: convierte las ofertas en `preparada` en lotes de archivos legibles por un chat y cierra su corrida con `evaluacion_pendiente`. Proceso **B — Importación**, lanzado a mano con un comando: valida lo que devolvió el chat, aplica el resultado, cambia el estado de cada oferta y cierra su corrida. La espera entre ambos **no es un nodo**: es el tiempo entre dos corridas cortas, cada una con su propio bloqueo y su propio cierre; ninguna corrida espera a una persona. El módulo deja de usar inteligencia artificial: se retiran las puertas, las llaves, las cuotas, las esperas máximas, las pausas entre ofertas, la política D50/D59 y el motivo `cupo_agotado`. Los 5 controles de veto, la regla de oro y el prompt `compatibility.md` v6 (D58) no cambian (el prompt pasa a ser la instrucción del chat); del resultado guardado solo cambia el campo que identificaba la puerta, que pasa a ser el modelo evaluador. Sin cambios de esquema: `resultado_evaluacion_inicial` se conserva y el campo de la puerta que respondió se reemplaza por el modelo evaluador declarado en configuración. Cuatro nodos por proceso (arranque, decisión, proceso, cierre), estructura espejo de las fichas de los Módulos 1 y 2.
+**Base de decisiones:** rediseño del módulo en **dos procesos independientes y consecutivos**, aprobado por el usuario el 2026-11-15. Proceso **A — Exportación**, lanzado por la tanda programada: convierte las ofertas en `preparada` en lotes de archivos legibles por un chat y cierra su corrida con `evaluacion_pendiente`. Proceso **B — Importación**, lanzado a mano con un comando: valida lo que devolvió el chat, aplica el resultado, cambia el estado de cada oferta y cierra su corrida. La espera entre ambos **no es un nodo**: es el tiempo entre dos corridas cortas, cada una con su propio bloqueo y su propio cierre; ninguna corrida espera a una persona. El módulo deja de usar inteligencia artificial: se retiran las puertas, las llaves, las cuotas, las esperas máximas, las pausas entre ofertas, la política D50/D59 y el motivo `cupo_agotado`. Los 5 controles de veto y la regla de oro no cambian; el prompt `compatibility.md` era v6 (D58) en el rediseño original y pasó a v7 (D80) el 2026-11-20 (el prompt es la instrucción del chat); del resultado guardado solo cambiaba en el rediseño el campo que identificaba la puerta, que pasó a ser el modelo evaluador. Sin cambios de esquema: `resultado_evaluacion_inicial` se conserva y el campo de la puerta que respondió se reemplaza por el modelo evaluador declarado en configuración. Cuatro nodos por proceso (arranque, decisión, proceso, cierre), estructura espejo de las fichas de los Módulos 1 y 2. **D80 (2026-11-20):** el prompt pasó a v7 y `entregable_principal` fue reemplazado por `eje_organizacional` en el formato de respuesta y en el resultado guardado; los cinco vetos, la decisión, los estados y el esquema siguen sin cambios.
 
 ## Convenciones comunes
 
@@ -19,7 +19,7 @@
 - **Reintentos**: máximo global configurable (`retries`, sección `evaluacion_manual:`); solo son reintentables los códigos declarados en cada nodo. Aplican a escritura y borrado de archivos y a escrituras de base. Una línea rechazada nunca se reintenta: se informa y la oferta sigue pendiente.
 - **Sin inteligencia artificial**: el módulo no llama a ningún modelo, no usa red, llaves ni credenciales. La evaluación la realiza el operador en un chat externo; el sistema prepara el material y aplica lo que vuelve.
 - **Nada se descarta por duda**: una línea inválida o faltante deja la oferta en `preparada`; solo un resultado válido y completo cambia su estado.
-- **Regla de datos (D31)**: ningún campo vacío — `N/A`/`N/R` cuando no aplica; exenciones: `id_externo` (dedup) y `fecha_ultima_verificacion` (marcador de verificación del Módulo 2). Cuando la oferta no trae descripción y se descarta por `v3 = FAIL`, el entregable principal se guarda `N/A` (cumple D31) como única excepción a la validación de contenido de D52.
+- **Regla de datos (D31)**: ningún campo vacío — `N/A`/`N/R` cuando no aplica; exenciones: `id_externo` (dedup) y `fecha_ultima_verificacion` (marcador de verificación del Módulo 2). Cuando la oferta no trae descripción y se descarta por `v3 = FAIL`, el eje organizacional se guarda `NO_APLICA` si `v1` también falla: es un valor cerrado, no un vacío (D80).
 
 ---
 
@@ -598,7 +598,7 @@ Flujo por lote, en orden de nombre (orden obligatorio):
 |---|---|---|---|
 | 1 | **Emparejar** | Une cada archivo de resultados con su lote y su ficha de control por el nombre base (corrida + lote + parte). Sin lote conocido, el archivo se rechaza completo | `resultados/` + `lotes/` |
 | 2 | **Leer y limpiar** | Una línea por oferta; descarta adornos del chat (bloques de código, texto suelto, líneas vacías) | Archivo de resultados |
-| 3 | **Validar cada línea** | Formato, existencia de la oferta, estado `preparada`, 5 vetos, decisión coherente, justificación y entregable con contenido, sin duplicados | Línea + BD |
+| 3 | **Validar cada línea** | Formato, existencia de la oferta, estado `preparada`, 5 vetos, decisión coherente, justificación con contenido y eje organizacional válido y coherente con `v1`, sin duplicados | Línea + BD |
 | 4 | **Aplicar las válidas** | Estado `aceptada_ei`/`descartada_ei`, resultado completo con el modelo evaluador, evento y contador | BD |
 | 5 | **Rechazar las inválidas** | Evento de error con el motivo exacto; la oferta sigue en `preparada`; suma en rechazadas | BD |
 | 6 | **Comparar con lo esperado** | Identifica los identificadores de la ficha de control que no llegaron o no se aplicaron | Ficha de control |
@@ -625,11 +625,11 @@ Un lote con faltantes no se borra mientras conserve ofertas pendientes. Un lote 
 ### Reglas de negocio
 - **RN-01**: por lotes: este nodo recorre todos los archivos antes de entregar control.
 - **RN-02**: manda el archivo: se aplica lo que trae, sin completar campos ausentes ni reinterpretar la decisión.
-- **RN-03**: validación estricta: 5 vetos con valor válido, decisión coherente con ellos, justificación con contenido real y entregable con contenido real —única excepción: `N/A` admitido en el descarte por falta de descripción (`v3 = FAIL` y `DESCARTADA`)—, oferta existente y en `preparada`, e identificador incluido en la ficha de control del lote (aprobado en la Fase 3: una respuesta no puede evaluar ofertas de otro lote).
+- **RN-03**: validación estricta: 5 vetos con valor válido, decisión coherente con ellos, justificación con contenido real y `eje_organizacional` dentro de los cinco valores definidos y coherente con `v1` (`FAIL` exige `NO_APLICA`; `PASS` lo prohíbe; D80), oferta existente y en `preparada`, e identificador incluido en la ficha de control del lote (aprobado en la Fase 3: una respuesta no puede evaluar ofertas de otro lote). Los campos extra se ignoran; las reglas de redacción de la instrucción no son motivo de rechazo.
 - **RN-04**: una línea inválida se rechaza entera; la oferta no cambia de estado. Nunca se descarta por una duda ni por un dato faltante.
 - **RN-05**: una oferta no se aplica dos veces: si ya no está en `preparada`, la línea se rechaza como "ya no pendiente" y se informa.
 - **RN-06**: la aprobada se marca `aceptada_ei` y la descartada `descartada_ei`, pasando por `evaluada` en el mismo movimiento. `aceptada_ei`/`descartada_ei` son estados propios de esta fase.
-- **RN-07**: `resultado_evaluacion_inicial` guarda el resultado completo (entregable principal, v1–v5, decisión, justificación y `evaluador`). `DEFAULT 'N/A'`; pendiente de evaluar = `'N/A'`. El entregable solo puede ser `'N/A'` en el descarte por falta de descripción (`v3 = FAIL` y `DESCARTADA`): única excepción a la validación de contenido de D52, cumpliendo D31.
+- **RN-07**: `resultado_evaluacion_inicial` guarda el resultado completo (eje organizacional, v1–v5, decisión, justificación y `evaluador`). `DEFAULT 'N/A'`; pendiente de evaluar = `'N/A'`. El eje se guarda normalizado a mayúsculas y siempre toma uno de los cinco valores; `NO_APLICA` significa que `v1 = FAIL`, no que falte información (D80, cumple D31).
 - **RN-08**: persistencia inmediata por oferta: cada resultado válido se escribe de una vez (estado + resultado + evento + cuenta) antes de tomar la siguiente.
 - **RN-09**: cierre de lote: se considera resuelto cuando todas sus ofertas están aplicadas o ya no están en `preparada`; solo entonces se borran los tres archivos. Con una oferta todavía pendiente, el lote completo se conserva.
 - **RN-10**: el borrado es definitivo y ocurre únicamente después de verificar en la base lo aplicado; lo evaluado vive en la base y los archivos eran transporte.
@@ -641,9 +641,9 @@ Un lote con faltantes no se borra mientras conserve ofertas pendientes. Un lote 
 - **VAL-01**: insumos presentes (lista no vacía, configuración, carpetas, BD).
 - **VAL-02**: todo archivo de resultados tiene lote y ficha de control con el mismo nombre base; un archivo sin pareja se rechaza completo, se informa y se aparta a `resultados/rechazados/` (no se borra y no se vuelve a procesar).
 - **VAL-03**: lectura línea por línea; una línea es un objeto JSON con `id`; los adornos se descartan antes de validar.
-- **VAL-04**: por línea — identificador incluido en la ficha de control del lote; oferta existente; estado `preparada`; `v1`–`v5` presentes con valor `PASS`/`FAIL`; `decision` ∈ {`APROBADA`, `DESCARTADA`} y coherente (aprobada exige los cinco `PASS`; descartada exige al menos un `FAIL`); `justificacion` con contenido real (no vacía, no `N/A`/`N/R`); `entregable_principal` con contenido real, con una única excepción: se admite `N/A` cuando `v3 = FAIL` y la decisión es `DESCARTADA` (oferta sin descripción; excepción a la validación de contenido de D52, cumpliendo D31); oferta no repetida en el lote ni en otro archivo.
+- **VAL-04**: por línea — identificador incluido en la ficha de control del lote; oferta existente; estado `preparada`; `v1`–`v5` presentes con valor `PASS`/`FAIL`; `decision` ∈ {`APROBADA`, `DESCARTADA`} y coherente (aprobada exige los cinco `PASS`; descartada exige al menos un `FAIL`); `justificacion` con contenido real (no vacía, no `N/A`/`N/R`); `eje_organizacional` presente y dentro de los cinco valores (`SISTEMAS_OPERACIONALES`, `SISTEMAS_DECISION_E_INFORMACION`, `DISENO_Y_TRANSFORMACION_ORGANIZACIONAL`, `MULTIPLE`, `NO_APLICA`), con coherencia: `v1 = FAIL` exige `NO_APLICA` y `v1 = PASS` lo prohíbe (clasificación informativa: no altera veto ni decisión); oferta no repetida en el lote ni en otro archivo.
 - **VAL-05**: la comparación con la ficha de control identifica con nombre y número los identificadores faltantes.
-- **VAL-06**: lo aplicado respeta D31 (sin vacíos; el único `'N/A'` admitido en el entregable es el del descarte por falta de descripción); el estado final corresponde a la decisión; el resultado queda completo.
+- **VAL-06**: lo aplicado respeta D31 (sin vacíos; el eje siempre toma uno de los cinco valores y `NO_APLICA` significa que `v1` falló, no que falte información); el estado final corresponde a la decisión; el resultado queda completo.
 - **VAL-07**: el borrado ocurre solo tras verificar en la base todas las ofertas del lote (aplicadas o ya no pendientes), y borra las tres piezas del lote.
 - **VAL-08**: evento escrito con `id_oferta`; evidencia acotada.
 
@@ -665,7 +665,7 @@ Un lote con faltantes no se borra mientras conserve ofertas pendientes. Un lote 
 | ERR-02 | Archivo de resultados sin lote o ficha de control | No | 1 | Se rechaza el archivo completo; evento de error con su nombre y se aparta a `resultados/rechazados/` (no se borra y no se repite el error) | `preparada` (sin cambios) |
 | ERR-03 | Línea ilegible, sin `id` o sin los 5 vetos | No | 2-3 | Se rechaza la línea; se informa; se cuenta rechazo | `preparada` |
 | ERR-04 | Oferta inexistente, no pendiente, repetida o fuera de la ficha del lote | No | 3 | Se rechaza la línea; nunca se cambia el estado | `preparada` |
-| ERR-05 | Decisión incoherente con los vetos, o justificación/entregable vacíos (salvo `entregable_principal = 'N/A'` en el descarte por falta de descripción) | No | 3 | Se rechaza la línea; se informa | `preparada` |
+| ERR-05 | Decisión incoherente con los vetos; justificación vacía; eje ausente, inválido o incoherente con `v1` | No | 3 | Se rechaza la línea; se informa | `preparada` |
 | ERR-06 | Fallo persistente al aplicar una línea válida | Sí (`retries`) | 4 | Reintento; agotado → aborto (no se puede garantizar integridad) | `abortada` |
 | ERR-07 | Faltantes contra la ficha de control | No | 6-7 | El lote no se cierra: se conserva completo y se informa qué falta | `preparada` |
 | ERR-08 | Fallo al borrar los archivos de un lote resuelto | Sí (`retries`) | 7 | Reintento; agotado → registro local y se informa; la base ya está escrita | continúa |
@@ -681,7 +681,7 @@ Un lote con faltantes no se borra mientras conserve ofertas pendientes. Un lote 
 - **Archivo vacío o solo con adornos**: se rechaza el archivo completo (ERR-02/ERR-03) y se informa.
 - **Todos los lotes completos**: se aplican y se borran; la carpeta queda vacía y la siguiente exportación no encuentra pendientes.
 - **Un lote con rechazos**: se conserva con lo rechazado y lo faltante; las ofertas afectadas siguen en `preparada` dentro de ese lote y se resuelven completando su respuesta (añadiendo las líneas que faltan al mismo archivo), no con una exportación nueva: mientras el lote exista, el guardián no genera lotes.
-- **Descripción vacía**: no afecta la importación; el chat debió marcarla V3 `FAIL`, la decisión coherente la descarta y el entregable puede venir como `N/A`.
+- **Descripción vacía**: no afecta la importación; el chat debió marcarla V3 `FAIL`, la decisión coherente la descarta y el eje debe ser `NO_APLICA` cuando `v1` también falla (D80).
 - **Fallo de la base a mitad de un lote**: lo aplicado persiste; lo no aplicado sigue pendiente; el lote no se cierra.
 
 ### Dependencias y contratos
@@ -696,9 +696,9 @@ Un lote con faltantes no se borra mientras conserve ofertas pendientes. Un lote 
   - La carpeta queda limpia de lotes resueltos: no se acumulan archivos ni trabajo repetido.
 
 ### Notas de implementación
-- Formato de línea: `{"id","entregable_principal","v1","v2","v3","v4","v5","decision","justificacion"}`; una por oferta; UTF-8.
+- Formato de línea: `{"id","eje_organizacional","v1","v2","v3","v4","v5","decision","justificacion"}`; una por oferta; UTF-8. Los campos extra se ignoran.
 - El limpiador de adornos descarta bloques de código, líneas de relleno y texto fuera de las llaves.
-- La justificación y el entregable se guardan íntegros; los topes de la instrucción (60 y 20 palabras) son criterio de redacción, no de rechazo, para no destruir datos.
+- La justificación se guarda íntegra y el eje se normaliza a mayúsculas; el tope de 60 palabras y la cita textual son criterios de redacción, no de rechazo, para no destruir datos.
 - Transiciones `preparada → evaluada → aceptada_ei` y `preparada → evaluada → descartada_ei` en el mismo movimiento (la máquina de estados no admite salto directo).
 - El borrado se hace por lote, con verificación previa en la base; nunca se borra un lote con ofertas pendientes y nunca se borra antes de escribir.
 - `evaluador` sale de `evaluacion_manual.modelo_evaluador` (por ejemplo `chat: gemini`); queda dentro del resultado guardado.
@@ -827,6 +827,8 @@ Los ocho puntos aprobados quedaron ejecutados:
 **Notas de la revisión:** el orquestador devuelve el cierre de toda corrida registrada —también en concurrencia, fallo de arranque o aborto— para que el comando informe el motivo real y el identificador en vez de decir que no hubo corrida; solo devuelve vacío cuando el fallo ocurre antes del registro. La herramienta de prueba de prompts usa una ruta declarada, porque la de evaluación se retiró. El tablero no pinta ceros de importación durante la exportación, y el prevuelo resuelve la carpeta de trabajo exactamente igual que el arranque del módulo.
 
 **Verificación real (2026-11-19):** con respaldo previo (`data/backup/job_search_pre_fase4_20261119_175455.db`), exportación real COR-0008: 294 ofertas `preparada` → 10 lotes, cierre `evaluacion_pendiente`, 0 errores. Importación sobre copia de la base con un lote real (COR-0009): 15 aprobadas / 15 descartadas, lote cerrado y verificado, aviso entregado y bloqueo libre. Sin respuestas (COR-0010): cierre `sin_resultados`, salida correcta y aviso informativo. Los diez lotes reales quedan en la carpeta de trabajo para que el operador los evalúe en el chat.
+
+**Ajuste v7 (2026-11-20, D80):** la instrucción del chat quedó en la versión 7 con `eje_organizacional` en lugar de `entregable_principal`. El prompt oficial (`compatibility.md` v7), el formato de salida que la exportación añade al lote, la validación de la importación y el resultado guardado usan el eje y sus cinco valores; la coherencia con `v1` se comprueba en la importación. Los cinco vetos, la decisión, los estados, el esquema y los lotes existentes no cambian. La carpeta de trabajo y la base no se tocaron: las pruebas usaron datos temporales.
 
 **(Histórico) Pendientes aprobados antes de la Fase 4:**
 

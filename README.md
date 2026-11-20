@@ -11,10 +11,10 @@ All official documentation is located in `docs/`:
 | [Ficha técnica — Descubrimiento (M1)](docs/diagrams/Ficha%20técnica%20-%20Diagrama%20de%20flujo%20(Descubrimiento%20de%20oportunidades).md) | Module 1 (Opportunity Discovery) — node-level spec, as-built (D22, D25, D28, D29, D30, D31, D32). |
 | [Ficha técnica — Preparación de ofertas (M2)](docs/diagrams/Ficha%20técnica%20-%20Diagrama%20de%20flujo%20(Preparación%20de%20ofertas).md) | Module 2 (Offer Preparation, Phase 5) — node-level spec, authoritative construction base (D33, 2026-08-20). |
 | [Ficha técnica — Orquestador transversal](docs/diagrams/Ficha%20técnica%20-%20Diagrama%20de%20flujo%20(Orquestador%20transversal).md) | Transversal orchestrator (modules 1 → 2 → 3) — authoritative construction base (D34, 2026-08-20; Module 3 note D76). |
-| [Ficha técnica — Evaluación inicial (M3)](docs/diagrams/Ficha%20técnica%20-%20Diagrama%20de%20flujo%20(Evaluación%20inicial%20de%20ofertas).md) | Module 3 (Initial Evaluation) — two AI-free processes: export and import (version 2.1, D76, built and closed 2026-11-19). |
-| [DOC-13A](docs/project-design/Document%2013A%20-%20Detailed%20Data%20Model%20Design.md) | Detailed data model (entities, attributes, catalogs, ERD) — v1.25. |
+| [Ficha técnica — Evaluación inicial (M3)](docs/diagrams/Ficha%20técnica%20-%20Diagrama%20de%20flujo%20(Evaluación%20inicial%20de%20ofertas).md) | Module 3 (Initial Evaluation) — two AI-free processes: export and import (version 2.2, D76 built 2026-11-19, aligned to instruction v7 by D80 on 2026-11-20). |
+| [DOC-13A](docs/project-design/Document%2013A%20-%20Detailed%20Data%20Model%20Design.md) | Detailed data model (entities, attributes, catalogs, ERD) — v1.26. |
 | [Appendix 5A](docs/project-design/DOC-Appendix%205A%20-%20Official%20Prefix%20Catalog.md) | Official prefix catalog (IDs, codes) — FNT retired (D31); module scope generalized (D33/D34). |
-| [Decision log](docs/history/decision%20log.md) | Approved decisions and deviations — D1 through D79. |
+| [Decision log](docs/history/decision%20log.md) | Approved decisions and deviations — D1 through D80. |
 | [MVP Execution Plan](docs/plans/MVP%20Execution%20Plan.md) | Build order and acceptance criteria |
 | [tracker.md](docs/history/tracker.md) | Current status of each phase and task |
 | [Database tables](docs/reports/database-tables.md) | As-built reference of `job_search.db` (tables, columns, writers) |
@@ -47,7 +47,7 @@ Notes:
 - `preflight.py --db` expects an explicit database path as an argument; omit it to check the default `data/job_search.db`.
 - Logs default to INFO; set `LOG_LEVEL=DEBUG` in `.env` for verbose output.
 - All persistent data lives in `data/job_search.db`; backups are stored under `data/backup/`.
-- Evaluation runs in two processes (D76, built): the batch exports the prepared offers into `data/evaluacion_manual/lotes/` and closes as `evaluacion_pendiente` when lots are waiting (or `sin_pendientes` when there is nothing to export). Evaluate a lot in the chat, save its answer in `data/evaluacion_manual/resultados/` and run `bash scripts/importar_evaluaciones.sh`: it validates each line, applies the verdicts, shows the report and sends the desktop notice. Invalid lines leave their offers pending; a lot with missing answers is kept and named in the report.
+- Evaluation runs in two processes (D76, built): the batch exports the prepared offers into `data/evaluacion_manual/lotes/` and closes as `evaluacion_pendiente` when lots are waiting (or `sin_pendientes` when there is nothing to export). Evaluate a lot in the chat, save its answer in `data/evaluacion_manual/resultados/` and run `bash scripts/importar_evaluaciones.sh`: it validates each line, applies the verdicts, shows the report and sends the desktop notice. Since D80 (instruction v7) each answer line carries `eje_organizacional` (five closed values, coherent with V1) instead of the former deliverable; invalid lines leave their offers pending, and a lot with missing answers is kept and named in the report.
 
 ## Scheduled automation
 

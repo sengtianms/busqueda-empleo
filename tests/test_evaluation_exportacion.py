@@ -348,8 +348,10 @@ def test_instruccion_se_genera_desde_el_prompt_oficial(tmp_path: Path) -> None:
     assert "REGLA DE ORO" in texto
     assert "FORMATO DE RESPUESTA PARA EL LOTE" in texto
     assert "una línea JSON por oferta" in texto
-    assert "entregable_principal" in texto
-    assert "`N/A`" in texto
+    assert "eje_organizacional" in texto
+    assert "SISTEMAS_OPERACIONALES" in texto
+    assert "NO_APLICA" in texto
+    assert "entregable_principal" not in texto
     for prohibido in ("api_key", "ollama", "openrouter", "gemma"):
         assert prohibido not in texto.lower()
 
