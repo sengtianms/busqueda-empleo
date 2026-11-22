@@ -429,7 +429,7 @@ class LinkedInAdapter:
         descripción vacía (estado 'descubierta'); el enriquecimiento con la
         descripción es una tarea posterior de Preparación.
 
-        (D61, 2026-10-22) ``desde_desplazamiento`` reanuda la misma búsqueda
+        (D81, 2026-10-22) ``desde_desplazamiento`` reanuda la misma búsqueda
         en la carta ``?start=N`` tras renovar (o perder) el navegador, y
         ``max_paginas``/``max_ofertas`` acotan el TRAMO (las políticas
         completas siguen mandando el límite por set en el nodo): el

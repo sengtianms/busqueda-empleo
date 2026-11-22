@@ -41,7 +41,7 @@ class _FalloTramo(Exception):
     """Señal interna: el tramo de captura falló de forma definitiva.
 
     Transporta la excepción original para que el bucle de resiliencia
-    distinga muerte de navegador (→ resurección, D61) de fallo de
+    distinga muerte de navegador (→ resurección, D81) de fallo de
     plataforma (→ fallo del set; la tanda sigue con el siguiente).
     """
 
@@ -83,14 +83,14 @@ def _registrar_evento(
 
 
 def capturar_ofertas(contexto: RunContext) -> ResultadoCaptura:
-    """Nodo: Capturar ofertas (v1.3, resiliencia D61).
+    """Nodo: Capturar ofertas (v1.3, resiliencia D81).
 
     Camina la búsqueda por TRAMOS paginados: cada tramo captura a lo sumo
     el presupuesto de páginas desde la última renovación y el nodo decide
     después de cada tramo si toca reconstruir el navegador, si la búsqueda
     terminó o si se alcanzó el freno de emergencia de las políticas.
 
-    Resiliencia (D61): una muerte del navegador durante el tramo fuerza el
+    Resiliencia (D81): una muerte del navegador durante el tramo fuerza el
     árbol, reabre el canal con la misma memoria de sesión (ventana manual
     de 5 minutos si la plataforma la pide) y reanuda el tramo siguiente en
     la paginación exacta donde murió; las resurecciones no tienen techo
@@ -123,7 +123,7 @@ def capturar_ofertas(contexto: RunContext) -> ResultadoCaptura:
     # Paso 2: obtener políticas
     politicas = contexto.politicas(fuente)
 
-    # Paso 3: bucle resiliencia D61 — tramos con reanudación por página
+    # Paso 3: bucle resiliencia D81 — tramos con reanudación por página
     adapter = obtener_adaptador(fuente.fuente_id)
     inicio_captura = monotonic()
     acumuladas: list[Offer] = []
@@ -198,7 +198,7 @@ def capturar_ofertas(contexto: RunContext) -> ResultadoCaptura:
                 raise
             causa = exc.error
             if es_muerte_navegador(causa):
-                # Muerte del navegador (D61): resurección sin techo.
+                # Muerte del navegador (D81): resurección sin techo.
                 contexto.muertes_sin_avance += 1
                 logger.error(
                     f"Navegador muerto en captura | run={contexto.id_corrida} | "

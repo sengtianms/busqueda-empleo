@@ -154,7 +154,7 @@ def _validar_fuente(conf: Any) -> str | None:
 
 
 def _validar_descubrimiento(config: dict[str, Any]) -> str | None:
-    """VAL-02 sección `descubrimiento` (D61): umbrales enteros >= 1."""
+    """VAL-02 sección `descubrimiento` (D81): umbrales enteros >= 1."""
     seccion = config.get("descubrimiento")
     if seccion is None:
         return None

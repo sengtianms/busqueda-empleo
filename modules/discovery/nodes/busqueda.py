@@ -45,7 +45,7 @@ class ResultadoBusqueda:
 
 
 class _MuerteBusqueda(Exception):
-    """Señal interna: el canal murió durante la búsqueda (resurección D61)."""
+    """Señal interna: el canal murió durante la búsqueda (resurección D81)."""
 
     def __init__(self, error: BaseException) -> None:
         super().__init__(str(error))
@@ -101,7 +101,7 @@ def aplicar_filtros(contexto: RunContext) -> ResultadoBusqueda:
     _tic_set_iniciado(contexto, set_actual.indice)
     narrar_set(set_actual.indice)
 
-    # Paso 3: resiliencia del canal (D61) — renovación prevista, tramo con
+    # Paso 3: resiliencia del canal (D81) — renovación prevista, tramo con
     # reintento condicional clásico y resurección ante muerte del navegador.
     if not renovar_si_toca(contexto):
         return _resultado_insostenible(contexto)

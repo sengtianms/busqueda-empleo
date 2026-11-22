@@ -469,7 +469,7 @@ def test_quedan_sets_fuente_ausente(contexto: RunContext) -> None:
     assert res.codigo == "ERR-01"
 
 
-# ==== D61: resiliencia del navegador en la captura ======================== #
+# ==== D81: resiliencia del navegador en la captura ======================== #
 
 _MUERTE_NAVEGADOR = Exception("Page.goto: Batch navigation failed: Target crashed")
 
@@ -550,7 +550,7 @@ def _preparar_set(contexto: RunContext) -> None:
 
 
 def test_captura_reanuda_tras_muerte_navegador() -> None:
-    """D61: muerte del canal → reconstrucción → reanudación en su paginación.
+    """D81: muerte del canal → reconstrucción → reanudación en su paginación.
 
     La búsqueda camina la página 1 (tramo aprobado) y muere caminando la
     página 2; al volver del reconstructor, la paginación retoma EXACTA en
@@ -590,7 +590,7 @@ def test_captura_reanuda_tras_muerte_navegador() -> None:
 
 
 def test_captura_muertes_consecutivas_sin_avance_abortan() -> None:
-    """D61: entorno roto (muertes sin NINGUNA página de avance) → cierre honesto."""
+    """D81: entorno roto (muertes sin NINGUNA página de avance) → cierre honesto."""
     contexto = _run_context_resiliencia(tope_muertes=1)
     _preparar_set(contexto)
     adapter = MagicMock()
@@ -609,7 +609,7 @@ def test_captura_muertes_consecutivas_sin_avance_abortan() -> None:
 
 
 def test_captura_reabrir_fallido_cierra_honesto() -> None:
-    """D61: la reconstrucción falla (p. ej. ventana manual vencida) → ERR-09."""
+    """D81: la reconstrucción falla (p. ej. ventana manual vencida) → ERR-09."""
     contexto = _run_context_resiliencia()
     _preparar_set(contexto)
     adapter = MagicMock()
@@ -627,7 +627,7 @@ def test_captura_reabrir_fallido_cierra_honesto() -> None:
 
 
 def test_captura_renovacion_programada_divide_tramos() -> None:
-    """D61: al alcanzar el umbral de páginas, el canal se renueva en la frontera."""
+    """D81: al alcanzar el umbral de páginas, el canal se renueva en la frontera."""
     contexto = _run_context_resiliencia(renovar=1)
     _preparar_set(contexto)
     lote_a = _lote("A")
@@ -664,7 +664,7 @@ def test_captura_renovacion_programada_divide_tramos() -> None:
 
 
 def test_captura_insostenible_guarda_de_frente() -> None:
-    """D61: el canal declarado insostenible no reintentela captura."""
+    """D81: el canal declarado insostenible no reintentela captura."""
     contexto = _run_context_resiliencia()
     contexto.navegador_insostenible = True
     res = capturar_ofertas(contexto)
@@ -673,7 +673,7 @@ def test_captura_insostenible_guarda_de_frente() -> None:
 
 
 def test_captura_muertes_pendientes_frenan_hoy() -> None:
-    """D61: muertes acumuladas sin avance exceden el tope → freno inmediato."""
+    """D81: muertes acumuladas sin avance exceden el tope → freno inmediato."""
     contexto = _run_context_resiliencia()
     _preparar_set(contexto)
     contexto.muertes_sin_avance = 4  # tope 3

@@ -297,13 +297,13 @@ def test_se_encontraron_ofertas_missing(mock_context: RunContext) -> None:
     assert res.codigo == "ERR-01"
 
 
-# ==== D61: resiliencia del canal en la búsqueda =========================== #
+# ==== D81: resiliencia del canal en la búsqueda =========================== #
 
 _MUERTE_NAVEGADOR = Exception("Page.goto: Search navigation failed: Target closed")
 
 
 def test_busqueda_reanuda_tras_muerte_navegador(mock_context: RunContext) -> None:
-    """D61: muerte del canal → reconstrucción → reintento del MISMO set."""
+    """D81: muerte del canal → reconstrucción → reintento del MISMO set."""
     with _adaptador_con_apply_filters(
         side_effect=[_MUERTE_NAVEGADOR, _resultado_ok(con_ofertas=True)]
     ) as child:
@@ -326,7 +326,7 @@ def test_busqueda_reanuda_tras_muerte_navegador(mock_context: RunContext) -> Non
 
 
 def test_busqueda_reabrir_fallido_cierra_honesto(mock_context: RunContext) -> None:
-    """D61: reconstrucción imposible → ERR-09 y la tanda cierra honesto."""
+    """D81: reconstrucción imposible → ERR-09 y la tanda cierra honesto."""
     with _adaptador_con_apply_filters(
         side_effect=[_MUERTE_NAVEGADOR]
     ) as child:
@@ -343,7 +343,7 @@ def test_busqueda_reabrir_fallido_cierra_honesto(mock_context: RunContext) -> No
 
 
 def test_busqueda_muertes_consecutivas_sin_avance(mock_context: RunContext) -> None:
-    """D61: entorno roto (muertes sin avance superan el tope) → cierre honesto."""
+    """D81: entorno roto (muertes sin avance superan el tope) → cierre honesto."""
     with _adaptador_con_apply_filters(
         side_effect=[_MUERTE_NAVEGADOR, _MUERTE_NAVEGADOR]
     ) as child:

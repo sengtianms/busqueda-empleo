@@ -1,4 +1,4 @@
-"""Pruebas de la navegación resiliente del Módulo 1 (D61, 2026-10-22).
+"""Pruebas de la navegación resiliente del Módulo 1 (D81, 2026-10-22).
 
 Cubre el chaleco antibloqueo: detección de muerte del navegador (señales
 directas y por cadena de causas), matador del árbol de procesos, reconstrucción
@@ -74,7 +74,7 @@ def test_es_muerte_navegador_por_cadena_de_causas() -> None:
 
 
 def test_es_muerte_navegador_no_confunde_bloqueos_de_plataforma() -> None:
-    """La muralla de la plataforma no es muerte del canal (D61)."""
+    """La muralla de la plataforma no es muerte del canal (D81)."""
     assert not es_muerte_navegador(Exception("Authwall detected."))
     assert not es_muerte_navegador(Exception("Captcha/challenge evidence."))
     assert not es_muerte_navegador(Exception("criterio de ingreso no cumplido"))

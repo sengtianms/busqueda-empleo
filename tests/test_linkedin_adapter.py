@@ -1800,7 +1800,7 @@ def test_total_a_entero_sin_separadores() -> None:
     assert linkedin_mod._total_a_entero("7") == 7
 
 
-# ==== D61: reanudación por paginación y tramos de renovación ============== #
+# ==== D81: reanudación por paginación y tramos de renovación ============== #
 
 _POLITICAS_TRAMOS = PoliticasCaptura(
     max_paginas=10,
@@ -1814,7 +1814,7 @@ def test_capture_batch_reanuda_en_carta_start(
     ficha_publica: FichaFuente,
     set_filtros: SetFiltros,
 ) -> None:
-    """D61: reanuda la MISMA búsqueda en su paginación ```?start=N``` exacta.
+    """D81: reanuda la MISMA búsqueda en su paginación ```?start=N``` exacta.
 
     El reanudador llega por otra página (la URL de resultados no está en el
     mapa): la paginación se reconstruye determinista desde la búsqueda.
@@ -1836,7 +1836,7 @@ def test_capture_batch_tramo_por_max_paginas(
     ficha_publica: FichaFuente,
     set_filtros: SetFiltros,
 ) -> None:
-    """D61: tramo cortado por presupuesto de páginas deja el avance exacto."""
+    """D81: tramo cortado por presupuesto de páginas deja el avance exacto."""
     pagina = FakePage(
         {
             URL_RESULTADOS: _leer("lista_linkedin_sdui_2026.html"),
@@ -1858,7 +1858,7 @@ def test_capture_batch_fin_real_reporta_continuacion(
     ficha_publica: FichaFuente,
     set_filtros: SetFiltros,
 ) -> None:
-    """D61: fin real sin botón anuncia ```hay_mas_ofertas=False``` y avance."""
+    """D81: fin real sin botón anuncia ```hay_mas_ofertas=False``` y avance."""
     pagina = FakePage(
         {
             URL_RESULTADOS: _leer("lista_linkedin_sdui_2026.html"),
@@ -1878,7 +1878,7 @@ def test_capture_batch_freno_ofertas_por_tramo(
     ficha_publica: FichaFuente,
     set_filtros: SetFiltros,
 ) -> None:
-    """D61: ```max_ofertas``` del tramo acota capturas sin marcar límite."""
+    """D81: ```max_ofertas``` del tramo acota capturas sin marcar límite."""
     pagina = FakePage(
         {
             URL_RESULTADOS: _leer("lista_linkedin_sdui_2026.html"),

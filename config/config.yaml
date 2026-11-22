@@ -16,12 +16,12 @@ fuentes:
     # (p.ej. 0 y 2) aborta la corrida con ERR-01 "Set ausente"; un índice
     # duplicado hace que el segundo set se ignore en silencio.
     #
-    # D60 (2026-10-22): una sola barrida (Colombia) x 18 grupos
-    # temáticos = 18 búsquedas por tanda. La matriz inicial de 4 barridas
-    # (Colombia 100876405, América Latina 91000011, América del Norte
-    # 91000022 y Mundo en remoto 92000000, esta última con filtro de
-    # modalidad "remoto") quedó recortada por decisión del usuario el
-    # mismo día: solo Colombia. As-built: location=<texto> dejó de
+    # D60 (2026-10-22) + D70 (2026-11-09): una sola barrida (Colombia) x
+    # 9 grupos definitivos (índices 0-8) = 9 búsquedas por tanda. La matriz
+    # inicial de 4 barridas (Colombia 100876405, América Latina 91000011,
+    # América del Norte 91000022 y Mundo en remoto 92000000, esta última con
+    # filtro de modalidad "remoto") quedó recortada por decisión del usuario
+    # el mismo día: solo Colombia. As-built: location=<texto> dejó de
     # honrarse por LinkedIn (2026-10-22); los sets no lo usan, la
     # geografía viaja solo por geoid.
     sets_de_filtros:
@@ -224,7 +224,7 @@ browser:
   ventana_alto: 900
   espera_manual_segundos: 300
 
-# --- Resiliencia del navegador (D61, 2026-10-22) ---
+# --- Resiliencia del navegador (D81, 2026-10-22) ---
 # La tanda sobrevive a la muerte del navegador y renueva el canal por
 # tramos: nada de una tanda viaja a la siguiente, cada tanda termina íntegra
 # lo suyo.

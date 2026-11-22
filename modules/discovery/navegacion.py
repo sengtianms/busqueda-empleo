@@ -1,4 +1,4 @@
-"""Canal de navegación resiliente del Módulo 1 (D61, 2026-10-22).
+"""Canal de navegación resiliente del Módulo 1 (D81, 2026-10-22).
 
 Dos mecanismos sobre un mismo camino de reconstrucción:
 
@@ -114,7 +114,7 @@ def abrir_canal_instancia(
     canal efímero. Devuelve ``(browser_o_contexto, page)``. ``headless=None``
     resuelve el modo en navegación; un valor explícito manda (compatibilidad
     con el nodo de ingreso). Lógica movida desde ``ingreso._abrir_pagina``
-    (D61) para compartirla con la reconstrucción.
+    (D81) para compartirla con la reconstrucción.
     """
     ancho, alto = ventana_navegador(load().get("browser", {}))
     argumentos = [f"--window-size={ancho},{alto}"]
@@ -153,7 +153,7 @@ def abrir_canal() -> tuple[Any, Any, Any]:
 
 
 def matar_arbol_navegador() -> None:
-    """Fuerza el árbol del navegador de automatización al suelo (D61).
+    """Fuerza el árbol del navegador de automatización al suelo (D81).
 
     Solo procesos de la automatización: el patrón exige `--user-data-dir=`
     (los procesos hijos del navegador no lo llevan y los navegadores
@@ -179,7 +179,7 @@ def matar_arbol_navegador() -> None:
 
 
 def matar_navegador(contexto: RunContext) -> None:
-    """Cierra el canal con cortesía y fuerza el árbol al suelo (D61)."""
+    """Cierra el canal con cortesía y fuerza el árbol al suelo (D81)."""
     cerrar_recursos(contexto)
     matar_arbol_navegador()
 
@@ -206,7 +206,7 @@ def _descartar_canal(instancia: Any, canal: Any, pagina: Any) -> None:
 
 
 def reabrir_navegador(contexto: RunContext, motivo: str) -> bool:
-    """Reconstruye el canal con la misma memoria de sesión y re-ingresa (D61).
+    """Reconstruye el canal con la misma memoria de sesión y re-ingresa (D81).
 
     Mata el árbol herido, abre un canal nuevo, verifica la entrada con la
     sesión persistente (la ventana manual de 5 minutos del nodo de ingreso
@@ -269,7 +269,7 @@ def reabrir_navegador(contexto: RunContext, motivo: str) -> bool:
 
 
 def renovar_si_toca(contexto: RunContext) -> bool:
-    """Reconstruye el canal cuando el tramo vivido alcanza el umbral (D61).
+    """Reconstruye el canal cuando el tramo vivido alcanza el umbral (D81).
 
     True con el canal vivo (nada que renovar o renovación exitosa); False
     si la renovación falló (contexto insostenible, cierre honesto arriba).
@@ -311,7 +311,7 @@ def techo_por_aplicacion(ficha_timeout_segundos: int) -> float:
 
 
 class LatidoNavegador:
-    """Vigilante con techo absoluto por operación del canal (D61).
+    """Vigilante con techo absoluto por operación del canal (D81).
 
     Una llamada silenciosa (canal colgado sin excepción) no puede detener
     la tanda: vencido el techo, el vigilante mata el árbol del navegador y

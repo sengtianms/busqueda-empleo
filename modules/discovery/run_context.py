@@ -74,7 +74,7 @@ class RunContext:
         self.estado_captura: EstadoCaptura | None = None
         self.set_corriente: SetFiltros | None = None
         self._ultimo_fuente_id_sets: str | None = None
-        # Resiliencia del navegador (D61): renovación por tramos y límite
+        # Resiliencia del navegador (D81): renovación por tramos y límite
         # honesto de muertes consecutivas sin avance (entorno roto).
         descubrimiento = config_descubrimiento if config_descubrimiento else {}
         self.renovar_navegador_tras_paginas: int = _entero_positivo(

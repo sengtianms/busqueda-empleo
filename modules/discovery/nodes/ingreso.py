@@ -69,14 +69,14 @@ def _resolver_headless() -> bool:
 
 
 def _resolver_perfil() -> str:
-    """Carpeta de sesión persistente (delegado en navegación, D61)."""
+    """Carpeta de sesión persistente (delegado en navegación, D81)."""
     return resolver_perfil()
 
 
 def _abrir_pagina(
     playwright_instance: Any, headless: bool
 ) -> tuple[Any, Any]:
-    """Crea la ventana del canal sobre una instancia Playwright viva (D61).
+    """Crea la ventana del canal sobre una instancia Playwright viva (D81).
 
     Delegado en `navegacion.abrir_canal_instancia`; `headless` se entrega
     explícito para respetar la resolución del propio nodo (parcheable).
