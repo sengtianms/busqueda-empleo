@@ -5,6 +5,7 @@ Unless noted, decisions from previous sessions remain in effect.
 ## Sessions index
 | № | Date | Session ID | Summary |
 |---|---|---|---|
+| 65 | 22/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Documentation synced to the automation as it actually runs: audit driven by the live trace and active configuration, browser-resilience decision registered, module sheets and operating docs aligned, internal references corrected without behavior changes; two reviewers green, 976 tests, dedicated branch active |
 | 64 | 22/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Project context recovered from the primary records and status summarized; fast-forward merges of the evaluation-redesign and adjustment branches into the main branch verified the same day, leaving a single clean branch; documentation drift in the previous session entry identified for recording here; read-only session, no code or project data touched |
 | 63 | 20/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Chat evaluation instruction upgraded to v7: the answer now carries a closed organizational axis instead of the deliverable; the official source, the lot answer contract, the strict import and the stored result were aligned, with the work folder, the operator's result file and the live database untouched; the operator later evaluated all nine lots and ran the one-line import, which applied 250 offers with zero rejected lines, and the full outcome, coherence and timings were verified read-only; 976 tests, lint and types clean, both reviewers green |
 | 62 | 19/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Module 3 AI-free redesign closed with Phase 4: a one-line import command shows the operator report and sends the desktop notice; the scheduled batch exports lots instead of calling a model, the verdict names exported lots and pending offers, the board shows lots instead of per-offer failures, the preflight checks no model, and the old AI route and its settings were removed; real export of 294 offers into 10 lots plus a real import on a copy, zero errors; reviewer findings fixed, 973 tests, lint and types clean |
@@ -58,6 +59,32 @@ Unless noted, decisions from previous sessions remain in effect.
 | 14 | 09/08/2026 | `ses_01bcc78adffemcqFEiZxT52Eli` | Sub-fase 4.4: capture/registration nodes implemented, audited, and post-audit fixes applied (FK-free schema, name columns, upsert tests) |
 | 13 | 08/08/2026 | `ses_01be77680ffeuyoKct4Qrfx1GG` | Repo sync to `fase-4`; new `/save` section with general git commit and push guidance |
 | 12 | 08/08/2026 | `ses_01c089ce2ffe9MvQT4F1pC0MJN` | Sub-fase 4.2 deep audit + post-audit fixes (credentials mapping, playwright lifecycle) |
+
+## Session 65 — 22/11/2026
+`ses_f4af1b961ffe5t8xNspW5U761x` · `docs/sincronizacion-operacion`
+
+**Topics**
+- Documentation audited against what the automation does when it runs, using the live trace, active configuration, execution path, tests and records as evidence
+- Scope kept to built and operating pieces; future modules, their prompts, entities, prefixes and plan phases left untouched
+- Browser-resilience channel registered as a late decision after its wrong decision reference and tracker attribution were found
+- Module 1 sheet aligned with the persistent session, channel renewal and resurrection, and narration marks
+- Orchestrator sheet, database reference, data model and prefix catalogue aligned with the three-module chain
+- Operating guide, environment template, operating contract and search-matrix comment aligned with current operation
+- Internal decision references repointed in comments only; no behavior changed
+- Both closing reviewers run, their findings corrected and reconfirmed
+
+**Decisions**
+- Browser resilience registered as a late decision; decisions from previous sessions remain in effect
+- Volatile database counts removed from the tables reference rather than refreshed, so the document cannot go stale again
+- Implemented but unobserved error branches documented as such, without presenting them as normal flow
+- Future-module documentation explicitly out of scope; no live run needed because the existing trace and active configuration were sufficient
+- No tracker status change: only two attribution notes were corrected, no task status changed
+
+**Status**
+- Documentation sync completed on a dedicated branch with five commits and a clean worktree
+- Lint and types clean, 976 tests collected, no behavior, schema, configuration, prompt or data change
+- Both reviewers conform after fixes; branch active and not merged into the main branch
+- Phases 0–6 complete and Version 1 scope intact; Phases 7–8 remain future-version planning
 
 ## Session 64 — 22/11/2026
 `ses_f4af1b961ffe5t8xNspW5U761x` · `main`
