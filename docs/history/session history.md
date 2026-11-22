@@ -5,7 +5,7 @@ Unless noted, decisions from previous sessions remain in effect.
 ## Sessions index
 | № | Date | Session ID | Summary |
 |---|---|---|---|
-| 63 | 20/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Chat evaluation instruction upgraded to v7: the answer now carries a closed organizational axis instead of the deliverable; the official source, the lot answer contract, the strict import and the stored result were aligned, with the work folder, the operator's result file and the live database untouched; 976 tests, lint and types clean, both reviewers green |
+| 63 | 20/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Chat evaluation instruction upgraded to v7: the answer now carries a closed organizational axis instead of the deliverable; the official source, the lot answer contract, the strict import and the stored result were aligned, with the work folder, the operator's result file and the live database untouched; the operator later evaluated all nine lots and ran the one-line import, which applied 250 offers with zero rejected lines, and the full outcome, coherence and timings were verified read-only; 976 tests, lint and types clean, both reviewers green |
 | 62 | 19/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Module 3 AI-free redesign closed with Phase 4: a one-line import command shows the operator report and sends the desktop notice; the scheduled batch exports lots instead of calling a model, the verdict names exported lots and pending offers, the board shows lots instead of per-offer failures, the preflight checks no model, and the old AI route and its settings were removed; real export of 294 offers into 10 lots plus a real import on a copy, zero errors; reviewer findings fixed, 973 tests, lint and types clean |
 | 61 | 19/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Module 3 AI-free redesign completed Phase 3: the import node pairs chat answers with their lots, validates every line strictly, applies approved and discarded verdicts with full results and events, keeps incomplete lots intact and deletes resolved ones only after database verification; a shared closure handles both processes with official motives, event-based metrics and ownership-safe lock release; two flow entries cover the scheduled export and the manual import while the old AI route stays untouched; the three approved rules were applied and recorded in the sheet and decision log; 63 new tests, 1018 total, lint and types clean, both reviewers green |
 | 60 | 19/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Module 3 AI-free redesign advanced with Phase 2 closed: the export node guards existing lots, refreshes the chat instruction from the official prompt, groups prepared offers into FIFO lots with internal control sheets and verified atomic writes, and emits one event per lot without changing any offer; reviewer pass closed a corrupt-configuration crash, added a write-permission probe and restored error accounting for half-written lots; tracker and project status updated; 36 new tests, 955 total, lint and types clean |
@@ -69,18 +69,25 @@ Unless noted, decisions from previous sessions remain in effect.
 - Writing-style guidance stays guidance, extra answer fields stay ignored, and veto and decision rules are unchanged
 - No schema, configuration, database, lot or scheduler change; all primary documents aligned
 - Code and documentation reviews closed all findings, including several stale current-state passages
+- Operator's pending answer file checked read-only: valid axis on every line and coherent with the first veto
+- Operator evaluated the remaining lots and ran the one-line import; all nine lots applied with zero rejected lines
+- Post-import audit: 250 evaluated offers, coherent axes and verdicts, zero errors, empty work folders, free lock
+- Module and stage timings reconstructed from the official trace; manual chat time falls outside system measurement
+- Remaining options reviewed with the operator: branch merge, scheduler resume and the deferred next stage
 
 **Decisions**
 - The improved instruction becomes the official source; the work-folder copy is left exactly as the operator left it
 - The answer field changes from the deliverable to the organizational axis, keeping the deliverable analysis internal to the first veto
-- The operator's answer file stays untouched and unimported until the operator gives a separate instruction
+- The operator's answer file stayed untouched until the operator evaluated the rest and chose to import; the import was then verified without modifying anything
+- No branch merge was authorized: the redesign branch stays active and unmerged
 - Decisions from previous sessions remain in effect
 
 **Status**
 - Instruction v7 alignment implemented and closed; decision recorded and all primary documents aligned
-- 976 tests passing, lint and types clean, code and documentation reviewers green
-- Active branch `rediseno-evaluacion`; all session changes committed in the save commit
-- Scheduled clock stays off; work folder and live database unchanged
+- Live import verified on 22/11/2026: 60 approved, 190 discarded, five duplicates untouched, zero pending offers, zero chain errors
+- 976 tests passing, lint and types clean, code and documentation reviewers green; no code changed after the save commit
+- Active branch `rediseno-evaluacion`, pushed and unmerged; scheduled clock stays off, watchdog active
+- Manual evaluation window measured only as elapsed time; no further measurements or remediation requested
 
 ## Session 62 — 19/11/2026
 `ses_f4af1b961ffe5t8xNspW5U761x` · `rediseno-evaluacion`
