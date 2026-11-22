@@ -10,7 +10,6 @@ pyyaml>=6.0
 python-dotenv>=1.1
 
 # --- Development tools ---
-black>=24
 ruff>=0.8
 mypy>=1.13
 pytest>=8

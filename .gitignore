@@ -57,3 +57,6 @@ temp/*
 *.egg-info/
 dist/
 build/
+
+# --- Playwright artifacts ---
+output/
