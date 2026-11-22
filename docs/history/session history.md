@@ -5,6 +5,7 @@ Unless noted, decisions from previous sessions remain in effect.
 ## Sessions index
 | № | Date | Session ID | Summary |
 |---|---|---|---|
+| 64 | 22/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Project context recovered from the primary records and status summarized; fast-forward merges of the evaluation-redesign and adjustment branches into the main branch verified the same day, leaving a single clean branch; documentation drift in the previous session entry identified for recording here; read-only session, no code or project data touched |
 | 63 | 20/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Chat evaluation instruction upgraded to v7: the answer now carries a closed organizational axis instead of the deliverable; the official source, the lot answer contract, the strict import and the stored result were aligned, with the work folder, the operator's result file and the live database untouched; the operator later evaluated all nine lots and ran the one-line import, which applied 250 offers with zero rejected lines, and the full outcome, coherence and timings were verified read-only; 976 tests, lint and types clean, both reviewers green |
 | 62 | 19/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Module 3 AI-free redesign closed with Phase 4: a one-line import command shows the operator report and sends the desktop notice; the scheduled batch exports lots instead of calling a model, the verdict names exported lots and pending offers, the board shows lots instead of per-offer failures, the preflight checks no model, and the old AI route and its settings were removed; real export of 294 offers into 10 lots plus a real import on a copy, zero errors; reviewer findings fixed, 973 tests, lint and types clean |
 | 61 | 19/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Module 3 AI-free redesign completed Phase 3: the import node pairs chat answers with their lots, validates every line strictly, applies approved and discarded verdicts with full results and events, keeps incomplete lots intact and deletes resolved ones only after database verification; a shared closure handles both processes with official motives, event-based metrics and ownership-safe lock release; two flow entries cover the scheduled export and the manual import while the old AI route stays untouched; the three approved rules were applied and recorded in the sheet and decision log; 63 new tests, 1018 total, lint and types clean, both reviewers green |
@@ -57,6 +58,26 @@ Unless noted, decisions from previous sessions remain in effect.
 | 14 | 09/08/2026 | `ses_01bcc78adffemcqFEiZxT52Eli` | Sub-fase 4.4: capture/registration nodes implemented, audited, and post-audit fixes applied (FK-free schema, name columns, upsert tests) |
 | 13 | 08/08/2026 | `ses_01be77680ffeuyoKct4Qrfx1GG` | Repo sync to `fase-4`; new `/save` section with general git commit and push guidance |
 | 12 | 08/08/2026 | `ses_01c089ce2ffe9MvQT4F1pC0MJN` | Sub-fase 4.2 deep audit + post-audit fixes (credentials mapping, playwright lifecycle) |
+
+## Session 64 — 22/11/2026
+`ses_f4af1b961ffe5t8xNspW5U761x` · `main`
+
+**Topics**
+- Full project context recovered from the primary records before any action
+- Current status summarized: Phase 6 closed, Version 1 complete, instruction v7 import verified, next step awaiting the operator's choice
+- Branch merges verified against the real repository: redesign and adjustment work integrated into the main branch the same day, no unmerged work left
+- Documentation drift identified: the previous session entry still described the redesign branch as active and unmerged, now superseded by this entry without rewriting the older record
+- Read-only work: no code, configuration, prompts, database or deployment changes
+
+**Decisions**
+- The merges are recorded as done here; the earlier session entry stays untouched as a historical record
+- No tracker change: no task status changed during this session
+- Decisions from previous sessions remain in effect
+
+**Status**
+- Context recovery, status summary and merge verification completed; no implementation performed
+- Single branch `main`, local and remote aligned, clean worktree; no tests run because no code changed
+- Phase 6 ✅ and Version 1 scope complete; Phases 7–8 remain future-version planning; active branch `main`
 
 ## Session 63 — 20/11/2026
 `ses_f4af1b961ffe5t8xNspW5U761x` · `rediseno-evaluacion`
