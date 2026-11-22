@@ -5,6 +5,7 @@ Unless noted, decisions from previous sessions remain in effect.
 ## Sessions index
 | № | Date | Session ID | Summary |
 |---|---|---|---|
+| 67 | 22/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Skills audited against real usage: inactive and out-of-scope guides removed, the redundant review guide retired, architecture guidance extended with data and persistence protection, and the remaining guides documented by purpose and moment of use; product and operator pendings reviewed; no code, data or official documents touched |
 | 66 | 22/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Project cleaned to what is actually used: browser memory and abandoned artifacts removed, backup retention reduced to three verified milestones, Git compacted without rewriting reachable history, obsolete tooling retired; authenticated session, database and official records preserved; two reviewers green, lint and types clean, 976 tests, dedicated branch merged into the main branch and removed |
 | 65 | 22/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Documentation synced to the automation as it actually runs: audit driven by the live trace and active configuration, browser-resilience decision registered, module sheets and operating docs aligned, internal references corrected without behavior changes; two reviewers green, 976 tests, dedicated branch active |
 | 64 | 22/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Project context recovered from the primary records and status summarized; fast-forward merges of the evaluation-redesign and adjustment branches into the main branch verified the same day, leaving a single clean branch; documentation drift in the previous session entry identified for recording here; read-only session, no code or project data touched |
@@ -60,6 +61,30 @@ Unless noted, decisions from previous sessions remain in effect.
 | 14 | 09/08/2026 | `ses_01bcc78adffemcqFEiZxT52Eli` | Sub-fase 4.4: capture/registration nodes implemented, audited, and post-audit fixes applied (FK-free schema, name columns, upsert tests) |
 | 13 | 08/08/2026 | `ses_01be77680ffeuyoKct4Qrfx1GG` | Repo sync to `fase-4`; new `/save` section with general git commit and push guidance |
 | 12 | 08/08/2026 | `ses_01c089ce2ffe9MvQT4F1pC0MJN` | Sub-fase 4.2 deep audit + post-audit fixes (credentials mapping, playwright lifecycle) |
+
+## Session 67 — 22/11/2026
+`ses_f4af1b961ffe5t8xNspW5U761x` · `main`
+
+**Topics**
+- Skills inventory audited across both tool folders; usage classified as guaranteed through agents, conditional by task match, or irrelevant to the project
+- Five inactive or out-of-scope guides removed; the ten survivors documented by purpose and activation moment
+- Generic review guide compared with the project's two specialized reviewers and retired as redundant
+- Architecture guide extended with a data and persistence protection checklist; implementation guide points to it before any data change
+- Remaining skill improvements assessed: documentation-updater wiring and explicit command invocation of conditional guides
+- Product status, deferred phases and operator pendings reviewed read-only
+
+**Decisions**
+- Five inactive guides and the overlapping review guide removed; the ten supporting the working cycle kept
+- Data and persistence protection added to the architecture guide, with a pre-change reference from the implementation guide
+- Documentation-updater wiring and mandatory command invocation of conditional guides left pending for the user's choice
+- No tracker change: skills housekeeping is not a phase status change
+- Decisions from previous sessions remain in effect
+
+**Status**
+- Skills housekeeping completed; nine project guides remain, eight in the agent toolkit and one in the shared folder
+- Three commits made on the main branch during this session and pushed; clean worktree, local and remote aligned
+- No lint, typecheck or tests run: no code, configuration or data changed
+- Phases 0–6 and Version 1 intact; Phases 7–8 deferred; scheduled clock still paused by operator order; first real batch after cleanup still pending
 
 ## Session 66 — 22/11/2026
 `ses_f4af1b961ffe5t8xNspW5U761x` · `main`
