@@ -100,7 +100,7 @@ Sole official reference for assigning, administering, and interpreting all prefi
 | OFP | processed_offers | Processed and cleaned offer |
 | EVL | evaluations | Compatibility evaluation |
 | RSP | processing_results | Deep processing result |
-| COR | corridas | Run of a module (Discovery — Module 1, Preparation — Module 2) or of the scheduled run (transversal orchestrator — D34) |
+| COR | corridas | Run of a module (Discovery — Module 1, Preparation — Module 2, Evaluation — Module 3: export in the scheduled batch and import by manual command, D76/D79) or of the scheduled run (transversal orchestrator — D34) |
 | SES | sesiones | Platform session of the Discovery module (Module 1) |
 | EVT | eventos | Event (error or success) of any module or the transversal orchestrator |
 | BLO | bloqueo | Concurrency lock record (single active run across the whole pipeline — D33) |

@@ -1,13 +1,13 @@
 # Especificación canónica densificada — Orquestador transversal (capa transversal)
 
-**Base de decisiones:** `docs/plans/Plan funcional fase 5.md` — sección "Orquestador de automatización (capa transversal)". Patrones as-built del orquestador interno del Módulo 1 (`modules/discovery/orchestrator.py`: decisiones D14, D17, D22, D25). Contratos de los módulos según sus fichas técnicas (Descubrimiento de oportunidades; Preparación de ofertas).
+**Base de decisiones:** `docs/plans/Plan funcional fase 5.md` — sección "Orquestador de automatización (capa transversal)". Patrones as-built del orquestador interno del Módulo 1 (`modules/discovery/orchestrator.py`: decisiones D14, D17, D22, D25). Contratos de los módulos según sus fichas técnicas (Descubrimiento de oportunidades; Preparación de ofertas; Evaluación inicial).
 
 ## Convenciones comunes (transversal)
 
 - **Naturaleza**: capa transversal, NO módulo funcional. Solo **lanza, supervisa y registra**. No gestiona tablas de negocio, no accede a plataformas, no invoca la IA (la IA es invocada bajo demanda por los nodos que la necesitan).
 - **Coordinación por base de datos**: los módulos no se conocen entre sí; cada uno lee su estado de entrada de la BD y escribe su estado de salida (Módulo 1 escribe `descubierta`; Módulo 2 lee `descubierta` y escribe `preparada`/`duplicada`). Esto hace cada módulo **auto-reparable**: si una corrida falla a medias, la siguiente ejecución retoma desde el estado que quedó.
-- **Ejecución en serie por defecto**: `modo_ejecucion: serie` — cada módulo procesa todo lo que hay de su estado y termina con su evento de terminación; el siguiente arranca después. El modo paralelo se documenta como opción futura (`serie | paralelo`) y **no se implementa hoy** (requiere los 5 módulos para probarse y revisar el bloqueo global).
-- **Disparo**: manual (hoy). Horarios de ejecución: fuera de alcance (decidido; trivial añadirlos después).
+- **Ejecución en serie por defecto**: `modo_ejecucion: serie` — cada módulo procesa todo lo que hay de su estado y termina con su evento de terminación; el siguiente arranca después. El modo paralelo se documenta como opción futura (`serie | paralelo`) y **no se implementa hoy** (requiere los módulos de fases futuras para probarse y revisar el bloqueo global).
+- **Disparo**: manual o programado. Los horarios están en servicio desde D54 (timer del sistema que lanza la cadena completa 10 minutos después de encenderse y la repite cada 3 h); el reloj puede estar pausado por orden del operador y se reanuda con el mando correspondiente.
 - **Bloqueo global**: NO lo gestiona el orquestador. Cada módulo lo toma en su INICIO y lo libera en su "Finalizar Proceso" (una sola ejecución activa a la vez en todo el pipeline). El orquestador asume que, mientras un módulo corre, ninguna otra corrida puede existir.
 - **Trazabilidad**: cada módulo termina con su corrida y su evento de terminación en `eventos`; el orquestador registra además la **corrida programada** (resumen de módulos ejecutados y estados resultantes).
 - **Regla de datos (D31)**: aplica a lo que el orquestador persiste — evidencia no vacía; `N/A` cuando no aplica. `EventoAlmacen` ya valida escrituras.
@@ -20,13 +20,13 @@
 **Versión**: 1.0 (aprobada)
 
 ### Posición
-Capa transversal que precede a los módulos funcionales en cada disparo manual. Sin nodo antecesor; sucesor: ninguno (fin de la automatización).
+Capa transversal que precede a los módulos funcionales en cada disparo, manual o programado. Sin nodo antecesor; sucesor: ninguno (fin de la automatización).
 
 ### Objetivo
-Ejecutar los módulos en el orden del pipeline (Módulo 1 → Módulo 2 → …) **sin que se conozcan entre sí**, esperar la terminación de cada uno y registrar el **resumen de la corrida programada** (módulos ejecutados, estados resultantes) como trazabilidad. El orquestador solo lanza y supervisa: no conoce la lógica interna de los módulos, no gestiona tablas de negocio ni lógica de negocio.
+Ejecutar los módulos en el orden del pipeline (Módulo 1 → Módulo 2 → Módulo 3) **sin que se conozcan entre sí**, esperar la terminación de cada uno y registrar el **resumen de la corrida programada** (módulos ejecutados, estados resultantes) como trazabilidad. El orquestador solo lanza y supervisa: no conoce la lógica interna de los módulos, no gestiona tablas de negocio ni lógica de negocio.
 
 ### Descripción funcional
-Al recibir disparador manual:
+Al recibir disparador (manual o programado):
 
 1. **Cargar y validar configuración** `orquestador:` (claves, rangos, `modo_ejecucion`).
 2. **Crear corrida programada**: `id_corrida` único (COR-xxxx, `generar_id`), `fecha_inicio` (T0), estado `en_ejecucion` — fila en `corridas` como contenedor de trazabilidad del resumen.
@@ -41,7 +41,7 @@ Al recibir disparador manual:
 6. **Fin de la automatización**: log del resumen con Loguru y terminar. La automatización termina cuando **todos los módulos terminaron sus corridas**, cada una con su evento de terminación en `eventos`.
 
 ### Entradas
-- Disparador manual (hoy) o programado (futuro, fuera de alcance).
+- Disparador manual o programado (D54; el reloj puede estar pausado por orden del operador).
 - Almacén de configuración: sección `orquestador:` (`modo_ejecucion`, `modulos`, `pausa_entre_modulos_segundos`).
 - Registro declarativo de módulos (código): nombre, `estado_entrada`, `estado_salida`, función pública `ejecutar_flujo()`.
 - BD: `corridas` y `eventos` (lectura para derivar resultados; escritura del resumen).
@@ -99,9 +99,9 @@ Al recibir disparador manual:
 - Pausa entre módulos: evita ráfagas de actividad de red consecutivas (prudencia anti-bloqueo, misma filosofía del Módulo 2).
 
 ### Dependencias y contratos
-- **Antecesor**: disparo manual (hoy).
-- **Sucesores**: los módulos en orden — `modules/discovery/orchestrator.ejecutar_flujo` (existe) y `modules/preparation/orchestrator.ejecutar_flujo` (a construir con el Módulo 2).
-- **Contratos consumidos**: `generar_id`, `registrar_corrida`, `actualizar_corrida`, `escribir_evento`, `contar_filas` (`shared/persistence.py`); nueva helper `leer_ultima_corrida_cerrada` (o equivalente) para derivar el resultado del módulo; registro declarativo de módulos en código.
+- **Antecesor**: disparo manual o programado (D54).
+- **Sucesores**: los tres módulos registrados, en orden — Descubrimiento, Preparación y Evaluación (esta última invoca la exportación de lotes, D76/D79).
+- **Contratos consumidos**: `generar_id`, `registrar_corrida`, `actualizar_corrida`, `escribir_evento`, `contar_filas` (paquete `shared/persistence/`); helper `leer_ultima_corrida_cerrada` para derivar el resultado del módulo; registro declarativo de módulos en código.
 - **Contratos entregados**: corrida programada cerrada + eventos del resumen; sin salida de datos de negocio.
 
 ### Decisiones de diseño
@@ -118,16 +118,16 @@ Al recibir disparador manual:
 
 **Nota as-built 2026-08-25 (decisión D42):** el arranque (`ejecutar_corrida_programada`) inicializa el esquema automáticamente cuando la base no tiene tablas; el chequeo prevuelo de este lote vive en `scripts/preflight.py` y el diagnóstico post-corrida en `scripts/reporte_corrida.py`.
 
-**Nota aprobado M3-docs (decisión D48, previo a construcción):** el Módulo 3 «Evaluación inicial» se suma tercero tras Preparación, solo después de su vuelta real de verificación en solo (`orquestador.modulos: [descubrimiento, preparacion, evaluacion]`; hasta entonces la lista sigue con 2 — restricción ya retirada el 2026-11-18 (D78), con el reloj programado pausado). Su resultado se lee desde la base como los demás; sin migraciones propias del orquestador.
+**Nota aprobado M3-docs (decisión D48, previo a construcción) — as-built D49/D76/D79:** el Módulo 3 «Evaluación inicial» está tercero tras Preparación (`orquestador.modulos: [descubrimiento, preparacion, evaluacion]`). Se habilitó con la construcción del módulo (D49, 2026-10-15) y su participación se conservó con el rediseño sin IA (D76/D79): la tanda llama a la exportación de lotes y cierra con `evaluacion_pendiente` o `sin_pendientes`; la importación la lanza el operador fuera de la tanda. D78 es el rediseño de ubicación del Módulo 2, no la habilitación del tercer módulo. Su resultado se lee desde la base como los demás; sin migraciones propias del orquestador.
 
 **Nota aprobada D76 (2026-11-15, rediseño del Módulo 3):** el tercer módulo ya no evalúa con inteligencia artificial. Su corrida programada **exporta** los lotes de ofertas preparadas y cierra con `evaluacion_pendiente` cuando quedan lotes esperando; la **importación** de lo que devuelve el chat la lanza el operador con un comando, fuera de la tanda, y registra su propia corrida. La lista de módulos no cambia (`[descubrimiento, preparacion, evaluacion]`), el resultado se sigue leyendo desde la base como los demás y el orquestador no gana nodos, migraciones ni claves de configuración propias. El aviso del veredicto debe informar «evaluación exportada, pendiente de importar» con el número de lotes en espera.
 
 **Nota as-built (Fase 4, 2026-11-19):** la nota anterior quedó cumplida. El registro `MODULOS` mantiene a evaluación en tercer lugar y llama a la entrada de exportación del módulo a través de un adaptador sin argumentos; su estado de salida declarado es `evaluacion_pendiente/sin_pendientes`. El orquestador no gana nodos ni configuración y el resultado de la corrida se sigue derivando de la base. El notificador lee los eventos `ofertas_exportadas` de esa corrida para decir cuántos lotes y ofertas quedan pendientes. Verificado en la exportación real COR-0008 (10 lotes, 294 ofertas, 0 errores).
 - Estructura: `modules/orchestrator/orchestrator.py` con la función pública `ejecutar_corrida_programada()` (distinta de `ejecutar_flujo()` de los módulos) y el registro declarativo `MODULOS: list[ModuloOrquestado]` (nombre, `estado_entrada`, `estado_salida`, `ejecutar_flujo`). Tests de integración en `tests/test_orquestador_transversal.py` (patrón de `tests/test_orquestador_integracion.py`: flujo completo con nodos reales y arranque de plataforma simulado).
-- Configuración nueva en `config/config.yaml` → `orquestador:` (`modo_ejecucion: serie`, `modulos: [descubrimiento, preparacion]`, `pausa_entre_modulos_segundos`).
+- Configuración en `config/config.yaml` → `orquestador:` (`modo_ejecucion: serie`, `modulos: [descubrimiento, preparacion, evaluacion]`, `pausa_entre_modulos_segundos`).
 - Sin migraciones de esquema propias: `corridas` y `eventos` ya existen; `motivo_terminacion` es TEXT libre; `EstadoCorrida` reutiliza `completada`/`abortada`. *(As-built D42: el arranque además crea el esquema completo si la base está vacía, vía `inicializar_si_ausente`.)*
 - Hitos informativos con Loguru (patrón del orquestador del Módulo 1); el evento final nunca se cuenta en métricas de módulos (semántica D30 intacta: el resumen es trazabilidad de la corrida programada, no de los módulos).
-- La **prueba real 1→2** (al cierre del Módulo 2) valida: Módulo 1 termina su corrida, Módulo 2 la suya (lee `descubierta`, escribe `preparada`/`duplicada`), y la corrida programada queda con sus eventos `modulo_ejecutado` × 2 + `corrida_programada`. La **prueba real 1→2→3** (al cierre del Módulo 3, D48) añade: Módulo 3 lee `preparada` y escribe `aceptada_ei`/`descartada_ei`, con `modulo_ejecutado` × 3.
+- La **prueba real 1→2** (al cierre del Módulo 2) valida: Módulo 1 termina su corrida, Módulo 2 la suya (lee `descubierta`, escribe `preparada`/`duplicada`), y la corrida programada queda con sus eventos `modulo_ejecutado` × 2 + `corrida_programada`. **As-built:** la cadena vigente es 1→2→3 con `modulo_ejecutado` × 3; el Módulo 3 lee `preparada`, exporta lotes y cierra con `evaluacion_pendiente`/`sin_pendientes` (D76/D79), sin escribir `aceptada_ei`/`descartada_ei` en la tanda — esos estados los produce después la importación manual. Verificado en vivo con COR-0008 (10 lotes, 294 ofertas, 0 errores).
 
 ### Pasos funcionales
 1. **Cargar y validar configuración**. Entrada: `config.yaml` (`orquestador:`). Proceso: leer y validar claves, rangos y `modo_ejecucion`. Salida: configuración. Val: VAL-01, VAL-02. Err: ERR-01.
@@ -141,12 +141,12 @@ Al recibir disparador manual:
 
 ## Estado del módulo
 
-Pendiente de implementación — se construye **al cierre del Módulo 2** con la prueba real de corrida secuencial 1→2 (decisión del plan; construcción incremental). Este documento es la base autoritativa de construcción. El Módulo 1 ya aporta su `ejecutar_flujo()` (`modules/discovery/orchestrator.py`); el Módulo 2 aportará el suyo al implementarse (`modules/preparation/orchestrator.py`).
+Construido y en operación desde la sub-fase 5.6 (2026-08-21). El orquestador encadena los tres módulos registrados en orden (`descubrimiento` → `preparacion` → `evaluacion`), deriva cada resultado de la base y cierra su propia corrida programada. La participación del tercer módulo se habilitó con D49 y se conservó con el rediseño sin IA de D76/D79: la tanda solo exporta lotes; la importación es un comando manual ajeno a la cadena. Verificado en vivo con la tanda programada del 2026-10-23 y con la exportación COR-0008 (10 lotes, 294 ofertas, 0 errores). Este documento es el registro as-built del orquestador transversal.
 
 ## Dependencias (consolidadas)
 
-1. `config/config.yaml`: sección nueva `orquestador:` (`modo_ejecucion: serie`, `modulos: [descubrimiento, preparacion]`, `pausa_entre_modulos_segundos`). *(Histórico D48; desde 2026-11-18 la lista vigente incluye también `evaluacion`, D78.)*
-2. `shared/persistence.py`: nueva helper `leer_ultima_corrida_cerrada(...)` (derivar el resultado por módulo desde `corridas`); `shared/retry.py`: `ejecutar_con_reintento` para los reintentos del nodo (ERR-02/ERR-05).
+1. `config/config.yaml`: sección `orquestador:` (`modo_ejecucion: serie`, `modulos: [descubrimiento, preparacion, evaluacion]`, `pausa_entre_modulos_segundos`). *(Histórico D48: la lista se amplió con el tercer módulo al construirse —D49— y se mantuvo con D76/D79; D78 es el rediseño de ubicación del Módulo 2.)*
+2. Paquete `shared/persistence/` (D42): helper `leer_ultima_corrida_cerrada(...)` (derivar el resultado por módulo desde `corridas`); `shared/retry.py`: `ejecutar_con_reintento` para los reintentos del nodo (ERR-02/ERR-05).
 3. `modules/orchestrator/`: `orchestrator.py` (público `ejecutar_corrida_programada()`) + registro declarativo de módulos; tests `tests/test_orquestador_transversal.py`.
-4. `modules/preparation/`: contrato público `ejecutar_flujo()` (se implementa con el Módulo 2).
+4. `modules/preparation/` y `modules/evaluation/`: contrato público `ejecutar_flujo()` ya implementado en ambos módulos; el tercero se invoca a través de la entrada de exportación.
 5. Sin migraciones de esquema propias (las tablas `corridas`/`eventos` y el vocabulario de estados ya existen). *(As-built D42: si la base no tiene tablas, el arranque las crea antes de registrar la corrida.)*
