@@ -1,5 +1,7 @@
 # Especificación canónica densificada — Módulo 1: Descubrimiento de oportunidades
 
+**Versión del documento**: 1.1 — 2026-11-22 (registro as-built de la sesión persistente —D47—, la resistencia del canal —D81— y las marcas de narración —D62—).
+
 ## Convenciones comunes
 
 - **Alcance del módulo**: consultar fuentes configuradas, aplicar filtros básicos por `sets_de_filtros`, capturar y almacenar información original de ofertas según `politicas_de_captura`. No interpreta, clasifica, puntúa ni decide adecuación.
@@ -13,7 +15,7 @@
 ---
 
 ## Nodo proceso: INICIO — Arranque de la corrida e inicialización del contexto de ejecución  
-**Versión**: 1.3 (aprobada)
+**Versión**: 1.4 (aprobada)
 
 ### Posición
 Punto de entrada único del módulo; precede toda decisión y acción de negocio. El elemento punteado `"Descubrimiento de oportunidades"` es rótulo/disparador, no nodo ejecutable. Ninguna decisión posterior puede ejecutarse sin el contexto producido aquí.
@@ -124,6 +126,7 @@ Error fatal de inicialización o concurrencia activa producen terminación contr
 - No acceder al almacén seguro ni a plataformas; referencia de credenciales solo se valida como campo presente y consistente.
 - `politicas_de_captura`: resolver defaults en carga y exponer valores efectivos; rangos: `max_paginas` ≥ 1, `max_ofertas_por_corrida` ≥ 1, `pausa_entre_lotes` ≥ 0; `estrategia_anti_bloqueo` dentro del conjunto definido.
 - `sets_de_filtros`: preservar orden; set vacío = búsqueda base.
+- `descubrimiento`: validar en carga `renovar_navegador_tras_paginas` y `tope_muertes_sin_avance` como enteros ≥ 1, con defaults 30 y 3 si faltan (D81; ver nota as-built final).
 - No implementar lógica de negocio ni validación de existencia de fuentes.
 
 ### Pasos funcionales
@@ -347,7 +350,7 @@ Contexto con contrato Sí: lista, iterador, `id_corrida`, existencia de fuente p
 ---
 
 ## Nodo proceso: “Entrar a la fuente seleccionada”  
-**Versión**: 1.1 (aprobada)
+**Versión**: 1.2 (aprobada)
 
 ### Posición
 Entre `"Seleccionar la siguiente fuente pendiente"` y `"¿El ingreso fue exitoso?"`. Primer nodo que toca plataformas externas. Posición definitiva.
@@ -463,6 +466,7 @@ En éxito crea `id_sesion` único y guarda handle + `id_sesion`. En fallo cierra
 - Timeout por fuente con default global.
 - Evidencia sin credenciales/tokens/cookies.
 - `id_sesion` único y vinculado a `id_corrida` y `fuente_id`.
+- **Sesión persistente y ciclo del canal (D47/D81):** con `browser.profile_path` configurado el nodo reutiliza la sesión válida o espera hasta `browser.espera_manual_segundos` un ingreso manual único (ventana normal, con vuelta automática al modo efímero si la memoria no sirve); la apertura, renovación preventiva y reapertura tras una muerte se delegan en la capa de navegación, y el vencimiento de la ventana manual o un entorno insostenible cierran la corrida de forma honesta. Ver nota as-built final.
 
 ### Pasos funcionales
 1. **Leer ficha**. Entrada: contexto. Proceso: acceder a URL, tipo, referencia, criterio, timeout. Salida: parámetros de acceso. Val: VAL-01. Err: ERR-01.
@@ -541,7 +545,7 @@ Contexto: `entry_result`, sesión si éxito, `id_corrida`, `fuente_id`.
 ---
 
 ## Nodo proceso: “Aplicar los filtros básicos establecidos para esa fuente/plataforma para encontrar ofertas laborales”  
-**Versión**: 1.1 (aprobada)
+**Versión**: 1.2 (aprobada)
 
 ### Posición
 Entre:
@@ -663,6 +667,8 @@ No decide si hay ofertas; no decide si quedan sets; no captura información comp
 - `total_declarado` solo si la plataforma lo expone; si no, indeterminado.
 - `estado_paginacion` debe permitir pedir página siguiente sin re-ejecutar búsqueda.
 - Nunca continuar sin filtros ante `filtros_no_aplicables`.
+- **Catálogo vigente de filtros (D60/D70):** `keywords`, `geoid`, `fecha_publicacion` y `nivel_experiencia`; la geografía viaja solo por código de región porque la plataforma dejó de honrar el texto de ubicación. `modalidad` sigue soportada por el adaptador pero no se usa en la matriz actual y comparte el espacio `f_SAL` con el nivel (uno por set).
+- **Resiliencia y avance (D81/D62):** antes de cada tramo se renueva el canal si toca; tras una muerte del navegador se reintenta entero el mismo set; al seleccionar el set se escribe `tic_set_iniciado`. Ver nota as-built final.
 - Evidencia sin credenciales/tokens/cookies.
 - **As-built 2026-08-17 (decisión D28):** `ofertas_primera_pagina` del `search_result` lleva los campos de tarjeta (empresa, ubicación, fecha relativa en `observaciones` y `fecha_publicacion` aproximada) — extiende el alcance de RN-08/Límites: el nodo entrega contenido de tarjeta, no solo referencias; la persistencia sigue haciéndose exclusivamente en `"Capturar ofertas"`. El total declarado se lee solo del texto **visible** del DOM (excluye `script`/`style` y comentarios HTML, que pueden contener "N resultados") — endurece la nota D27 (e).
 
@@ -765,7 +771,7 @@ Contexto: `search_result`, `id_corrida`, `fuente_id`, `id_sesion`.
 ---
 
 ## Nodo proceso: “Capturar ofertas”  
-**Versión**: 1.2 (aprobada)  
+**Versión**: 1.3 (aprobada)  
 **Nota de implementación aprobada**: reedición 2026-08-12 — captura por listado (D11): el adaptador recorre páginas `?start=N` del listado sin entrar al detalle de cada oferta (descripciones vacías en MVP; enriquecimiento en Módulo de Preparación); fin del recorrido por ausencia del botón de paginación ("Siguiente"/"Página N") o página vacía; navegación directa a `/jobs/search-results/` con `wait_until="commit"` reutilizando la página 1 ya cargada tras aplicar filtros (elimina la doble carga por redirect); `tope_espera_paginas_sucesivas_segundos` en políticas efectivas; el suceso `captura_completada` (evidencia "páginas=N | ofertas=M") reemplaza a `captura_exitosa` en el contrato de códigos. También: reedición 2026-08-11 — `estado_captura` incorpora `indice_set` (implementado desde 2026-08-09).
 
 ### Posición
@@ -851,10 +857,14 @@ Captura información original de las ofertas del lote recorriendo el listado de 
 | ERR-07 | `respuesta_invalida` | No | 3–4 | Fallo de lote con parcial | fallo de lote |
 | ERR-08 | `error_interno_captura` | No | 3–5 | Fallo de lote con parcial | fallo de lote |
 | ERR-09 | Corrupción del contexto al guardar | No | 6 | Evento crítico; aborto | `error` |
+| `registro_parcial` | Error de registro con algunas ofertas fallidas | No | 7 | Error con `registradas`/`fallidas`; lote parcial conservado | continúa |
+| `lote_degradado` | Ninguna oferta del lote pudo registrarse | No | 7 | Error con `fallidas`; sin filas nuevas | continúa |
 | EVT-01 | `oferta_no_capturada` | No | 4 | Evento con referencia; excluir oferta; lote continúa | continúa |
 | EVT-02 | `captura_completada` | No | 5 | Suceso con evidencia "páginas=N \| ofertas=M"; cierre del recorrido | continúa |
 
-**Contrato de códigos**: `captura_completada` (suceso de cierre; reemplaza a `captura_exitosa`), `fuente_inalcanzable`, `fuente_no_soportada`, `tiempo_agotado_captura`, `sesion_expirada`, `bloqueo_plataforma`, `respuesta_invalida`, `error_interno_captura`; evento por oferta: `oferta_no_capturada`. `fuente_no_soportada` (adaptador no registrado para la fuente, D13) se emite en la resolución del adaptador y nunca se reintenta.
+`registro_parcial` y `lote_degradado` son ramas de error **implementadas pero no observadas en la traza actual**; se documentan para que el diagnóstico conozca los códigos que el nodo puede escribir.
+
+**Contrato de códigos**: `captura_completada` (suceso de cierre; reemplaza a `captura_exitosa`), `fuente_inalcanzable`, `fuente_no_soportada`, `tiempo_agotado_captura`, `sesion_expirada`, `bloqueo_plataforma`, `respuesta_invalida`, `error_interno_captura`; evento por oferta: `oferta_no_capturada`. `fuente_no_soportada` (adaptador no registrado para la fuente, D13) se emite en la resolución del adaptador y nunca se reintenta. Se escriben además `navegador_renovado` (suceso de renovación/reapertura del canal, D81), `tic_modulo_iniciado`, `tic_set_iniciado` y `tic_captura_pagina` (marcas de narración, D62, excluidas de las métricas de cierre) y los errores de registro `registro_parcial`/`lote_degradado` indicados arriba.
 
 ### Escenarios límite
 - Mecanismo masivo vs incremental; fin de recorrido por ausencia del botón de paginación o página vacía.
@@ -882,6 +892,7 @@ Captura información original de las ofertas del lote recorriendo el listado de 
 - El adaptador se resuelve por `fuente_id` vía registro (`obtener_adaptador`, D13); fuente sin adaptador → `fuente_no_soportada` (sin reintentos).
 - Progreso persiste en contexto entre pasadas.
 - Conservar lote parcial ante fallo.
+- **Tramos y reanudación (D81):** el recorrido avanza por tramos con posición exacta (`desde_desplazamiento`) y presupuestos de páginas y ofertas; renueva el canal de forma preventiva, se reanuda en la página exacta tras una muerte sin techo mientras haya avance, declara entorno insostenible tras muertes consecutivas sin progreso y devuelve la silla en toda salida. Cada tramo exitoso escribe `tic_captura_pagina` (D62). Ver nota as-built final.
 - Auditoría única por `(id_sesion, indice_set)`; idempotencia ante reentradas.
 - No escribir en `"Ofertas Totales"`; no interpretar contenido.
 - **As-built 2026-08-17 (decisión D28, extracción de campos de tarjeta):** el adaptador extrae de cada tarjeta SDUi — además de enlace/título — empresa, ubicación y fecha relativa desde el texto de sus `<p>` (las clases CSS reales están hasheadas por página): primer `p` = título (`span[aria-hidden='true']`), último `p` con "Publicado hace N <unidad>" = fecha, resto = empresa y ubicación en orden tras excluir el ruido fijo de la UI (`Visto`, `·`, `Adelántate a solicitar el empleo`, `Solicitar`, `Evaluando solicitudes de forma activa`); las ubicaciones pueden llevar sufijo de modalidad "(En remoto)/(Híbrido)/(Presencial)". `fecha_publicacion` se persiste como timestamp absoluto aproximado (`FORMATO_TIMESTAMP`; precisión ±1 h por redondeo de LinkedIn, unidad mes = 30 días) y el texto crudo se conserva íntegro en `observaciones` — desviación aprobada de RN-03 (aditiva y reversible: la información original nunca se destruye; el enriquecimiento/normalización de fechas sigue siendo competencia del Módulo 2). La variante clásica (`base-search-card`) expone empresa/ubicación pero no fecha (best-effort: fecha vacía).
@@ -1100,6 +1111,8 @@ Contexto: iterador de sets, `search_result`, `estado_captura`, `limite_alcanzado
 
 ## Nodo terminal: “Finalizar Proceso”
 
+**Versión**: 1.1 (aprobada)
+
 ### Identificación
 Último nodo pendiente del Módulo 1. Punto de convergencia de todas las terminaciones. Oficializa motivos/estados acumulados.
 
@@ -1153,6 +1166,9 @@ No es nodo de decisión.
 4. **Cerrar recursos abiertos (best-effort)**. Entrada: handle de sesión si existe; conexiones BD. Proceso: cerrar canal y conexiones; errores se registran localmente y no impiden terminación. Salida: recursos cerrados. Excepción: errores de cierre no abortan.
 5. **Terminar proceso**. Entrada: —. Proceso: cerrar nodo. Salida: fin de corrida. Excepción: ninguna.
 
+### Notas de implementación
+- **Métricas con narración (D62):** `total_sucesos` cuenta los sucesos de negocio previos al cierre y resta las marcas `tic_*` del propio `id_corrida` (`contar_narracion`); con cero marcas el resultado es idéntico al de antes de D62. El evento de terminación se escribe después del conteo y nunca se cuenta. Ver nota as-built final.
+
 ### Puntos de aprobación
 - Conjunto oficial de estados/motivos y tipo de evento.
 - Evento de terminación minimal con `fuentes_procesadas` opcional.
@@ -1162,7 +1178,7 @@ No es nodo de decisión.
 - Tabla funcional tal como está.
 
 ### Estado del módulo
-Con este nodo queda completo el conjunto de nodos del Módulo 1. Pendientes de implementación: ninguno. La reedición `"Capturar ofertas"` v1.1 con `indice_set` en `estado_captura` quedó implementada y documentada (2026-08-11); el documento pasa a ser el registro as-built del Módulo 1. Identificadores alineados al catálogo español (decisiones D7/D8, 2026-08-11): `run_id`→`id_corrida`, `source_id`→`fuente_id`, `session_id`→`id_sesion`, `set_indice`→`indice_set`, `id_externo_url`→`id_externo`, `timestamp_ultima_verificacion`→`fecha_ultima_verificacion`, timeout `tiempo_agotado_ingreso/consulta/captura`.
+Con este nodo queda completo el conjunto de nodos del Módulo 1. Pendientes de implementación: ninguno. El presente documento es el registro as-built del Módulo 1, actualizado a v1.1 (2026-11-22): `"Capturar ofertas"` quedó en v1.3 con reanudación por tramos (D81), la entrada registra la sesión persistente (D47) y el cierre descuenta las marcas de narración (D62). Identificadores alineados al catálogo español (decisiones D7/D8, 2026-08-11): `run_id`→`id_corrida`, `source_id`→`fuente_id`, `session_id`→`id_sesion`, `set_indice`→`indice_set`, `id_externo_url`→`id_externo`, `timestamp_ultima_verificacion`→`fecha_ultima_verificacion`, timeout `tiempo_agotado_ingreso/consulta/captura`.
 
 **Nota as-built 2026-08-12 (decisión D14, limpieza Lote 1):** sin cambio de contrato ni de nodos: (a) el progreso de captura vive exclusivamente en `estado_captura` — se eliminaron los espejos de contexto `paginas_consumidas`/`capturadas_acumuladas_fuente`/`limite_alcanzado` (no documentados); (b) las ramas No de "¿Existe…?" y "¿Quedan fuentes…?" ya no fijan `motivo_terminacion`/`fecha_terminacion` en el contexto; el motivo oficial se entrega a "Finalizar Proceso" por parámetro del orquestador (mismo resultado final: evento de terminación con `sin_fuentes`/`corrida_completada`); (c) "Finalizar Proceso" consulta métricas una sola vez y las reutiliza para el evento de terminación y el cierre de corrida.
 
@@ -1201,3 +1217,5 @@ Con este nodo queda completo el conjunto de nodos del Módulo 1. Pendientes de i
 **Nota as-built 2026-11-09 (decisión D70, filtro de nivel de experiencia + matriz de 9 grupos):** sin cambio de contrato ni de nodos — RN-02/RN-04/ERR-02 intactos. (a) "Aplicar los filtros básicos" acepta el nuevo filtro `nivel_experiencia`: los grupos lo declaran por etiqueta humana (Sénior/Administrador/Director/Ejecutivo), validada contra la taxonomía del listado SDUi comprobada en vivo (facet 227001: 277001·278001·272003·279001; el mapeo muerto `f_JT` del buscador clásico se retira); la URL emite siempre en orden canónico `f_SAL=f_SA_id_227001:277001,278001,272003,279001` con independencia del orden declarado; etiquetas desconocidas o repetidas, y la combinación con `modalidad` (comparten el espacio `f_SAL`), fallan con `filtros_no_aplicables`. (b) la verificación de DOM se extiende con `nivel_experiencia`: con una sola opción declarada debe estar marcada la casilla por nombre; con dos o más, la fila resumen contadora `<n>Nivel de experiencia` (formato observado en vivo: el número va pegado a la palabra); mismo patrón `label[for]`+input vía `_casilla_marcada`. (c) el fallback por clics (D27) gana la vía del nivel, probada en vivo: clic en la fila plegable del grupo (`label:has-text('Nivel de experiencia')`), marcar cada casilla oculta `input[type='checkbox'][aria-label='<nivel>']` con foco+espacio (el clic directo no es posible: la entrada no es visible) y confirmar con «Mostrar resultados»; la URL queda con el `f_SAL` canónico. (d) la configuración pasa a la matriz de 9 grupos definitivos del usuario (índices 0–8), cada uno con geoid Colombia `100876405`, `r86400` y los 4 niveles; D60 queda recortada por decisión del usuario. (e) evidencia de la sonda viva (solo lectura, copia aislada del perfil de sesión, sin tanda en curso): con la consulta de prueba el barrido pasó de 57 a 28 ofertas con los cuatro niveles (por nivel: Sénior 28, Administrador 17, Director 7, Ejecutivo 14); en tandas reales se espera menos volumen por grupo (el filtro excluye los niveles que la evaluación descartaba con veto).
 
 **Nota as-built 2026-11-10 (decisión D71, atribución de listas y libro de duplicados):** dos tablas nuevas + una columna, sin cambio de navegación ni de filtros. (a) **INICIO** sincroniza `listas_busquedas` tras la sonda de escritura (VAL-03) desde la config oficial: `LT-<posición>` (`indice_set` 0 → LT-0001) + frase de búsqueda completa; texto cambiado actualiza la fila, lista retirada conserva su fila (atribución histórica legible), sets sin frase se saltan con aviso; la sincronización es mejor esfuerzo (solo Loguru, sin código de evento nuevo — las métricas de cierre no cambian). (b) **Captura** escribe `ofertas_descubiertas.id_lista` (`id_lista_de_indice(indice_set)`) en cada oferta nueva y anota cada encuentro duplicado del dedup por `id_externo` en `duplicados_descubiertas` (`DUP-…`), con la lista del encuentro y la lista de origen leída de la fila original; el dedup no cambia de comportamiento (sin fila nueva en ofertas, sin cambio de estado, solo el refresco habitual de `fecha_ultima_verificacion`); la evidencia de `ofertas_registradas` gana `duplicados: K`; `upsert_lote_ofertas` devuelve triple `(registradas, duplicados, fallidas)`. (c) NULL en `id_lista` es legítimo SOLO para las 129 filas previas a D71 (instrucción del usuario: no atribuirlas — excepción junto a la de `fecha_ultima_verificacion` en D31) y el origen del encuentro es desconocido (NULL) contra esas filas; el informe de solo lectura `scripts/reporte_listas.py` lo muestra como "sin atribución". (d) Verificado en producción: backup `job_search_pre_d71_20261110_063418.db`, migración vía `init_db()` + sincronización oficial (9 listas cargadas), humo de datos borrado, secuencias saneadas (sin tanda en curso).
+
+**Nota as-built 2026-11-22 (decisiones D47, D62 y D81) — comportamiento vigente de entrada, búsqueda, captura y cierre:** (a) **Sesión persistente (D47):** con `browser.profile_path` configurado (carpeta propia del sistema, nunca el perfil personal) la entrada usa un contexto persistente y ventana normal (`browser.ventana_ancho/alto`); si la sesión sigue válida entra sin tocar credenciales, si no abre la página de ingreso y espera hasta `browser.espera_manual_segundos` (300 por defecto) un inicio manual único con verificación; si la memoria no es utilizable cae al modo efímero con las credenciales de `.env`. Vaciar `browser.profile_path` restaura el comportamiento anterior. (b) **Resistencia del canal (D81, registro tardío de lo construido el 2026-10-22 y verificado el 2026-10-23):** renovación preventiva cada `descubrimiento.renovar_navegador_tras_paginas` (30) páginas pesadas conservando la misma sesión lógica; resurrección ante muerte reanudando la misma búsqueda en la página exacta (`desde_desplazamiento`) con presupuestos de páginas/ofertas por tramo y sin techo mientras haya avance; no-rendición con cierre honesto solo por ventana manual vencida o entorno insostenible (`muertes_sin_avance` > `tope_muertes_sin_avance`, 3); techo absoluto de tiempo por operación que fuerza el árbol del navegador al suelo; y devolución de la silla en todas las salidas. El nodo de entrada delega el ciclo del canal en la capa de navegación; la búsqueda se reintenta entera tras una muerte; cada renovación/reapertura exitosa escribe `navegador_renovado`. Las dos claves de `descubrimiento:` se validan en INICIO. (c) **Narración (D62):** `tic_modulo_iniciado` se escribe en el INICIO de cada módulo, `tic_set_iniciado` al seleccionar un set y `tic_captura_pagina` por cada tramo de captura correcto; son `suceso` y se restan de `total_sucesos` en los tres cierres mediante `contar_narracion`, con lo que la semántica D30/D36 permanece intacta cuando no hay marcas. (d) **Evidencia de la traza actual:** el evento `navegador_renovado` aparece una vez, y las marcas de avance 18 (`tic_captura_pagina`), 9 (`tic_set_iniciado`) y 4 (`tic_modulo_iniciado`) en las cinco corridas registradas; las referencias internas que antes citaban D61 para este mecanismo se han corregido a D81. Sin cambio de contrato de nodos, esquema, configuración ni datos.
