@@ -5,6 +5,7 @@ Unless noted, decisions from previous sessions remain in effect.
 ## Sessions index
 | № | Date | Session ID | Summary |
 |---|---|---|---|
+| 66 | 22/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Project cleaned to what is actually used: browser memory and abandoned artifacts removed, backup retention reduced to three verified milestones, Git compacted without rewriting reachable history, obsolete tooling retired; authenticated session, database and official records preserved; two reviewers green, lint and types clean, 976 tests, dedicated branch merged into the main branch and removed |
 | 65 | 22/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Documentation synced to the automation as it actually runs: audit driven by the live trace and active configuration, browser-resilience decision registered, module sheets and operating docs aligned, internal references corrected without behavior changes; two reviewers green, 976 tests, dedicated branch active |
 | 64 | 22/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Project context recovered from the primary records and status summarized; fast-forward merges of the evaluation-redesign and adjustment branches into the main branch verified the same day, leaving a single clean branch; documentation drift in the previous session entry identified for recording here; read-only session, no code or project data touched |
 | 63 | 20/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Chat evaluation instruction upgraded to v7: the answer now carries a closed organizational axis instead of the deliverable; the official source, the lot answer contract, the strict import and the stored result were aligned, with the work folder, the operator's result file and the live database untouched; the operator later evaluated all nine lots and ran the one-line import, which applied 250 offers with zero rejected lines, and the full outcome, coherence and timings were verified read-only; 976 tests, lint and types clean, both reviewers green |
@@ -59,6 +60,31 @@ Unless noted, decisions from previous sessions remain in effect.
 | 14 | 09/08/2026 | `ses_01bcc78adffemcqFEiZxT52Eli` | Sub-fase 4.4: capture/registration nodes implemented, audited, and post-audit fixes applied (FK-free schema, name columns, upsert tests) |
 | 13 | 08/08/2026 | `ses_01be77680ffeuyoKct4Qrfx1GG` | Repo sync to `fase-4`; new `/save` section with general git commit and push guidance |
 | 12 | 08/08/2026 | `ses_01c089ce2ffe9MvQT4F1pC0MJN` | Sub-fase 4.2 deep audit + post-audit fixes (credentials mapping, playwright lifecycle) |
+
+## Session 66 — 22/11/2026
+`ses_f4af1b961ffe5t8xNspW5U761x` · `main`
+
+**Topics**
+- Full project audit of disk weight, file references, active configuration, tests, database integrity and version-control objects
+- Cleanup limited to unused or regenerable material: browser memory, idle plugin library, tool caches, old temporary and debugging artifacts, superseded backups and obsolete tooling files
+- Authenticated browser session, live database, official records, prompts, test data and future-phase configuration deliberately preserved
+- Version-control history compacted without rewriting reachable history, with safety copies kept outside the project
+- Two closing reviewers run; minor exclusion-pattern finding corrected and verified
+- Feature branch merged into the main branch and removed after confirming identical content
+
+**Decisions**
+- Browser cache and navigation artifacts removed; authentication files preserved and verified
+- Backup retention reduced to three verified milestones
+- Unreachable version-control objects pruned with a safety bundle of reachable history
+- Obsolete tooling files and unused formatter retired; historical mentions left as historical records
+- No tracker change: the cleanup is not a phase status change
+- Decisions from previous sessions remain in effect
+
+**Status**
+- Cleanup completed: project reduced from about 1.5 GB to 322 MB; branch merged into the main branch and deleted; clean worktree
+- Lint and types clean, 976 tests collected, preflight ready, database and session intact
+- Main branch aligned locally and remotely; no pending changes
+- Phases 0–6 and Version 1 scope intact; Phases 7–8 remain future-version planning
 
 ## Session 65 — 22/11/2026
 `ses_f4af1b961ffe5t8xNspW5U761x` · `docs/sincronizacion-operacion`
