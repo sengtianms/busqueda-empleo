@@ -59,4 +59,4 @@ dist/
 build/
 
 # --- Playwright artifacts ---
-output/
+/output/
