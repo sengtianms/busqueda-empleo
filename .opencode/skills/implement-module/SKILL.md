@@ -91,6 +91,10 @@ Always follow:
 - Coding standards.
 - Existing interfaces and contracts.
 
+If the task changes the database structure, existing data, backups or
+retention rules, apply the Data and Persistence Protection section of the
+`project-architecture` skill before writing any code.
+
 Never redesign or restructure the project unless explicitly instructed.
 
 ---

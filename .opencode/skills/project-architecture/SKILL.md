@@ -1,6 +1,6 @@
 ---
 name: project-architecture
-description: Use this skill whenever implementing, modifying, reviewing, or refactoring code to ensure every change complies with the project's official architecture and design decisions.
+description: Use this skill whenever implementing, modifying, reviewing, or refactoring code — including database structure, data migrations and backups — to ensure every change complies with the project's official architecture and design decisions.
 ---
 
 # Purpose
@@ -24,6 +24,7 @@ Use this skill whenever:
 - Reviewing architecture compliance.
 - Making design decisions.
 - Integrating multiple modules.
+- Changing the database structure, existing data, backups or retention rules.
 
 Do not use this skill for debugging or code style reviews.
 
@@ -109,6 +110,45 @@ Before finishing, verify:
 - Naming remains consistent.
 - Public interfaces remain compatible.
 - Existing workflows remain intact.
+
+---
+
+# Data and Persistence Protection
+
+Applies to any task that changes the database structure, existing data,
+backups, or the persistence contract.
+
+## Before the change
+
+1. Locate the authoritative definition in DOC-13A, Appendix 5A and the
+   decision log. Never invent a table, column, state, prefix or rule.
+2. Take a verified backup of the live database and record its path.
+   The backup must pass an integrity check before proceeding.
+3. Design the change as an idempotent migration: running it twice must be
+   harmless, and it must execute automatically at startup.
+4. Preserve existing rows and traceability. Historical records are never
+   deleted or rewritten silently. Transformations keep the original value
+   where the rules require it.
+5. Define the before/after evidence: row counts, distinct counts and
+   key samples.
+6. State the rollback path and what would be lost if it is used.
+7. Stop and request approval for any destructive or irreversible change.
+
+## After the change
+
+1. Run the integrity check on the live database and on retained backups.
+2. Compare before/after counts and confirm the expected result.
+3. Confirm the migration runs cleanly on a copy and on the live database.
+4. Confirm the no-empty-field rule and its documented exceptions.
+5. Report the backup path, the evidence and any deviation.
+
+## Never
+
+- Modify the live database without a verified backup or explicit authorization.
+- Delete or rename columns used by traceability without a registered decision.
+- Let a functional module access the database directly.
+- Store credentials, tokens or personal data in the repository or database.
+- Treat a successful script run as proof: the data itself must be verified.
 
 ---
 
