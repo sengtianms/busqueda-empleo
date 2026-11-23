@@ -40,29 +40,39 @@ Python 3.12 · Playwright · BeautifulSoup + lxml · SQLite · Pydantic · httpx
 - **Instrucción general y principal (2026-08-25):** Cuando te comuniques con el usuario, utiliza exclusivamente una perspectiva funcional del proyecto y un lenguaje claro y comprensible para una persona sin conocimientos de programación. No expliques el funcionamiento mediante código, variables, funciones, estructuras, arquitecturas u otros conceptos técnicos, salvo que el usuario lo solicite expresamente una explicación técnica. Tu responsabilidad es asumir internamente el rol de arquitecto y desarrollador de software senior, encargándote de analizar y resolver los aspectos técnicos, de diseño y de implementación necesarios. Sin embargo, al comunicarte con el usuario, debes traducir todo al nivel funcional: qué debe hacer el sistema, para qué sirve cada componente, cómo funciona el proceso, cómo se relacionan sus partes, qué problema resuelve cada decisión y qué impacto tendrá en el funcionamiento general del proyecto.
 
 ## Workflow
-Work cycle: Context → Define task → Analyze → Plan → Implement → Verify → Close → Save. Every user request is a task; the user defines it and approves plan/implementation. Stage gates are `/check` commands.
+Work cycle: Context → Define task → Analyze → Plan → Implement → Verify → Close → Save.
+Every user request is a task; the user defines it and approves plan and implementation.
+The cycle is conversational: the agent applies analysis and closure automatically and waits
+for explicit approval before planning and before implementing.
 
 | Command | Stage | Who and when |
 |---|---|---|
 | `/resume` | Context | User-invoked |
 | — | Define task | User request itself |
-| `/check-analisis` | Analyze | Automatic: agent applies right after each request, before anything else |
-| `/check-planeacion` | Plan | User-invoked: agent creates plan and waits approval |
-| `/check-implementacion` | Implement | User-invoked: approves plan and authorizes implementation |
-| `/check-tests` | Verify | Only when request requires tests; otherwise skipped |
-| `/check-cierre` | Close | Automatic: agent self-verifies after implementation, including reviewers |
+| — | Analyze | Automatic: agent applies right after each request, before anything else |
+| — | Plan | Agent proposes; user approves |
+| — | Implement | Only after explicit approval; minimal approved change |
+| — | Verify | Lint + typecheck when code changed; tests only when required |
+| — | Close | Automatic: acceptance criteria, diff review, reviewers, docs/tracker updates |
 | `/save` | Save | User-invoked when closing session; never automatic or anticipated |
 
 Task rules:
 1. User invokes `/resume`, then sends request (task definition).
-2. Apply `/check-analisis` automatically (task readiness, gap, impact, risks, viable approaches); read only necessary docs. Never skip, even for simple inspections or read-only requests.
-3. Create plan only on `/check-planeacion`.
-4. Implement only after `/check-implementacion` approval; minimal approved change.
-5. Validate after change: lint + typecheck always when code changed; `/check-tests` only when required.
-6. Apply `/check-cierre` automatically: verify acceptance criteria, review diff, run reviewers (code-reviewer, docs-reviewer), update AGENTS.md/tracker.md if changed.
+2. Apply the analysis automatically (task readiness, gap, impact, risks, viable approaches); read only necessary docs. Never skip, even for simple inspections or read-only requests.
+3. Present a plan and wait for explicit approval before implementing.
+4. Implement only the approved plan; minimal approved change, no scope expansion.
+5. Validate after change: lint + typecheck always when code changed; tests only when required.
+6. Apply closure automatically: verify acceptance criteria, review diff, run reviewers (code-reviewer, docs-reviewer), update AGENTS.md/tracker.md if changed.
 7. Deliver closing report and wait approval before continuing.
 8. User invokes `/save` at session end to update session history.
 9. Never work on more than one task at a time.
+
+Skill loading by stage:
+- Analysis and planning: `project-documentation`; add `decision-making` when alternatives exist.
+- Implementation: `implement-module`, `project-architecture` and `python-best-practices`.
+- Tests: `python-testing-patterns`.
+- Closure: the code and documentation reviewers load their own skills.
+- Browser debugging: `playwright` and `systematic-debugging`.
 
 ## Keep Documents Updated
 - After each validated task/phase, update AGENTS.md if existing sections changed; only update existing sections (new topics → Session History).
