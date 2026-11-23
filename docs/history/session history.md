@@ -5,6 +5,7 @@ Unless noted, decisions from previous sessions remain in effect.
 ## Sessions index
 | № | Date | Session ID | Summary |
 |---|---|---|---|
+| 68 | 23/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Unused check and audit commands removed after confirming they were never part of the real workflow; operating contract rewritten as a conversational cycle with skill loading guaranteed from the always-present contract; the two operator commands and nine skills kept, with no code, data or official records touched |
 | 67 | 22/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Skills audited against real usage: inactive and out-of-scope guides removed, the redundant review guide retired, architecture guidance extended with data and persistence protection, and the remaining guides documented by purpose and moment of use; product and operator pendings reviewed; no code, data or official documents touched |
 | 66 | 22/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Project cleaned to what is actually used: browser memory and abandoned artifacts removed, backup retention reduced to three verified milestones, Git compacted without rewriting reachable history, obsolete tooling retired; authenticated session, database and official records preserved; two reviewers green, lint and types clean, 976 tests, dedicated branch merged into the main branch and removed |
 | 65 | 22/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Documentation synced to the automation as it actually runs: audit driven by the live trace and active configuration, browser-resilience decision registered, module sheets and operating docs aligned, internal references corrected without behavior changes; two reviewers green, 976 tests, dedicated branch active |
@@ -61,6 +62,31 @@ Unless noted, decisions from previous sessions remain in effect.
 | 14 | 09/08/2026 | `ses_01bcc78adffemcqFEiZxT52Eli` | Sub-fase 4.4: capture/registration nodes implemented, audited, and post-audit fixes applied (FK-free schema, name columns, upsert tests) |
 | 13 | 08/08/2026 | `ses_01be77680ffeuyoKct4Qrfx1GG` | Repo sync to `fase-4`; new `/save` section with general git commit and push guidance |
 | 12 | 08/08/2026 | `ses_01c089ce2ffe9MvQT4F1pC0MJN` | Sub-fase 4.2 deep audit + post-audit fixes (credentials mapping, playwright lifecycle) |
+
+## Session 68 — 23/11/2026
+`ses_f4af1b961ffe5t8xNspW5U761x` · `main`
+
+**Topics**
+- Follow-up on the pending skills improvements; documentation-updater wiring assessed and rejected as cosmetic
+- Check commands confirmed unused in practice: created early, abandoned because they added work without the expected result
+- Operating contract rewritten to describe the conversational cycle instead of command-based stage gates
+- Five check commands and the audit command removed; the two operator commands kept
+- Skill loading moved into the always-present contract so every guide has a guaranteed activation moment
+- References, remaining commands and skills verified read-only
+
+**Decisions**
+- Documentation updater left unchanged: its task is bookkeeping under fixed rules, not interpreting documentation
+- Check and audit commands removed; no active workflow depended on them
+- Analysis, approval, validation and closure kept as behavioral rules rather than commands
+- Skill loading by stage added to the operating contract
+- No tracker change: workflow housekeeping is not a phase status change
+- Decisions from previous sessions remain in effect
+
+**Status**
+- Workflow alignment completed; two commands and nine skills remain, with no broken references
+- Main branch aligned locally and remotely; clean worktree
+- No lint, typecheck or tests run: no code, configuration or data changed
+- Phases 0–6 and Version 1 intact; Phases 7–8 deferred; scheduled clock still paused by operator order; first real batch after cleanup still pending
 
 ## Session 67 — 22/11/2026
 `ses_f4af1b961ffe5t8xNspW5U761x` · `main`
