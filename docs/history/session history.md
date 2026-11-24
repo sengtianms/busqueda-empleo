@@ -5,6 +5,7 @@ Unless noted, decisions from previous sessions remain in effect.
 ## Sessions index
 | № | Date | Session ID | Summary |
 |---|---|---|---|
+| 69 | 24/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Database wiped by operator order with the locations catalogue preserved; locations storage reviewed and confirmed as the best option; exact-tuple uniqueness guard designed, built and verified as a new decision; reviewer findings resolved; branch merged into main and removed |
 | 68 | 23/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Unused check and audit commands removed after confirming they were never part of the real workflow; operating contract rewritten as a conversational cycle with skill loading guaranteed from the always-present contract; the two operator commands and nine skills kept, with no code, data or official records touched |
 | 67 | 22/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Skills audited against real usage: inactive and out-of-scope guides removed, the redundant review guide retired, architecture guidance extended with data and persistence protection, and the remaining guides documented by purpose and moment of use; product and operator pendings reviewed; no code, data or official documents touched |
 | 66 | 22/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Project cleaned to what is actually used: browser memory and abandoned artifacts removed, backup retention reduced to three verified milestones, Git compacted without rewriting reachable history, obsolete tooling retired; authenticated session, database and official records preserved; two reviewers green, lint and types clean, 976 tests, dedicated branch merged into the main branch and removed |
@@ -62,6 +63,29 @@ Unless noted, decisions from previous sessions remain in effect.
 | 14 | 09/08/2026 | `ses_01bcc78adffemcqFEiZxT52Eli` | Sub-fase 4.4: capture/registration nodes implemented, audited, and post-audit fixes applied (FK-free schema, name columns, upsert tests) |
 | 13 | 08/08/2026 | `ses_01be77680ffeuyoKct4Qrfx1GG` | Repo sync to `fase-4`; new `/save` section with general git commit and push guidance |
 | 12 | 08/08/2026 | `ses_01c089ce2ffe9MvQT4F1pC0MJN` | Sub-fase 4.2 deep audit + post-audit fixes (credentials mapping, playwright lifecycle) |
+
+## Session 69 — 24/11/2026
+`ses_f4af1b961ffe5t8xNspW5U761x` · `main`
+
+**Topics**
+- Project context recovered from the primary records; current phase, last closed task and pending operator work summarized
+- Live database wiped by explicit order: every table emptied except the locations catalogue, no backup, integrity confirmed
+- Locations storage examined with real timings; the catalogue in the database confirmed as the best option, alternatives compared and rejected
+- Exact-tuple uniqueness guard designed and approved: protect the catalogue, reuse an existing row on conflict, leave current rows untouched
+- Guard implemented and verified end to end: migration, conflict-safe creation, tests, official records and live database application with a verified backup
+- Four minor reviewer findings closed: conflict-branch coverage, identifier-counter evidence, trivial assertion removed, empty-component normalization
+- Dedicated branch merged into main by operator order and removed
+
+**Decisions**
+- New decision registered for the catalogue guard: exact stored tuple only, migration skips and warns on pre-existing duplicates without merging or deleting, semantic-column alternative rejected as disproportionate
+- Database wipe executed without backup by operator instruction, preserving the locations catalogue and its identifier counter
+- Reviewer findings treated as coverage and boundary hardening, not as behavior changes; no new dependencies, rules or settings
+- Decisions from previous sessions remain in effect
+
+**Status**
+- Phases 0–6 and Version 1 intact; Phases 7–8 deferred; scheduled clock still paused by operator order
+- Catalogue guard closed: 984 tests green, ruff and mypy clean, both reviewers green, live database migrated with a verified backup and 1,139 rows preserved
+- Branch merged into main and removed; worktree clean; local main ahead of remote until this save's push
 
 ## Session 68 — 23/11/2026
 `ses_f4af1b961ffe5t8xNspW5U761x` · `main`
