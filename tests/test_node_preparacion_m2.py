@@ -615,6 +615,36 @@ def test_ubicacion_sin_coincidencia_ia_crea_fila_sistema(
     assert len(eventos) == 1
 
 
+def test_ia_con_fila_ya_registrada_reutiliza_sin_error(temp_db_file: Path) -> None:
+    """D82: a row unknown to the in-memory catalogue is reused, not duplicated."""
+    import sqlite3
+
+    from modules.preparation.ubicaciones import CatalogoUbicaciones
+
+    _sembrar_catalogo()
+    conn = sqlite3.connect(str(temp_db_file))
+    try:
+        conn.execute(
+            "INSERT INTO ubicaciones (id, municipio, departamento, pais, origen) "
+            "VALUES ('UBI-9001', 'puerto bogota', 'cundinamarca', 'colombia', 'sistema')"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    contexto = _contexto()
+    filas = [f for f in leer_tabla("ubicaciones", {}) if f["id"] != "UBI-9001"]
+    contexto.catalogo_ubicaciones = CatalogoUbicaciones(filas)
+    contexto.cache_ia["Puerto Bogotá"] = (
+        "Puerto Bogotá", "Cundinamarca", "Colombia"
+    )
+
+    resultado = preparacion._diligenciar_ubicacion(contexto, "Puerto Bogotá")
+
+    assert resultado == "UBI-9001"
+    assert len(leer_tabla("ubicaciones", {"municipio": "puerto bogota"})) == 1
+
+
 def test_ubicacion_solo_departamento_enlaza_fila_na(
     temp_db_file: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1139,8 +1169,19 @@ def test_ia_municipio_existente_ambiguo_no_crea_fila(
     temp_db_file: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """AI with existing but ambiguous municipality doesn't create, uses country."""
+    import sqlite3
+
+    from shared.persistence._migraciones import INDICE_UBICACIONES_UNICA
+
     ids = _sembrar_catalogo()
-    # Seed two identical Granada rows so it's ambiguous (duplicate in catalogue)
+    # Legacy catalogue without the D82 guard: seed two identical Granada rows
+    # so the municipality is ambiguous (a guarded catalogue cannot hold them).
+    conn = sqlite3.connect(str(temp_db_file))
+    try:
+        conn.execute(f"DROP INDEX {INDICE_UBICACIONES_UNICA}")
+        conn.commit()
+    finally:
+        conn.close()
     escribir_fila(
         "ubicaciones",
         {"municipio": "Granada", "departamento": "Antioquia", "pais": "Colombia"},

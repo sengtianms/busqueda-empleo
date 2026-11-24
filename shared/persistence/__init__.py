@@ -94,6 +94,9 @@ from ._escrituras import (
     adquirir_bloqueo as adquirir_bloqueo,
 )
 from ._escrituras import (
+    crear_o_reutilizar_ubicacion as crear_o_reutilizar_ubicacion,
+)
+from ._escrituras import (
     escribir_evento as escribir_evento,
 )
 from ._escrituras import (

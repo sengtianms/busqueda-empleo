@@ -352,10 +352,8 @@ def test_reserva_crea_fila_con_componentes_normalizados(
         "ubicaciones",
         {"municipio": "N/A", "departamento": "N/A", "pais": "Colombia"},
     )
-    escribir_fila(
-        "ubicaciones",
-        {"municipio": "N/A", "departamento": "N/A", "pais": "N/A"},
-    )
+    # The triple-N/A "no aplica" row is already seeded by init_db(); the D82
+    # unique guard rejects a second identical row.
 
     filas = leer_tabla("ubicaciones")
     catalogo = CatalogoUbicaciones(filas)

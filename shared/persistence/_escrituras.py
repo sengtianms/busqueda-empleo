@@ -71,6 +71,56 @@ def escribir_fila(tabla: str, datos: dict[str, Any]) -> str:
 
 
 
+def crear_o_reutilizar_ubicacion(datos: dict[str, Any]) -> str:
+    """Create a location row or reuse the existing one for its exact tuple (D82).
+
+    The single writer of `ubicaciones` outside migrations is the Preparation
+    AI exception. With the exact-tuple unique index in place, a second write of
+    the same municipality/department/country must not abort the run: it returns
+    the already registered id instead. The SELECT-first path avoids consuming
+    an id when the row already exists; the IntegrityError fallback covers a
+    writer that inserted the row between both statements.
+    """
+    d = _serialize(datos)
+    # D31 at the persistence boundary: an absent location component is stored
+    # as the sentinel, never as an empty string that would look like a new tuple.
+    for clave in ("municipio", "departamento", "pais"):
+        if d.get(clave) is None or str(d[clave]).strip() == "":
+            d[clave] = "N/A"
+    tupla = {clave: d[clave] for clave in ("municipio", "departamento", "pais")}
+    sql_buscar = (
+        "SELECT id FROM ubicaciones WHERE municipio = :municipio "
+        "AND departamento = :departamento AND pais = :pais"
+    )
+    conn = _connection()
+    try:
+        fila = conn.execute(sql_buscar, tupla).fetchone()
+        if fila is not None:
+            return str(fila[0])
+
+        marca = ahora()
+        d["id"] = _generar_id_en(conn, "ubicaciones")
+        if not d.get("fecha_creacion"):
+            d["fecha_creacion"] = marca
+        d["fecha_ultima_edicion"] = marca
+        columnas = list(d.keys())
+        sql_insertar = (
+            f"INSERT INTO ubicaciones ({', '.join(columnas)}) "
+            f"VALUES ({', '.join(':' + columna for columna in columnas)})"
+        )
+        try:
+            conn.execute(sql_insertar, d)
+        except sqlite3.IntegrityError:
+            fila = conn.execute(sql_buscar, tupla).fetchone()
+            if fila is None:
+                raise
+            return str(fila[0])
+        conn.commit()
+        return str(d["id"])
+    finally:
+        conn.close()
+
+
 def actualizar_fila(tabla: str, id_valor: str, datos: dict[str, Any]) -> bool:
     d = _serialize(datos)
     d["fecha_ultima_edicion"] = ahora()

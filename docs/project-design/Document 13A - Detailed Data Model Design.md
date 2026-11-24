@@ -115,7 +115,7 @@ MVP capture deviation (D4, 2026-08-09): `fuente_id` is stored as a raw `fuente_i
 **Attributes:** `id`, `municipio`, `departamento`, `pais`, `origen`, `fecha_creacion`, `fecha_ultima_edicion`. (`address`, `modality`, `location_type` and `observations` belong to the target model and are not implemented in the physical table — `modalidad` was removed in D33.)
 
 **Primary key:** `id`.  
-**Alternate keys:** None.  
+**Alternate keys:** The **exact stored tuple** `(municipio, departamento, pais)` is unique since D82 (`idx_ubicaciones_tupla_unica`); spelling variants are not merged — the Preparation code normalizes before creating.  
 **Foreign keys:** Not applicable.
 
 **Relationships:** is used by Offer 1:N.
@@ -922,6 +922,7 @@ Every data-model modification must be recorded before becoming official. Each ve
 
 | Version | Date | Author | Change description |
 | --- | --- | --- | --- |
+| 1.28 | 2026-11-24 | System | Decision D82 — `ubicaciones` gains the exact-tuple unique index `idx_ubicaciones_tupla_unica` on `(municipio, departamento, pais)` (§2.4 alternate key). No column, row or relationship change; the AI exception reuses an existing row instead of duplicating it; ERD unchanged. Live DB migrated with backup, 1,139 rows preserved. |
 | 1.27 | 2026-11-22 | System | Documentation alignment with as-built behavior D81/D62: §5.5.10 Event records Module 1's `navegador_renovado`, `lote_degradado` and the narration marks (subtracted from closure metrics); §5.5.6 Initial Evaluation now names `eje_organizacional`/instruction v7 as the current result shape; the two consecutive D78 as-built notes on `ubicacion` were merged. Editorial only — no schema change, no migration, ERD unchanged. |
 | 1.26 | 2026-11-20 | System | Decision D80 — evaluation instruction v7: `entregable_principal` replaced by `eje_organizacional` (five closed values, coherence with `v1`) in the official prompt, the batch response contract, the import validation and the stored result. No schema change, no migration and no change to vetoes, states or lots; the work folder and live DB were untouched. §5.5.1 and §5.5.6 updated; ERD unchanged. |
 | 1.25 | 2026-11-19 | System | Decision D79 — Module 3 redesign closed (design D76): no schema change, column/state/metric/event set unchanged; the operator now imports chat answers with a one-line command and the batch exports lots. Old AI route and its config retired; no migration. Verified with a real export of 294 offers into 10 lots and a real import on a copy (15 approvals + 15 discards), 0 errors; 973 tests. §1 scope note updated; ERD unchanged. |

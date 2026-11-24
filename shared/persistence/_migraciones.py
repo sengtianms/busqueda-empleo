@@ -2,6 +2,8 @@
 
 import sqlite3
 
+from loguru import logger
+
 from shared.utilidades import ahora
 
 from ._conexion import _connection
@@ -66,6 +68,7 @@ def init_db() -> None:
         _migrate_silla_proceso_d72(conn)
         _migrate_ubicaciones_columnas(conn)
         _migrate_ubicaciones_d77(conn)
+        _migrate_ubicaciones_unica_d82(conn)
         for sentencia in _INDICES:
             conn.execute(sentencia)
         conn.commit()
@@ -669,4 +672,40 @@ def _sync_secuencia_ubicaciones(conn: sqlite3.Connection) -> None:
         "ultimo_numero = MAX(ultimo_numero, "
         "(SELECT COALESCE(MAX(CAST(SUBSTR(id, 5) AS INTEGER)), 0) "
         "FROM ubicaciones WHERE id LIKE 'UBI-%'))"
+    )
+
+
+INDICE_UBICACIONES_UNICA = "idx_ubicaciones_tupla_unica"
+
+
+def _migrate_ubicaciones_unica_d82(conn: sqlite3.Connection) -> None:
+    """Exact-tuple uniqueness guard for the locations catalogue (D82).
+
+    Idempotent: an existing index is left untouched. If the catalogue already
+    holds exact duplicates, the index is NOT created and a warning with the
+    offending tuples is logged — no row is merged or deleted silently. The
+    engine links by normalized text, so a duplicate degrades to a pending
+    location rather than to a wrong link; the guard is preventive only.
+    """
+    presente = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?",
+        (INDICE_UBICACIONES_UNICA,),
+    ).fetchone()
+    if presente is not None:
+        return
+
+    duplicados = conn.execute(
+        "SELECT municipio, departamento, pais, COUNT(*) AS n FROM ubicaciones "
+        "GROUP BY municipio, departamento, pais HAVING n > 1"
+    ).fetchall()
+    if duplicados:
+        logger.warning(
+            "ubicaciones_indice_unico_omitido | duplicados exactos: {}",
+            [tuple(fila) for fila in duplicados],
+        )
+        return
+
+    conn.execute(
+        f"CREATE UNIQUE INDEX IF NOT EXISTS {INDICE_UBICACIONES_UNICA} "
+        "ON ubicaciones(municipio, departamento, pais)"
     )

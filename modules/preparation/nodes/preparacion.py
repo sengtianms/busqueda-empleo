@@ -42,6 +42,7 @@ from modules.preparation.ubicaciones import (
 from shared.ia_service import analyze, analyze_openrouter
 from shared.persistence import (
     actualizar_fila,
+    crear_o_reutilizar_ubicacion,
     escribir_fila,
     leer_candidatas_descubiertas,
     leer_tabla,
@@ -422,14 +423,13 @@ def _diligenciar_ubicacion(contexto: RunContext, texto_crudo: str) -> str:
                     clave_creada = (mun_limpiado, dept_norm, pais_norm)
                     if clave_creada in contexto.cache_creadas:
                         return contexto.cache_creadas[clave_creada]
-                    nueva_id = escribir_fila(
-                        "ubicaciones",
+                    nueva_id = crear_o_reutilizar_ubicacion(
                         {
                             "municipio": mun_limpiado,
                             "departamento": dept_norm,
                             "pais": pais_norm,
                             "origen": "sistema",
-                        },
+                        }
                     )
                     contexto.cache_creadas[clave_creada] = nueva_id
                     return nueva_id

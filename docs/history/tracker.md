@@ -421,6 +421,20 @@
 
 ---
 
+## Candado de unicidad del catálogo de ubicaciones (2026-11-24)
+
+> Decisión D82 (libro v1.62). Petición del operador: proteger el catálogo maestro contra filas repetidas sin tocar las 1.139 existentes. Se evaluó también un candado semántico con columnas normalizadas (opción 3) y se descartó: añadiría tres columnas derivadas, obligaría a mantenerlas en cada escritura y no cubriría alias como «San José de Cúcuta» → «Cúcuta», que ya resuelven las reglas D78. La candidata exacta cubre la carga duplicada, que es el error realista.
+
+| # | Cambio | Estado | Notas |
+|---|--------|--------|-------|
+| — | Índice único exacto | ✅ | `idx_ubicaciones_tupla_unica` sobre `(municipio, departamento, pais)`. Rechaza tuplas idénticas; no fusiona variantes de tilde/mayúscula, que el código normaliza antes de crear. |
+| — | Migración idempotente con comprobación previa | ✅ | Si hay duplicados exactos, no crea el índice y deja `ubicaciones_indice_unico_omitido` con las tuplas; no borra ni fusiona nada. Doble arranque inocuo. |
+| — | Reutilización en la excepción por IA | ✅ | `crear_o_reutilizar_ubicacion` devuelve el identificador existente si la base rechaza la inserción; un conflicto ya no se convierte en `ERR-09` y no se gasta un identificador. Cachés de la corrida intactas. |
+| — | Aplicación en producción | ✅ | Sin tanda ni silla activas y sin duplicados: respaldo verificado `job_search_pre_d82_20261124_111816.db`, migración aplicada una vez, 1.139 filas intactas, contador `UBI-1139`, integridad `ok`. |
+| — | Pruebas y documentación | ✅ | 8 pruebas nuevas (migración, idempotencia, omisión con duplicado, creación, reutilización sin consumir identificador, conflicto entre búsqueda e inserción, rechazo directo y ruta de IA con catálogo desactualizado); dos pruebas antiguas adaptadas a la base protegida; 984 pruebas, ruff/mypy limpios. Paso del revisor: cobertura de la rama de conflicto, evidencia del contador y normalización de componentes vacíos en la frontera de persistencia. Libro v1.62, DOC-13A v1.28, referencia de tablas, ficha M2 y contrato operativo alineados. |
+
+---
+
 ## Phase 7. Module 4 — Deep Processing
 
 | # | Task | Source docs | Status | Notes |
