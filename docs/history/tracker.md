@@ -435,6 +435,21 @@
 
 ---
 
+## Herramienta de mantenimiento del catálogo de ubicaciones (2026-11-24)
+
+> Decisión D83 (libro v1.63). Petición del operador: mantener el catálogo maestro sin escribir consultas, con validaciones que impidan romperlo. Se confirmó incluir la fusión, el chequeo en el prevuelo, el origen de creación inmutable, el país Colombia por defecto y la numeración D83.
+
+| # | Cambio | Estado | Notas |
+|---|--------|--------|-------|
+| — | Núcleo de diagnóstico de solo lectura | ✅ | Clasifica municipio / solo departamento / solo país / no aplica, comprueba las filas estructurales y detecta variantes con la normalización, la limpieza de municipio y los alias del motor —también «San José de Cúcuta» frente a «Cúcuta» y «Bogotá D.C.» frente a «Bogotá»—. Compartido por la orden y el prevuelo. |
+| — | Orden de operador con cuatro acciones | ✅ | `listar` (filtros, origen, ofertas enlazadas, variantes), `agregar` (municipio o solo departamento), `corregir` (mantiene identificador y enlace) y `fusionar` (en una transacción). `--db` ensaya sobre copia; no inicializa una base ausente. |
+| — | Validaciones y seguridad | ✅ | Rechaza duplicado exacto, variante normalizada, alias/equivalencia conocida, departamento repetido, cambio de tipo, componente vacío y silla vigente. Listar siempre permitido; diario en `logs/catalogo_ubicaciones.log`, sin eventos de corrida. |
+| — | Chequeo del catálogo en el prevuelo | ✅ | Solo si la preparación está habilitada: falla con «no aplica» ausente o filas de país ≠ 1; avisa con variantes o catálogo sin municipios/departamentos. Sin escrituras ni llamadas a modelo. |
+| — | Verificación | ✅ | `listar --origen sistema` y prevuelo correctos en la base viva (1.139 filas, 3 del sistema, 0 variantes). Las cuatro acciones ejercitadas de extremo a extremo sobre una copia con ofertas sintéticas: variante detectada, fila agregada y corregida, oferta movida y fila retirada. Base viva intacta, integridad `ok`, copia y diario de ensayo descartados. |
+| — | Pruebas y documentación | ✅ | 30 pruebas nuevas (121 en los módulos implicados), 1.014 en total; ruff y mypy limpios. Paso del revisor: limpieza de alias en la clave de variantes, diario de ensayo separado con marca `ENSAYO` y prueba de rollback forzado a mitad de la fusión. Libro v1.63, DOC-13A v1.29, referencia de tablas, README, AGENTS.md alineados; sin esquema, configuración ni prompts nuevos. |
+
+---
+
 ## Phase 7. Module 4 — Deep Processing
 
 | # | Task | Source docs | Status | Notes |

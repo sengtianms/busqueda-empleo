@@ -138,6 +138,51 @@ def actualizar_fila(tabla: str, id_valor: str, datos: dict[str, Any]) -> bool:
         conn.close()
 
 
+def fusionar_ubicacion(id_origen: str, id_destino: str) -> int:
+    """Reasigna las ofertas de una ubicación a otra y retira la original (D83).
+
+    Transacción única: o se mueven las ofertas y se elimina la fila, o no cambia
+    nada. El llamador valida que ambas filas sean del mismo tipo y país y que
+    no sean estructurales; aquí se garantiza la integridad de los enlaces.
+    La fila destino conserva su origen y solo actualiza su fecha de edición.
+    """
+    if id_origen == id_destino:
+        raise PersistenceError("FUS-01", "origen y destino son la misma fila")
+    conn = _connection()
+    try:
+        destino = conn.execute(
+            "SELECT 1 FROM ubicaciones WHERE id = ?", (id_destino,)
+        ).fetchone()
+        if destino is None:
+            raise PersistenceError("FUS-02", "la fila destino no existe")
+        origen = conn.execute(
+            "SELECT 1 FROM ubicaciones WHERE id = ?", (id_origen,)
+        ).fetchone()
+        if origen is None:
+            raise PersistenceError("FUS-03", "la fila origen no existe")
+
+        marca = ahora()
+        cursor = conn.execute(
+            "UPDATE ofertas_descubiertas "
+            "SET ubicacion_id = :destino, fecha_ultima_edicion = :marca "
+            "WHERE ubicacion_id = :origen",
+            {"destino": id_destino, "marca": marca, "origen": id_origen},
+        )
+        movidas = cursor.rowcount
+        conn.execute(
+            "UPDATE ubicaciones SET fecha_ultima_edicion = ? WHERE id = ?",
+            (marca, id_destino),
+        )
+        conn.execute("DELETE FROM ubicaciones WHERE id = ?", (id_origen,))
+        conn.commit()
+        return movidas
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 
 def umbral_obsolescencia_minutos(config: dict[str, Any] | None = None) -> int:
     cfg = config if config is not None else load()

@@ -43,6 +43,9 @@ from ._consultas import (
     contar_narracion as contar_narracion,
 )
 from ._consultas import (
+    contar_ofertas_por_ubicacion as contar_ofertas_por_ubicacion,
+)
+from ._consultas import (
     contar_ofertas_sin_lista as contar_ofertas_sin_lista,
 )
 from ._consultas import (
@@ -104,6 +107,9 @@ from ._escrituras import (
 )
 from ._escrituras import (
     escribir_fila as escribir_fila,
+)
+from ._escrituras import (
+    fusionar_ubicacion as fusionar_ubicacion,
 )
 from ._escrituras import (
     generar_id as generar_id,

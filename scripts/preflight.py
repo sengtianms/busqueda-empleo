@@ -4,15 +4,17 @@ Uso:
     python scripts/preflight.py [--db data/job_search.db]
 
 Verifica: configuracion de modulos/orquestador y de la evaluacion manual,
-carpeta de trabajo, base escribible y bloqueo de concurrencia. No consulta
-ningun modelo: la inteligencia artificial ya no interviene en la evaluacion
-y la de preparacion es opcional (Fase 4, D76).
+carpeta de trabajo, base escribible, bloqueo de concurrencia y catálogo de
+ubicaciones (D83, solo si la preparación está habilitada). No consulta ningun
+modelo: la inteligencia artificial ya no interviene en la evaluacion y la de
+preparacion es opcional (Fase 4, D76).
 Codigo de salida 0 = todo en orden; 1 = hay bloqueos.
 """
 
 from __future__ import annotations
 
 import argparse
+import sqlite3
 import sys
 import tempfile
 from datetime import datetime
@@ -22,11 +24,13 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from modules.evaluation.nodes.inicio_manual import _carpetas_de_trabajo
+from scripts.modelo_catalogo import diagnosticar
 from shared.config import load
 from shared.persistence import (
     change_path,
     consultar_bloqueo,
     inicializar_si_ausente,
+    leer_tabla,
     reset_path,
     sondear_escritura,
 )
@@ -100,6 +104,43 @@ def _check_base_datos() -> tuple[bool, str]:
     return True, "base de datos escribible"
 
 
+def _check_catalogo(config: dict[str, Any]) -> tuple[bool, str]:
+    """Condiciones que el Módulo 2 exige al catálogo (D83; solo lectura)."""
+    modulos = (config.get("orquestador") or {}).get("modulos") or []
+    if "preparacion" not in modulos:
+        return True, "catalogo de ubicaciones: no aplica (preparacion no habilitada)"
+    try:
+        diagnostico = diagnosticar(leer_tabla("ubicaciones"))
+    except sqlite3.OperationalError as error:
+        return False, f"catalogo de ubicaciones ilegible: {error}"
+    if diagnostico.no_aplica != 1:
+        return (
+            False,
+            f"catalogo incompleto: fila 'no aplica'={diagnostico.no_aplica} (debe ser 1)",
+        )
+    if diagnostico.filas_pais != 1:
+        return (
+            False,
+            f"catalogo incompleto: filas de solo pais={diagnostico.filas_pais} (debe ser 1)",
+        )
+    avisos: list[str] = []
+    if diagnostico.variantes:
+        avisos.append(
+            f"{len(diagnostico.variantes)} variantes de escritura (dejan ofertas pendientes)"
+        )
+    if (
+        diagnostico.por_tipo["municipio"] == 0
+        and diagnostico.por_tipo["departamento"] == 0
+    ):
+        avisos.append("sin municipios ni departamentos cargados")
+    if avisos:
+        return True, (
+            f"catalogo de ubicaciones: OK {diagnostico.total} filas; "
+            f"aviso: {'; '.join(avisos)}"
+        )
+    return True, f"catalogo de ubicaciones: OK {diagnostico.total} filas, sin variantes"
+
+
 def _check_bloqueo(config: dict[str, Any]) -> tuple[bool, str]:
     fila = consultar_bloqueo()
     if fila is None:
@@ -134,6 +175,9 @@ def ejecutar_preflight() -> tuple[bool, list[str]]:
     ok_bd, mensaje_bd = _check_base_datos()
     lineas.append(f"[{'OK ' if ok_bd else 'FALLA'}] {mensaje_bd}")
     todo_ok = todo_ok and ok_bd
+    ok_catalogo, mensaje_catalogo = _check_catalogo(config)
+    lineas.append(f"[{'OK ' if ok_catalogo else 'FALLA'}] {mensaje_catalogo}")
+    todo_ok = todo_ok and ok_catalogo
     ok_bloqueo, mensaje_bloqueo = _check_bloqueo(config)
     lineas.append(f"[{'OK ' if ok_bloqueo else 'FALLA'}] {mensaje_bloqueo}")
     todo_ok = todo_ok and ok_bloqueo

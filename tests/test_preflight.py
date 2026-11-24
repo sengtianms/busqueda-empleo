@@ -1,9 +1,16 @@
 """Tests for the preflight CLI (D42): environment checks before launching."""
 
+import sqlite3
 from pathlib import Path
 from typing import Any
 
-from scripts.preflight import _check_bloqueo, _check_config, ejecutar_preflight
+from scripts.preflight import (
+    _check_bloqueo,
+    _check_catalogo,
+    _check_config,
+    ejecutar_preflight,
+)
+from shared.persistence import escribir_fila
 
 CONFIG_OK: dict[str, Any] = {
     "orquestador": {
@@ -90,9 +97,15 @@ def test_check_bloqueo_obsoleto(temp_db_file: Path) -> None:
 
 
 def test_ejecutar_preflight_camino_feliz(temp_db_file: Path) -> None:
+    # El prevuelo comprueba el catálogo (D83): la fila de país la pone el operador.
+    escribir_fila(
+        "ubicaciones",
+        {"municipio": "N/A", "departamento": "N/A", "pais": "colombia"},
+    )
     todo_ok, lineas = ejecutar_preflight()
     assert todo_ok is True
     assert any("base de datos escribible" in linea for linea in lineas)
+    assert any("catalogo de ubicaciones: OK" in linea for linea in lineas)
     assert any("bloqueo libre" in linea for linea in lineas)
     assert any("evaluacion manual" in linea for linea in lineas)
     assert any("carpeta de trabajo evaluacion" in linea for linea in lineas)
@@ -123,3 +136,68 @@ def _ahora() -> str:
     from shared.utilidades import FORMATO_TIMESTAMP
 
     return datetime.now().strftime(FORMATO_TIMESTAMP)
+
+
+def _sembrar_catalogo_valido() -> None:
+    escribir_fila(
+        "ubicaciones",
+        {"municipio": "N/A", "departamento": "N/A", "pais": "colombia"},
+    )
+    escribir_fila(
+        "ubicaciones",
+        {"municipio": "bogota", "departamento": "cundinamarca", "pais": "colombia"},
+    )
+
+
+def test_check_catalogo_valido(temp_db_file: Path) -> None:
+    _sembrar_catalogo_valido()
+    ok, mensaje = _check_catalogo(CONFIG_OK)
+    assert ok is True
+    assert "sin variantes" in mensaje
+
+
+def test_check_catalogo_falta_fila_de_pais(temp_db_file: Path) -> None:
+    ok, mensaje = _check_catalogo(CONFIG_OK)
+    assert ok is False
+    assert "filas de solo pais=0" in mensaje
+
+
+def test_check_catalogo_dos_filas_de_pais(temp_db_file: Path) -> None:
+    _sembrar_catalogo_valido()
+    from shared.persistence._migraciones import INDICE_UBICACIONES_UNICA
+
+    conn = sqlite3.connect(str(temp_db_file))
+    try:
+        conn.execute(f"DROP INDEX {INDICE_UBICACIONES_UNICA}")
+        conn.commit()
+    finally:
+        conn.close()
+    escribir_fila(
+        "ubicaciones",
+        {"municipio": "N/A", "departamento": "N/A", "pais": "ecuador"},
+    )
+    ok, mensaje = _check_catalogo(CONFIG_OK)
+    assert ok is False
+    assert "filas de solo pais=2" in mensaje
+
+
+def test_check_catalogo_variantes_avisa(temp_db_file: Path) -> None:
+    _sembrar_catalogo_valido()
+    escribir_fila(
+        "ubicaciones",
+        {"municipio": "Bogotá", "departamento": "cundinamarca", "pais": "colombia"},
+    )
+    ok, mensaje = _check_catalogo(CONFIG_OK)
+    assert ok is True
+    assert "aviso" in mensaje and "variantes" in mensaje
+
+
+def test_check_catalogo_no_aplica_sin_preparacion(temp_db_file: Path) -> None:
+    config = dict(CONFIG_OK)
+    config["orquestador"] = {
+        **CONFIG_OK["orquestador"],
+        "modulos": ["descubrimiento", "evaluacion"],
+    }
+    ok, mensaje = _check_catalogo(config)
+    assert ok is True
+    assert "no aplica" in mensaje

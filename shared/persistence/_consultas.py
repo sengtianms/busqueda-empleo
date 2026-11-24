@@ -434,3 +434,22 @@ def ids_de_corrida_con_codigos(codigos: Iterable[str]) -> set[str]:
         return {str(fila[0]) for fila in cursor.fetchall()}
     finally:
         conn.close()
+
+
+def contar_ofertas_por_ubicacion() -> dict[str, int]:
+    """Ofertas enlazadas a cada id de ubicación (D83; para el mantenedor).
+
+    Una sola consulta agregada: el informe de mantenimiento necesita saber
+    cuántas ofertas apuntan a cada fila antes de corregirla o fusionarla.
+    Devuelve también las claves centinela 'N/A' y 'N/R'; cada llamador decide
+    cuáles le interesan.
+    """
+    conn = _connection()
+    try:
+        cursor = conn.execute(
+            "SELECT ubicacion_id, COUNT(*) AS n FROM ofertas_descubiertas "
+            "GROUP BY ubicacion_id"
+        )
+        return {str(fila[0]): int(fila[1]) for fila in cursor.fetchall()}
+    finally:
+        conn.close()

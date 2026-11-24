@@ -1,13 +1,17 @@
 import os
+import sqlite3
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+from shared.errors import PersistenceError
 from shared.persistence import (
     actualizar_fila,
     buscar_por_id,
+    contar_ofertas_por_ubicacion,
     escribir_fila,
+    fusionar_ubicacion,
     generar_id,
     leer_candidatas_descubiertas,
     leer_tabla,
@@ -2360,3 +2364,88 @@ def test_migracion_d77_idempotente_y_preserva_operador(
         assert len(sistema) == 1
     finally:
         reset_path()
+
+
+def _sembrar_ubicaciones_y_ofertas() -> tuple[str, str]:
+    origen = escribir_fila(
+        "ubicaciones",
+        {"municipio": "milan", "departamento": "caqueta", "pais": "colombia"},
+    )
+    destino = escribir_fila(
+        "ubicaciones",
+        {"municipio": "puerto milan", "departamento": "caqueta", "pais": "colombia"},
+    )
+    for indice, id_ubicacion in enumerate((origen, origen, destino), start=1):
+        escribir_fila(
+            "ofertas_descubiertas",
+            {
+                "enlace": f"https://www.linkedin.com/jobs/view/{indice}",
+                "estado": "preparada",
+                "ubicacion_id": id_ubicacion,
+                "ubicacion": "texto original capturado",
+                "fecha_ultima_verificacion": "2026-11-24 10:00:00",
+            },
+        )
+    return origen, destino
+
+
+def test_contar_ofertas_por_ubicacion(temp_db_file: Path) -> None:
+    origen, destino = _sembrar_ubicaciones_y_ofertas()
+    conteos = contar_ofertas_por_ubicacion()
+    assert conteos[origen] == 2
+    assert conteos[destino] == 1
+
+
+def test_fusionar_ubicacion_mueve_y_elimina_en_una_sola_operacion(
+    temp_db_file: Path,
+) -> None:
+    origen, destino = _sembrar_ubicaciones_y_ofertas()
+    movidas = fusionar_ubicacion(origen, destino)
+    assert movidas == 2
+    assert buscar_por_id("ubicaciones", origen) is None
+    fila_destino = buscar_por_id("ubicaciones", destino)
+    assert fila_destino is not None and fila_destino["fecha_ultima_edicion"] != ""
+    ofertas = leer_tabla("ofertas_descubiertas")
+    assert len(ofertas) == 3
+    assert all(oferta["ubicacion_id"] == destino for oferta in ofertas)
+    assert all(oferta["ubicacion"] == "texto original capturado" for oferta in ofertas)
+    assert all(
+        oferta["fecha_ultima_verificacion"] == "2026-11-24 10:00:00"
+        for oferta in ofertas
+    )
+
+
+def test_fusionar_ubicacion_destino_inexistente_no_cambia_nada(
+    temp_db_file: Path,
+) -> None:
+    origen, _destino = _sembrar_ubicaciones_y_ofertas()
+    with pytest.raises(PersistenceError):
+        fusionar_ubicacion(origen, "UBI-9999")
+    assert buscar_por_id("ubicaciones", origen) is not None
+    assert contar_ofertas_por_ubicacion()[origen] == 2
+
+
+def test_fusionar_ubicacion_rechaza_mismo_id(temp_db_file: Path) -> None:
+    origen, _destino = _sembrar_ubicaciones_y_ofertas()
+    with pytest.raises(PersistenceError):
+        fusionar_ubicacion(origen, origen)
+
+
+def test_fusionar_ubicacion_revierte_todo_si_falla_a_mitad(temp_db_file: Path) -> None:
+    origen, destino = _sembrar_ubicaciones_y_ofertas()
+    conn = sqlite3.connect(str(temp_db_file))
+    try:
+        conn.execute(
+            "CREATE TRIGGER impedir_borrado BEFORE DELETE ON ubicaciones "
+            "BEGIN SELECT RAISE(ABORT, 'borrado bloqueado'); END"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    with pytest.raises(sqlite3.IntegrityError):
+        fusionar_ubicacion(origen, destino)
+
+    assert buscar_por_id("ubicaciones", origen) is not None
+    assert contar_ofertas_por_ubicacion()[origen] == 2
+    assert contar_ofertas_por_ubicacion().get(destino, 0) == 1
