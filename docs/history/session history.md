@@ -5,6 +5,7 @@ Unless noted, decisions from previous sessions remain in effect.
 ## Sessions index
 | № | Date | Session ID | Summary |
 |---|---|---|---|
+| 70 | 24/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Locations catalogue maintenance designed and built as a one-line operator command with four actions and a preflight check; reviewer findings closed; live catalogue untouched, rehearsal on a copy; dedicated branch merged into main and removed |
 | 69 | 24/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Database wiped by operator order with the locations catalogue preserved; locations storage reviewed and confirmed as the best option; exact-tuple uniqueness guard designed, built and verified as a new decision; reviewer findings resolved; branch merged into main and removed |
 | 68 | 23/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Unused check and audit commands removed after confirming they were never part of the real workflow; operating contract rewritten as a conversational cycle with skill loading guaranteed from the always-present contract; the two operator commands and nine skills kept, with no code, data or official records touched |
 | 67 | 22/11/2026 | `ses_f4af1b961ffe5t8xNspW5U761x` | Skills audited against real usage: inactive and out-of-scope guides removed, the redundant review guide retired, architecture guidance extended with data and persistence protection, and the remaining guides documented by purpose and moment of use; product and operator pendings reviewed; no code, data or official documents touched |
@@ -63,6 +64,29 @@ Unless noted, decisions from previous sessions remain in effect.
 | 14 | 09/08/2026 | `ses_01bcc78adffemcqFEiZxT52Eli` | Sub-fase 4.4: capture/registration nodes implemented, audited, and post-audit fixes applied (FK-free schema, name columns, upsert tests) |
 | 13 | 08/08/2026 | `ses_01be77680ffeuyoKct4Qrfx1GG` | Repo sync to `fase-4`; new `/save` section with general git commit and push guidance |
 | 12 | 08/08/2026 | `ses_01c089ce2ffe9MvQT4F1pC0MJN` | Sub-fase 4.2 deep audit + post-audit fixes (credentials mapping, playwright lifecycle) |
+
+## Session 70 — 24/11/2026
+`ses_f4af1b961ffe5t8xNspW5U761x` · `main`
+
+**Topics**
+- Catalogue maintenance reviewed after the uniqueness guard: one-line operator tool preferred over extending reports, documenting queries or adding a web panel
+- Four actions specified and built — list, add, correct and fuse — with filters, linked-offer counts and variant alerts
+- Structural rows protected, creation origin kept, country fixed to Colombia, and fusion chosen instead of a bare deletion
+- Catalogue check added to preflight so a broken catalogue stops a batch before it starts
+- Full rehearsal on a copy with synthetic offers: variant detected, row added and corrected, offer moved and duplicate retired; live catalogue untouched
+- Reviewer findings closed: alias and suffix cleaning in variant detection, separate rehearsal journal, rollback test and a misleading report text
+- Dedicated branch merged into main by operator order and removed after verifying identical content
+
+**Decisions**
+- New decision registered for the maintenance tool: transactional fusion, read-only structural rows, preserved creation origin, validation before every write and a journal line per action
+- Preflight fails on a missing "not applicable" row or a country-row count other than one, and warns on spelling variants
+- Variant detection extended to known aliases and "D.C." suffixes after review; rehearsals write to a separate marked journal
+- Decisions from previous sessions remain in effect
+
+**Status**
+- Phases 0–6 and Version 1 intact; Phases 7–8 deferred; scheduled clock still paused by operator order
+- Maintenance tool closed: 1,014 tests green, ruff and mypy clean, both reviewers green, live catalogue with 1,139 rows and integrity ok
+- Branch merged into main and removed; worktree clean; local main ahead of remote until this save's push
 
 ## Session 69 — 24/11/2026
 `ses_f4af1b961ffe5t8xNspW5U761x` · `main`
